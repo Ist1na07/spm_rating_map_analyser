@@ -1,0 +1,118 @@
+{
+  "classifier": "decision_tree",
+  "max_depth": 3,
+  "accuracy": 0.9953051643192489,
+  "feature_names": [
+    "ln_ratio",
+    "avg_ln_dur",
+    "max_ln_density",
+    "rc_sr_ratio",
+    "ln_contrib"
+  ],
+  "n_samples": 213,
+  "class_distribution": {
+    "rc": 99,
+    "ln": 102,
+    "hb": 12
+  },
+  "class_order": [
+    "hb",
+    "ln",
+    "rc"
+  ],
+  "mix_thresholds": {
+    "ln_contrib": 0.1,
+    "ln_ratio_max": 0.45
+  },
+  "javascript": "/** Auto-generated map sort classifier. */\nfunction classifyMapSort(lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib) {\n  if (lnRatio <= 0.147477) {\n    return 'RC';\n  } else {\n    if (lnRatio <= 0.423330) {\n      if (avgLNDur <= 277.806046) {\n        return 'HB';\n      } else {\n        return 'LN';\n      }\n    } else {\n      return 'LN';\n    }\n  }\n}\n\n/** Mix heuristic: low LN count but high LN impact. */\nfunction isMapMix(lnRatio, lnContrib) {\n  return (lnRatio < 0.4500 && lnContrib > 0.1000);\n}\n",
+  "tree": {
+    "n_nodes": 7,
+    "children_left": [
+      1,
+      -1,
+      3,
+      4,
+      -1,
+      -1,
+      -1
+    ],
+    "children_right": [
+      2,
+      -1,
+      6,
+      5,
+      -1,
+      -1,
+      -1
+    ],
+    "feature": [
+      "ln_ratio",
+      null,
+      "ln_ratio",
+      "avg_ln_dur",
+      null,
+      null,
+      null
+    ],
+    "threshold": [
+      0.14747664704918861,
+      -2.0,
+      0.42332954704761505,
+      277.80604553222656,
+      -2.0,
+      -2.0,
+      -2.0
+    ],
+    "value": [
+      [
+        [
+          0.056338028169014086,
+          0.4788732394366197,
+          0.4647887323943662
+        ]
+      ],
+      [
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      [
+        [
+          0.10526315789473684,
+          0.8947368421052632,
+          0.0
+        ]
+      ],
+      [
+        [
+          0.8,
+          0.2,
+          0.0
+        ]
+      ],
+      [
+        [
+          1.0,
+          0.0,
+          0.0
+        ]
+      ],
+      [
+        [
+          0.25,
+          0.75,
+          0.0
+        ]
+      ],
+      [
+        [
+          0.0,
+          1.0,
+          0.0
+        ]
+      ]
+    ]
+  }
+}

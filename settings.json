@@ -1,0 +1,23 @@
+[
+  {
+    "uniqueID": "showSkills",
+    "type": "checkbox",
+    "title": "Show Skill Breakdown",
+    "description": "Display individual skill ratings (stream/jack/tech/chordjack/release)",
+    "value": true
+  },
+  {
+    "uniqueID": "showTags",
+    "type": "checkbox",
+    "title": "Show Pattern Tags",
+    "description": "Display pattern type tags below the rating",
+    "value": true
+  },
+  {
+    "uniqueID": "accentColor",
+    "type": "color",
+    "title": "Accent Color",
+    "description": "Main accent color for the rating number",
+    "value": "#ffffff"
+  }
+]
