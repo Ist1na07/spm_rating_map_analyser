@@ -178,12 +178,12 @@ function danToLabelLN(danLevel) {
 }
 
 function danToLabelGeneric(danLevel, thresholds) {
-    if (danLevel < thresholds[0]) return "<" + DAN_NAMES[0];
+    if (danLevel < thresholds[0]) return DAN_NAMES[0];
     let idx = 0;
     for (let i = thresholds.length - 1; i >= 0; i--) {
         if (danLevel >= thresholds[i]) { idx = i; break; }
     }
-    if (idx >= DAN_NAMES.length) return ">" + DAN_NAMES[DAN_NAMES.length - 1];
+    if (idx >= DAN_NAMES.length) return DAN_NAMES[DAN_NAMES.length - 1];
     const name = DAN_NAMES[idx];
     const binStart = thresholds[idx];
     const binEnd = idx < thresholds.length - 1 ? thresholds[idx + 1] : binStart + 1;
@@ -193,10 +193,6 @@ function danToLabelGeneric(danLevel, thresholds) {
     else if (frac < 0.75) return name;
     else return name + " high";
 }
-
-// Deprecated compatibility wrapper — use ratingToDanRC/ratingToDanLN instead
-function ratingToDan(rating) { return ratingToDanRC(rating); }
-function danToLabel(danLevel) { return danToLabelRC(danLevel); }
 
 function bisectLeft(arr, x) {
     let lo = 0, hi = arr.length;
@@ -1328,7 +1324,7 @@ function calculate(osuContent, speedRate) {
         params: { total_notes: totalNotes, n_raw: noteSeq.length, n_LN: LNSeq.length, K, od: data.od },
         noteSeq, LNSeq, allCorners, D_all, Jbar: JbarAll, Xbar: XbarTotalAll, Pbar: PbarAll, Rbar: RbarAll,
         rcD_all: rcDresult.D_all, rcEquivD_all,
-        LN_rep,  // for HB section masks
+        LN_rep, lnMask, rcMask,  // HB section masks (reused in processMap)
         features: { lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib },
     };
 }
@@ -1402,73 +1398,6 @@ function computeSkillRatings(Jbar, Xbar, Pbar, Rbar) {
         chordjack: Math.max(0, aggregate(Jbar.map((v, i) => v * (1 - Math.exp(-Pbar[i] / 5))))),
         release: Math.max(0, aggregate(Rbar)),
     };
-}
-
-function computePatternTags(noteSeq, LNSeq, skillRatings, mapType) {
-    const tags = [];
-    const totalSkill = Object.values(skillRatings).reduce((a, b) => a + b, 0);
-    const lnRatio = LNSeq.length / Math.max(noteSeq.length, 1);
-    if (totalSkill <= 0) return tags;
-
-    const fracs = {};
-    for (const k in skillRatings) fracs[k] = skillRatings[k] / totalSkill;
-
-    const chords = [];
-    let currentChordCols = new Set(), currentChordTime = null;
-    for (const note of noteSeq) {
-        if (currentChordTime === null || note.start - currentChordTime > 30) {
-            if (currentChordCols.size > 0) chords.push(new Set(currentChordCols));
-            currentChordCols = new Set([note.col]); currentChordTime = note.start;
-        } else { currentChordCols.add(note.col); }
-    }
-    if (currentChordCols.size > 0) chords.push(new Set(currentChordCols));
-
-    let avgOverlap = 0; const overlaps = [];
-    for (let i = 1; i < chords.length; i++) {
-        let overlap = 0;
-        for (const col of chords[i]) if (chords[i - 1].has(col)) overlap++;
-        const union = new Set([...chords[i], ...chords[i - 1]]).size;
-        if (union > 0) overlaps.push(overlap / union);
-    }
-    if (overlaps.length > 0) avgOverlap = overlaps.reduce((a, b) => a + b, 0) / overlaps.length;
-
-    const nps = noteSeq.length > 1
-        ? noteSeq.length / Math.max(1, (noteSeq[noteSeq.length - 1].start - noteSeq[0].start) / 1000.0) : 0;
-
-    if (mapType === 'RC') {
-        const isJack = (fracs.jack > 0.30 && avgOverlap < 0.35) || (fracs.jack > fracs.stream * 1.5 && avgOverlap < 0.40);
-        const isStream = avgOverlap < 0.15 || (fracs.stream > 0.35 && avgOverlap < 0.25 && fracs.jack < 0.25);
-        const isChordstream = avgOverlap > 0.30 && fracs.jack > 0.15 && fracs.stream > 0.20;
-        const maxFrac = Math.max(fracs.stream, fracs.jack, fracs.tech, fracs.chordjack, fracs.release);
-        const isTech = maxFrac < 0.55 && fracs.tech > 0.05 && !(fracs.stream > 0.60 && fracs.tech < 0.10);
-
-        if (isJack && !isStream) {
-            tags.push('jack');
-            if (fracs.chordjack > 0.12) tags.push('chordjack');
-            else if (fracs.jack > 0.50) tags.push('minijack');
-        } else if (isChordstream) {
-            tags.push('chordstream');
-            if (fracs.stream > 0.45 || nps > 25) tags.push('dense chordstream'); else tags.push('light chordstream');
-            if (nps > 30) tags.push('vibro');
-        } else if (isStream && !isJack) {
-            if (fracs.stream > 0.60) tags.push('speed'); else tags.push('stream');
-            if (nps > 30) tags.push('vibro');
-        } else { if (nps > 30) tags.push('vibro'); else tags.push('speed'); }
-
-        if (isTech && !tags.includes('tech')) tags.push('tech');
-        if (tags.length >= 3) tags.push('wildcard');
-        if (tags.length === 0) tags.push('RC Mix');
-    } else {
-        if (fracs.release > 0.30) tags.push('LN Release');
-        if (fracs.release > 0.40 && fracs.jack < 0.15) tags.push('LN Coordination');
-        if (lnRatio > 0.6) tags.push('LN Density');
-        const avgLnDur = LNSeq.length > 0 ? LNSeq.reduce((a, n) => a + (n.end - n.start), 0) / LNSeq.length : 0;
-        if (avgLnDur < 400 && fracs.release > 0.25) tags.push('LN Inverse');
-        if (fracs.tech > 0.08) tags.push('LN Technical');
-        if (tags.length === 0) tags.push('LN Mix');
-        if (lnRatio > 0.15 && lnRatio < 0.40 && (fracs.stream > 0.30 || fracs.jack > 0.20)) tags.push('Hybrid');
-    }
-    return tags;
 }
 
 /**
@@ -1594,123 +1523,29 @@ function extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq) {
     };
 }
 
-function _predictTag_Hybrid(feat) {
-  if (feat.rbarMean <= 1.291554) {
-    return 0.000000;
-  } else {
-    if (feat.lnRatio <= 0.423330) {
-      if (feat.chordjackFrac <= 0.200900) {
-        return 1.000000;
-      } else {
-        return 0.666667;
-      }
-    } else {
-      return 0.000000;
-    }
-  }
-}
+// ============================================================
+// ML TAG CLASSIFIER — Auto-generated per-tag decision trees
+// Trained on 147 labeled maps (12 individual tags)
+// Exact match: 64.6%, Avg extra: 0.35, Avg missing: 0.12
+// ============================================================
 
-function _predictTag_LN_Mix(feat) {
-  if (feat.lnRatio <= 0.423330) {
-    return 0.000000;
-  } else {
-    if (feat.streamFrac <= 0.477058) {
-      if (feat.pbarStd <= 5.594486) {
-        if (feat.streamFrac <= 0.432211) {
-          return 0.000000;
-        } else {
-          return 0.750000;
-        }
-      } else {
-        if (feat.xbarStd <= 4.863719) {
-          return 1.000000;
-        } else {
-          return 0.666667;
-        }
-      }
-    } else {
-      if (feat.avgChordOverlap <= 0.095128) {
-        return 0.000000;
-      } else {
-        return 0.333333;
-      }
-    }
-  }
-}
-
-function _predictTag_RC_Mix(feat) {
-  if (feat.streamFrac <= 0.279505) {
-    if (feat.avgChordOverlap <= 0.102825) {
-      if (feat.chordjackFrac <= 0.275419) {
-        return 1.000000;
-      } else {
-        return 0.333333;
-      }
-    } else {
-      return 0.000000;
-    }
-  } else {
-    if (feat.avgLnDur <= 1335.928589) {
-      if (feat.pbarMean <= 18.282125) {
-        if (feat.pbarMean <= 17.245674) {
-          return 0.040000;
-        } else {
-          return 0.600000;
-        }
-      } else {
-        if (feat.avgLnDur <= 447.546844) {
-          return 0.000000;
-        } else {
-          return 0.125000;
-        }
-      }
-    } else {
-      if (feat.avgChordOverlap <= 0.055188) {
-        if (feat.jackFrac <= 0.226058) {
-          return 0.333333;
-        } else {
-          return 0.000000;
-        }
-      } else {
-        return 1.000000;
-      }
-    }
-  }
-}
-
-function _predictTag_anchor(feat) {
-  if (feat.avgChordOverlap <= 0.135205) {
-    return 0.000000;
-  } else {
-    if (feat.streamFrac <= 0.302012) {
-      if (feat.chordjackFrac <= 0.282659) {
-        return 1.000000;
-      } else {
-        return 0.333333;
-      }
-    } else {
-      return 0.000000;
-    }
-  }
-}
-
-function _predictTag_chordjack(feat) {
-  if (feat.avgChordOverlap <= 0.110638) {
-    if (feat.pbarP50 <= 11.238130) {
+function _predictTag_Chordjack(feat) {
+  if (feat.avgChordOverlap <= 0.111276) {
+    if (feat.pbarP90 <= 16.046998) {
       return 0.333333;
     } else {
       return 0.000000;
     }
   } else {
-    if (feat.chordjackFrac <= 0.240263) {
-      if (feat.rbarStd <= 0.609482) {
-        return 0.333333;
-      } else {
-        return 0.000000;
-      }
+    if (feat.chordjackFrac <= 0.234886) {
+      return 0.000000;
     } else {
-      if (feat.xbarStd <= 2.472803) {
-        return 0.666667;
+      if (feat.streamFrac <= 0.297955) {
+        if (feat.jbarMax <= 34.139162) {
+          return 0.333333;
+        } else {
+          return 1.000000;
+        }
       } else {
         return 1.000000;
       }
@@ -1718,32 +1553,44 @@ function _predictTag_chordjack(feat) {
   }
 }
 
-function _predictTag_coordination(feat) {
-  if (feat.streamFrac <= 0.458628) {
-    if (feat.techFrac <= 0.148658) {
-      if (feat.nps <= 24.052688) {
-        return 0.000000;
+function _predictTag_Coordination(feat) {
+  if (feat.chordjackFrac <= 0.183770) {
+    if (feat.lnRatio <= 0.708388) {
+      if (feat.rbarP90 <= 4.612066) {
+        if (feat.rbarStd <= 1.146641) {
+          return 0.000000;
+        } else {
+          return 0.333333;
+        }
       } else {
-        return 0.500000;
+        return 1.000000;
       }
     } else {
-      return 0.000000;
+      if (feat.pbarStd <= 4.762462) {
+        if (feat.pbarStd <= 4.203827) {
+          return 0.000000;
+        } else {
+          return 0.600000;
+        }
+      } else {
+        return 0.000000;
+      }
     }
   } else {
-    if (feat.xbarP90 <= 2.420569) {
-      return 0.000000;
-    } else {
-      if (feat.rbarMean <= 4.735386) {
-        return 1.000000;
+    if (feat.techFrac <= 0.148658) {
+      if (feat.techFrac <= 0.147638) {
+        return 0.000000;
       } else {
         return 0.333333;
       }
+    } else {
+      return 0.000000;
     }
   }
 }
 
-function _predictTag_dense_chordstream(feat) {
-  if (feat.techFrac <= 0.217621) {
+function _predictTag_Dense_Chordstream(feat) {
+  if (feat.techFrac <= 0.206743) {
     if (feat.pbarMax <= 23.179231) {
       if (feat.chordjackFrac <= 0.243122) {
         return 1.000000;
@@ -1751,17 +1598,17 @@ function _predictTag_dense_chordstream(feat) {
         return 0.333333;
       }
     } else {
-      if (feat.techFrac <= 0.206743) {
-        if (feat.pbarStd <= 3.110134) {
-          return 0.333333;
+      if (feat.avgChordOverlap <= 0.021009) {
+        if (feat.nps <= 18.956896) {
+          return 0.000000;
         } else {
-          return 0.010638;
+          return 0.500000;
         }
       } else {
-        if (feat.pbarMax <= 27.398076) {
-          return 0.666667;
+        if (feat.pbarStd <= 3.043700) {
+          return 0.333333;
         } else {
-          return 0.166667;
+          return 0.000000;
         }
       }
     }
@@ -1773,47 +1620,57 @@ function _predictTag_dense_chordstream(feat) {
         return 0.000000;
       }
     } else {
-      if (feat.pbarStd <= 4.616347) {
-        return 1.000000;
-      } else {
-        if (feat.jbarStd <= 3.937165) {
-          return 0.000000;
+      if (feat.nps <= 26.829497) {
+        if (feat.jbarMax <= 22.385497) {
+          return 0.875000;
         } else {
-          return 0.727273;
+          return 0.222222;
+        }
+      } else {
+        return 1.000000;
+      }
+    }
+  }
+}
+
+function _predictTag_Density(feat) {
+  if (feat.rbarMean <= 2.411396) {
+    return 0.000000;
+  } else {
+    if (feat.avgLnDur <= 291.869278) {
+      if (feat.jackFrac <= 0.184191) {
+        if (feat.avgChordOverlap <= 0.033891) {
+          return 0.500000;
+        } else {
+          return 1.000000;
+        }
+      } else {
+        if (feat.rbarP90 <= 7.719554) {
+          return 0.125000;
+        } else {
+          return 0.625000;
         }
       }
-    }
-  }
-}
-
-function _predictTag_density(feat) {
-  if (feat.nps <= 34.015474) {
-    if (feat.pbarStd <= 3.553239) {
-      if (feat.nps <= 22.896724) {
-        return 0.000000;
+    } else {
+      if (feat.lnRatio <= 0.548014) {
+        return 0.666667;
       } else {
-        return 0.333333;
+        return 0.000000;
       }
-    } else {
-      return 0.000000;
-    }
-  } else {
-    if (feat.jbarMax <= 26.382727) {
-      return 1.000000;
-    } else {
-      return 0.000000;
     }
   }
 }
 
-function _predictTag_fast_chordstream(feat) {
-  if (feat.techFrac <= 0.223358) {
-    if (feat.xbarStd <= 8.279739) {
-      if (feat.jackFrac <= 0.308088) {
-        if (feat.avgLnDur <= 1090.500000) {
-          return 0.000000;
+function _predictTag_Fast_Chordstream(feat) {
+  if (feat.pbarStd <= 2.598569) {
+    return 0.500000;
+  } else {
+    if (feat.xbarStd <= 8.661942) {
+      if (feat.chordjackFrac <= 0.288750) {
+        if (feat.techFrac <= 0.224652) {
+          return 0.008197;
         } else {
-          return 0.083333;
+          return 0.133333;
         }
       } else {
         return 0.333333;
@@ -1821,52 +1678,42 @@ function _predictTag_fast_chordstream(feat) {
     } else {
       return 0.333333;
     }
-  } else {
-    if (feat.techFrac <= 0.225519) {
-      return 0.666667;
-    } else {
-      if (feat.pbarMean <= 19.712944) {
-        return 0.333333;
-      } else {
-        return 0.000000;
-      }
-    }
   }
 }
 
-function _predictTag_minijack(feat) {
-  if (feat.pbarStd <= 2.511311) {
-    return 0.666667;
-  } else {
-    if (feat.jackFrac <= 0.256886) {
+function _predictTag_Inverse(feat) {
+  if (feat.pbarMean <= 34.630302) {
+    if (feat.xbarMean <= 1.026996) {
+      if (feat.lnContrib <= 0.127920) {
+        return 1.000000;
+      } else {
+        return 0.000000;
+      }
+    } else {
       return 0.000000;
-    } else {
-      if (feat.nps <= 21.416211) {
-        return 0.000000;
-      } else {
-        if (feat.jbarMax <= 37.931873) {
-          return 0.666667;
-        } else {
-          return 0.000000;
-        }
-      }
     }
-  }
-}
-
-function _predictTag_release(feat) {
-  if (feat.techFrac <= 0.092792) {
-    if (feat.lnRatio <= 0.713062) {
-      return 0.250000;
+  } else {
+    if (feat.lnRatio <= 0.984001) {
+      return 0.000000;
     } else {
       return 1.000000;
     }
+  }
+}
+
+function _predictTag_Minijack(feat) {
+  if (feat.pbarStd <= 2.511311) {
+    return 0.666667;
   } else {
-    if (feat.chordjackFrac <= 0.174984) {
-      if (feat.avgChordOverlap <= 0.044443) {
+    if (feat.streamFrac <= 0.296863) {
+      if (feat.streamFrac <= 0.285604) {
         return 0.000000;
       } else {
-        return 0.666667;
+        if (feat.avgChordOverlap <= 0.072175) {
+          return 0.000000;
+        } else {
+          return 0.666667;
+        }
       }
     } else {
       return 0.000000;
@@ -1874,8 +1721,40 @@ function _predictTag_release(feat) {
   }
 }
 
-function _predictTag_speed(feat) {
-  if (feat.avgChordOverlap <= 0.017391) {
+function _predictTag_Release(feat) {
+  if (feat.lnContrib <= 0.129016) {
+    if (feat.rbarMean <= 4.669211) {
+      if (feat.lnContrib <= 0.096907) {
+        return 0.000000;
+      } else {
+        if (feat.avgChordOverlap <= 0.091307) {
+          return 0.000000;
+        } else {
+          return 0.666667;
+        }
+      }
+    } else {
+      if (feat.avgLnDur <= 211.083199) {
+        if (feat.techFrac <= 0.177414) {
+          return 0.000000;
+        } else {
+          return 0.750000;
+        }
+      } else {
+        return 1.000000;
+      }
+    }
+  } else {
+    if (feat.lnRatio <= 0.708388) {
+      return 0.400000;
+    } else {
+      return 1.000000;
+    }
+  }
+}
+
+function _predictTag_Speed(feat) {
+  if (feat.avgChordOverlap <= 0.018154) {
     if (feat.pbarStd <= 3.895566) {
       if (feat.avgChordOverlap <= 0.009878) {
         return 0.666667;
@@ -1890,88 +1769,157 @@ function _predictTag_speed(feat) {
       }
     }
   } else {
-    if (feat.techFrac <= 0.239885) {
-      if (feat.techFrac <= 0.202430) {
-        if (feat.avgChordOverlap <= 0.029608) {
-          return 0.142857;
+    if (feat.techFrac <= 0.202210) {
+      if (feat.avgChordOverlap <= 0.029608) {
+        if (feat.rbarMean <= 2.094883) {
+          return 0.500000;
         } else {
           return 0.000000;
         }
       } else {
-        if (feat.avgChordOverlap <= 0.113636) {
-          return 0.100000;
-        } else {
-          return 0.750000;
-        }
+        return 0.000000;
       }
     } else {
-      return 0.666667;
+      if (feat.avgChordOverlap <= 0.113636) {
+        if (feat.techFrac <= 0.239885) {
+          return 0.136364;
+        } else {
+          return 0.666667;
+        }
+      } else {
+        return 0.750000;
+      }
     }
   }
 }
 
-function _predictTag_tech(feat) {
-  if (feat.rbarStd <= 0.264322) {
-    if (feat.lnRatio <= 0.002112) {
-      if (feat.avgChordOverlap <= 0.020455) {
+function _predictTag_Tech(feat) {
+  if (feat.jackFrac <= 0.226271) {
+    if (feat.pbarP50 <= 16.622025) {
+      if (feat.xbarMean <= 6.797189) {
         return 0.000000;
       } else {
-        if (feat.jbarStd <= 4.912884) {
-          return 0.380952;
-        } else {
-          return 0.086957;
-        }
+        return 1.000000;
       }
     } else {
+      return 0.000000;
+    }
+  } else {
+    if (feat.jbarStd <= 4.912884) {
+      if (feat.jbarMax <= 32.182098) {
+        if (feat.pbarMax <= 29.066476) {
+          return 0.200000;
+        } else {
+          return 0.583333;
+        }
+      } else {
+        return 1.000000;
+      }
+    } else {
+      if (feat.pbarP50 <= 34.507318) {
+        return 0.000000;
+      } else {
+        return 0.500000;
+      }
+    }
+  }
+}
+
+function _predictTag_Technical(feat) {
+  if (feat.nps <= 36.539736) {
+    if (feat.rbarMean <= 3.354473) {
+      return 0.000000;
+    } else {
+      if (feat.chordjackFrac <= 0.189611) {
+        return 0.000000;
+      } else {
+        return 1.000000;
+      }
+    }
+  } else {
+    if (feat.avgLnDur <= 132.488228) {
       return 1.000000;
-    }
-  } else {
-    return 0.000000;
-  }
-}
-
-function _predictTag_vibro(feat) {
-  if (feat.pbarStd <= 2.511311) {
-    return 0.666667;
-  } else {
-    if (feat.avgChordOverlap <= 0.254159) {
-      if (feat.chordjackFrac <= 0.265894) {
-        return 0.000000;
-      } else {
-        if (feat.jbarMax <= 33.087460) {
+    } else {
+      if (feat.rbarP90 <= 8.054947) {
+        if (feat.pbarMax <= 41.102358) {
           return 0.333333;
         } else {
           return 0.000000;
         }
+      } else {
+        return 0.666667;
       }
+    }
+  }
+}
+
+function _predictTag_Vibro(feat) {
+  if (feat.pbarStd <= 2.511311) {
+    return 0.666667;
+  } else {
+    if (feat.chordjackFrac <= 0.263587) {
+      return 0.000000;
     } else {
-      return 0.333333;
+      if (feat.xbarStd <= 3.430713) {
+        return 0.666667;
+      } else {
+        return 0.000000;
+      }
     }
   }
 }
 
 /**
- * ML-based pattern tag prediction.
+ * ML-based pattern tag prediction with post-processing.
+ * - RC maps: only RC-type tags; ≥3 → "RC Mix" (suppresses all others)
+ * - LN maps: only LN-type tags; ≥3 → "LN Mix" (suppresses all others)
+ * - HB maps: all tags; ≥3 → "Hybrid" (suppresses all others)
  * @param {Object} feat - Features from extractTagFeatures()
+ * @param {string} mapType - 'RC' | 'LN' | 'HB' | 'Mix'
  * @returns {string[]} predicted tags
  */
-function computePatternTagsML(feat) {
-    const tags = [];
-    if (_predictTag_Hybrid(feat) >= 0.2800) tags.push('Hybrid');
-    if (_predictTag_LN_Mix(feat) >= 0.2800) tags.push('LN Mix');
-    if (_predictTag_RC_Mix(feat) >= 0.2800) tags.push('RC Mix');
-    if (_predictTag_anchor(feat) >= 0.2800) tags.push('anchor');
-    if (_predictTag_chordjack(feat) >= 0.2800) tags.push('chordjack');
-    if (_predictTag_coordination(feat) >= 0.2800) tags.push('coordination');
-    if (_predictTag_dense_chordstream(feat) >= 0.2800) tags.push('dense chordstream');
-    if (_predictTag_density(feat) >= 0.2800) tags.push('density');
-    if (_predictTag_fast_chordstream(feat) >= 0.2800) tags.push('fast chordstream');
-    if (_predictTag_minijack(feat) >= 0.2800) tags.push('minijack');
-    if (_predictTag_release(feat) >= 0.2800) tags.push('release');
-    if (_predictTag_speed(feat) >= 0.2800) tags.push('speed');
-    if (_predictTag_tech(feat) >= 0.2800) tags.push('tech');
-    if (_predictTag_vibro(feat) >= 0.2800) tags.push('vibro');
-    return tags;
+function computePatternTagsML(feat, mapType) {
+    // HB maps: always "Hybrid" — no individual tags
+    if (mapType === 'HB') return ['Hybrid'];
+
+    const RC_TAGS = new Set(['Chordjack', 'Dense Chordstream', 'Fast Chordstream',
+                              'Minijack', 'Speed', 'Tech', 'Vibro']);
+    const LN_TAGS = new Set(['Coordination', 'Density', 'Inverse', 'Release', 'Technical']);
+
+    // Collect all individual tag predictions
+    const rawTags = [];
+    if (_predictTag_Chordjack(feat) >= 0.2800) rawTags.push('Chordjack');
+    if (_predictTag_Coordination(feat) >= 0.2800) rawTags.push('Coordination');
+    if (_predictTag_Dense_Chordstream(feat) >= 0.3400) rawTags.push('Dense Chordstream');
+    if (_predictTag_Density(feat) >= 0.2800) rawTags.push('Density');
+    if (_predictTag_Fast_Chordstream(feat) >= 0.2800) rawTags.push('Fast Chordstream');
+    if (_predictTag_Inverse(feat) >= 0.2800) rawTags.push('Inverse');
+    if (_predictTag_Minijack(feat) >= 0.2800) rawTags.push('Minijack');
+    if (_predictTag_Release(feat) >= 0.2800) rawTags.push('Release');
+    if (_predictTag_Speed(feat) >= 0.2800) rawTags.push('Speed');
+    if (_predictTag_Tech(feat) >= 0.2800) rawTags.push('Tech');
+    if (_predictTag_Technical(feat) >= 0.2800) rawTags.push('Technical');
+    if (_predictTag_Vibro(feat) >= 0.2800) rawTags.push('Vibro');
+
+    // Filter by map type: RC maps get only RC tags, LN maps get only LN tags
+    let filtered;
+    if (mapType === 'RC') {
+        filtered = rawTags.filter(function(t) { return RC_TAGS.has(t); });
+    } else if (mapType === 'LN') {
+        filtered = rawTags.filter(function(t) { return LN_TAGS.has(t); });
+    } else {
+        // Mix: keep all individual tags
+        filtered = rawTags;
+    }
+
+    // Mix synthesis: ≥3 individual tags → suppress all, show only RC Mix / LN Mix / Hybrid
+    if (filtered.length >= 3) {
+        if (mapType === 'RC') return ['RC Mix'];
+        if (mapType === 'LN') return ['LN Mix'];
+        return ['Hybrid'];  // Mix (≥3 tags → diverse patterns)
+    }
+
+    return filtered;
 }
 
 
@@ -1984,7 +1932,7 @@ function processMap(osuContent, mode, speedRate) {
 
     const { rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
             noteSeq, LNSeq, allCorners,
-            D_all, rcD_all, rcEquivD_all, LN_rep, features } = result;
+            D_all, rcD_all, rcEquivD_all, LN_rep, lnMask, features } = result;
     const firstNoteTime = noteSeq.length > 0 ? noteSeq[0].start : 0;
     const lastNoteTime = noteSeq.length > 0 ? noteSeq[noteSeq.length - 1].start : 0;
 
@@ -2001,6 +1949,17 @@ function processMap(osuContent, mode, speedRate) {
         isMix = true;
     }
 
+    // Hybrid→LN reclassification: if RC sections are short/simple but LN dominates
+    // rcEquivRating treats LN heads as taps globally → captures "tap difficulty" everywhere
+    // rcSectionRating is RC sections only → actual RC difficulty
+    // If RC sections contribute far less than their share, LN content dominates
+    if (mapType === 'HB' && rcSectionRating > 0 && rcEquivRating > 0.01) {
+        const rcSectionFraction = rcSectionRating / rcEquivRating;
+        if (rcSectionFraction < 0.65 && features.lnRatio > 0.20) {
+            mapType = 'LN';
+        }
+    }
+
     const skillRatings = computeSkillRatings(result.Jbar, result.Xbar, result.Pbar, result.Rbar);
 
     // Per-sort difficulty values
@@ -2009,13 +1968,19 @@ function processMap(osuContent, mode, speedRate) {
     let mainD_all = D_all;  // default main curve
 
     if (mapType === 'RC') {
-        // RC maps: only RC model rating matters, no LN contribution
+        // RC maps: use RC model rating; show LN rating if map has long notes
         displayRcRating = rcRating;
-        displayLnRating = null;  // hidden
+        displayLnRating = LNSeq.length > 0 ? lnMaskedRating : null;
         displayRcDan = ratingToDanRC(rcRating);
-        displayLnDan = null;  // hidden
+        displayLnDan = LNSeq.length > 0 ? ratingToDanLN(lnMaskedRating) : null;
         rcSectionDiffs = computeSectionData(allCorners, rcD_all, firstNoteTime, lastNoteTime).sectionDifficulties;
-        lnSectionDiffs = null;  // hidden
+        // Show total D as green curve if map has LNs
+        if (LNSeq.length > 0) {
+            const lnSectionD_RC = D_all.map((d, i) => lnMask[i] ? d : 0);
+            lnSectionDiffs = computeSectionData(allCorners, lnSectionD_RC, firstNoteTime, lastNoteTime).sectionDifficulties;
+        } else {
+            lnSectionDiffs = null;
+        }
     } else if (mapType === 'LN') {
         // LN maps: RC-equiv D as RC curve (LN heads treated as taps, full curve, no mask)
         displayRcRating = rcEquivRating;
@@ -2027,8 +1992,7 @@ function processMap(osuContent, mode, speedRate) {
         const rcEquivSection = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
         rcSectionDiffs = rcEquivSection.sectionDifficulties;
         // Green curve = Total D masked to LN sections (near 0 in RC sections)
-        const lnMaskLN = computeHBSectionMasks(allCorners, LN_rep).lnMask;
-        const lnSectionD_LN = D_all.map((d, i) => lnMaskLN[i] ? d : 0);
+        const lnSectionD_LN = D_all.map((d, i) => lnMask[i] ? d : 0);
         lnSectionDiffs = computeSectionData(allCorners, lnSectionD_LN, firstNoteTime, lastNoteTime).sectionDifficulties;
     } else if (mapType === 'HB') {
         // HB maps: LN difficulty uses LN-masked model (LN sections only, not inflated by RC)
@@ -2042,30 +2006,34 @@ function processMap(osuContent, mode, speedRate) {
         const rcEquivSection = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
         rcSectionDiffs = rcEquivSection.sectionDifficulties;
         // Green curve = Total D masked to LN sections (near 0 in RC sections)
-        const lnMaskHB = computeHBSectionMasks(allCorners, LN_rep).lnMask;
-        const lnSectionD_HB = D_all.map((d, i) => lnMaskHB[i] ? d : 0);
+        const lnSectionD_HB = D_all.map((d, i) => lnMask[i] ? d : 0);
         lnSectionDiffs = computeSectionData(allCorners, lnSectionD_HB, firstNoteTime, lastNoteTime).sectionDifficulties;
     } else {
-        // Mix maps: only total SR, no RC/LN breakdown
-        displayRcRating = null;  // hidden
-        displayLnRating = null;  // hidden
-        displayRcDan = null;     // hidden
-        displayLnDan = ratingToDanLN(rating);  // total rating uses LN dan mapping
-        rcSectionDiffs = null;   // hidden
-        lnSectionDiffs = null;   // hidden
+        // Mix maps: show both RC and LN difficulty (same treatment as HB)
+        displayRcRating = rcSectionRating;
+        displayLnRating = lnMaskedRating;
+        displayRcDan = ratingToDanRC(rcSectionRating);
+        displayLnDan = ratingToDanLN(lnMaskedRating);
+
+        // RC curve = RC-equiv D (smooth, full)
+        const rcEquivSectionMix = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
+        rcSectionDiffs = rcEquivSectionMix.sectionDifficulties;
+        // Green curve = Total D masked to LN sections
+        const lnSectionD_Mix = D_all.map((d, i) => lnMask[i] ? d : 0);
+        lnSectionDiffs = computeSectionData(allCorners, lnSectionD_Mix, firstNoteTime, lastNoteTime).sectionDifficulties;
     }
 
     const { sectionDifficulties, sectionTimes } = computeSectionData(allCorners, D_all, firstNoteTime, lastNoteTime);
     // Use ML-based tag prediction (replaces old rule-based computePatternTags)
     const tagFeatures = extractTagFeatures(result.Jbar, result.Xbar, result.Pbar, result.Rbar, noteSeq, LNSeq);
-    const patternTags = computePatternTagsML(tagFeatures);
+    const patternTags = computePatternTagsML(tagFeatures, mapType);
 
-    // Dan fields: total SR for RC maps, rcEquiv for LN, rcRating for HB, rating for all LN dan
+    // Dan fields: total SR for RC maps, rcEquiv for LN, rcSection for HB/Mix
     const rcDan = (mapType === 'RC') ? ratingToDanRC(rating)
                 : (mapType === 'LN') ? ratingToDanRC(rcEquivRating)
-                : (mapType === 'HB') ? ratingToDanRC(rcSectionRating)
-                : ratingToDanRC(rcRating);
-    const lnDan = (mapType === 'HB') ? ratingToDanLN(lnMaskedRating) : ratingToDanLN(rating);
+                : ratingToDanRC(rcSectionRating);  // HB / Mix
+    const lnDan = (mapType === 'HB' || mapType === 'Mix' || (mapType === 'RC' && LNSeq.length > 0))
+        ? ratingToDanLN(lnMaskedRating) : ratingToDanLN(rating);
     const totalDan = ratingToDanRC(rating);
 
     const output = {

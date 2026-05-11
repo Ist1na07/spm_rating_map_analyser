@@ -1,5 +1,5 @@
 name:SPM Map Analyser
-author:SPM Rating
-version:1.0.0
+author:Ist1na
+version:0.1.1
 resolution:-2x240
 compatiblewith:tosu

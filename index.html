@@ -113,13 +113,12 @@ body {
 }
 #dan-row.rc-only .dan-item.ln-dan-row { display: none; }
 #dan-row.rc-only .dan-sep { display: none; }
-#dan-row.mix-only .dan-item.rc-dan-row { display: none; }
-#dan-row.mix-only .dan-sep { display: none; }
-#rc-ln-row.mix-only { display: none; }
 #dan-row .total-dan-sep,
 #dan-row .total-dan-item { display: none; }
 #dan-row.hb .total-dan-sep,
 #dan-row.hb .total-dan-item { display: inline-flex; }
+#dan-row.mix .total-dan-sep,
+#dan-row.mix .total-dan-item { display: inline-flex; }
 #tags {
     font-size: 19px;
     color: rgba(255, 255, 255, 0.6);
@@ -129,45 +128,6 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-#skills {
-    display: flex;
-    gap: 2px;
-    height: 9px;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 3px;
-}
-#skills .bar {
-    height: 100%;
-    transition: width 0.3s ease;
-}
-#skills .bar.stream { background: #42a5f5; }
-#skills .bar.jack { background: #ef5350; }
-#skills .bar.tech { background: #ab47bc; }
-#skills .bar.chordjack { background: #ffa726; }
-#skills .bar.release { background: #66bb6a; }
-#skill-labels {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px 17px;
-    font-size: 15px;
-    color: rgba(255, 255, 255, 0.5);
-    margin-top: 2px;
-}
-#skill-labels span::before {
-    content: '';
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    margin-right: 3px;
-    vertical-align: middle;
-}
-#skill-labels .l-stream::before { background: #42a5f5; }
-#skill-labels .l-jack::before { background: #ef5350; }
-#skill-labels .l-tech::before { background: #ab47bc; }
-#skill-labels .l-chordjack::before { background: #ffa726; }
-#skill-labels .l-release::before { background: #66bb6a; }
 #curve-container {
     margin-top: 7px;
     position: relative;
@@ -231,20 +191,6 @@ body {
         </div>
     </div>
     <div id="tags"></div>
-    <div id="skills">
-        <div class="bar stream" style="width:0%"></div>
-        <div class="bar jack" style="width:0%"></div>
-        <div class="bar tech" style="width:0%"></div>
-        <div class="bar chordjack" style="width:0%"></div>
-        <div class="bar release" style="width:0%"></div>
-    </div>
-    <div id="skill-labels">
-        <span class="l-stream" id="lbl-stream">STR 0.00</span>
-        <span class="l-jack" id="lbl-jack">JCK 0.00</span>
-        <span class="l-tech" id="lbl-tech">TCH 0.00</span>
-        <span class="l-chordjack" id="lbl-chordjack">CJ 0.00</span>
-        <span class="l-release" id="lbl-release">RLS 0.00</span>
-    </div>
     <div id="curve-container">
         <canvas id="curve-canvas"></canvas>
         <div id="curve-legend">
@@ -288,8 +234,6 @@ body {
     const elTotalDan = document.getElementById('total-dan');
     const elDanRow = document.getElementById('dan-row');
     const elTags = document.getElementById('tags');
-    const elSkills = document.getElementById('skills');
-    const elSkillLabels = document.getElementById('skill-labels');
     const elCanvas = document.getElementById('curve-canvas');
     const elCurveLegend = document.getElementById('curve-legend');
 
@@ -407,7 +351,7 @@ body {
         const pad = 3;
 
         const isMix = mapType === 'Mix';
-        const showBoth = (mapType === 'LN' || mapType === 'HB') && rcSectionDiffs && rcSectionDiffs.length > 0;
+        const showBoth = rcSectionDiffs && rcSectionDiffs.length > 0 && lnSectionDiffs && lnSectionDiffs.length > 0;
 
         if (showBoth) {
             // Blue = RC D (full/smooth RC-equiv), Green = LN D (near 0 in RC sections)
@@ -453,7 +397,7 @@ body {
             elCurveLegend.classList.remove('hidden');
         } else if (sectionDiffs && sectionDiffs.length > 0) {
             const maxVal = Math.max(...sectionDiffs, 0.01);
-            const curveColor = isMix ? '#ff9800' : '#64b5f6';  // orange for Mix, blue for RC
+            const curveColor = isMix ? '#ce93d8' : '#64b5f6';  // purple for Mix fallback, blue for RC
             ctx.beginPath();
             ctx.strokeStyle = curveColor;
             ctx.globalAlpha = 0.9;
@@ -486,7 +430,8 @@ body {
 
         // Cursor position
         if (cursorTimeMs !== null && sectionTimes && sectionTimes.length > 0) {
-            const scaledTime = cursorTimeMs / currentSpeedRate;
+            // cursorTimeMs is already scaled (divided by speedRate) in onmessage handler
+            const scaledTime = cursorTimeMs;
             const mapStart = firstNoteTime || sectionTimes[0];
             const mapEnd = lastNoteTime || sectionTimes[sectionTimes.length - 1] + 400;
             const timeSpan = Math.max(1, mapEnd - mapStart);
@@ -531,31 +476,19 @@ body {
 
         // Per-type row visibility
         elRcLnRow.classList.remove('mix-only');
-        elDanRow.classList.remove('rc-only', 'mix-only', 'hb');
+        elDanRow.classList.remove('rc-only', 'mix-only', 'hb', 'mix');
 
-        if (result.mapType === 'RC') {
+        if (result.mapType === 'RC' && result.lnCount === 0) {
             elDanRow.classList.add('rc-only');
+        } else if (result.mapType === 'RC') {
+            // RC with LNs: show both RC and LN dan rows
         } else if (result.mapType === 'HB') {
             elDanRow.classList.add('hb');
         } else if (result.mapType === 'Mix') {
-            elRcLnRow.classList.add('mix-only');
-            elDanRow.classList.add('mix-only');
+            elDanRow.classList.add('mix');
         }
 
         elTags.textContent = result.patternTags.join(', ');
-
-        const sr = result.skillRatings;
-        const total = Math.max(Object.values(sr).reduce((a, b) => a + b, 0), 0.01);
-        const skillNames = ['stream', 'jack', 'tech', 'chordjack', 'release'];
-        const shortNames = { stream: 'STR', jack: 'JCK', tech: 'TCH', chordjack: 'CJ', release: 'RLS' };
-
-        const bars = elSkills.querySelectorAll('.bar');
-        skillNames.forEach((name, i) => {
-            const pct = (sr[name] / total * 100);
-            bars[i].style.width = pct + '%';
-            document.getElementById('lbl-' + name).textContent =
-                shortNames[name] + ' ' + sr[name].toFixed(2);
-        });
 
         const cursorTime = getInterpolatedTime();
         drawCurve(
@@ -673,8 +606,12 @@ body {
                 currentSpeedRate = modData.speedRate;
 
                 if (modData.speedRate !== 1.0) {
-                    elModBadge.textContent = modData.modCodes.length > 0
-                        ? modData.modCodes.join('+') + ' ' + modData.speedRate.toFixed(2) + 'x'
+                    // NC implies DT in osu! — show NC standalone, not DT+NC
+                    const displayCodes = modData.modCodes.includes('NC')
+                        ? modData.modCodes.filter(c => c !== 'DT')
+                        : modData.modCodes;
+                    elModBadge.textContent = displayCodes.length > 0
+                        ? displayCodes.join('+') + ' ' + modData.speedRate.toFixed(2) + 'x'
                         : modData.speedRate.toFixed(2) + 'x';
                     elModBadge.classList.remove('hidden');
                 } else {
