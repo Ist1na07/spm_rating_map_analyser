@@ -21,7 +21,7 @@
 
 ## 使用方法
 
-1. 前往 [Release](https://github.com/SPMRating/spm_rating_map_analyser/releases/latest) 下载。
+1. 前往 [Release](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将文件夹放入 tosu 的 `static` 目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
