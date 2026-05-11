@@ -21,7 +21,7 @@ A [tosu](https://tosu.app) in-game overlay providing real-time difficulty rating
 
 ## Usage
 
-1. Download from [Releases](https://github.com/SPMRating/spm_rating_map_analyser/releases/latest).
+1. Download from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder inside tosu's `static` directory.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
