@@ -106,7 +106,7 @@ RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation
 ## References
 
 - [tosu](https://tosu.app) — Runtime environment
-- [SPM Rating](https://github.com/ESWAT-omamori/SPMRating_v2_pro) — Algorithm tuning codebase
+- [SPM Rating](https://github.com/Ist1na07/SPMRating) — Algorithm tuning codebase
 
 ## License
 
