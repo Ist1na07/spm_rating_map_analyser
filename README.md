@@ -21,7 +21,7 @@
 
 ## 使用方法
 
-1. 前往 [Release](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
+1. 前往 [Release](https://github.com/Ist1na07/spm_rating_map_analyser/releases/latest) 下载。
 2. 将文件夹放入 tosu 的 `static` 目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
@@ -85,18 +85,15 @@ RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 
 ### v0.1.1
 - HB 谱面 tag 统一为 "Hybrid"
-- 新增 Inverse、Technical 标签分类器
-- 移除 Anchor 标签
+- 新增 Inverse、Technical 标签分类器，移除 Anchor
 - 二次 FP 惩罚损失函数（减少过度预测）
 - Mix 谱面显示 RC+LN 双难度
-- Mix tag 颜色恢复橙色
-- 修复 HT 进度条双重缩放
-- 修复 NC 显示为 "DT+NC"
-- 段位极端值直接显示 0th / Stellium
-- 修复 RC 谱面 LN 段位使用错误 SR 源
+- 修复 HT 进度条双重缩放、NC 显示等 Bug
 
 ### v0.1.0
-- 初始发布：Sigmoid 聚合模型 + RC/LN 子模型
+- 初始发布：Sigmoid 聚合模型 (k=1.56, C=3.99) + RC/LN 子模型
+- 12-tag 决策树键型分类 + 合成标签 (RC Mix / LN Mix / Hybrid)
+- 段位映射 (0th~Stellium)、难度曲线、Mod 支持
 
 ## 注意事项
 

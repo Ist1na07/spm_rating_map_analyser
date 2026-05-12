@@ -21,7 +21,7 @@ A [tosu](https://tosu.app) in-game overlay providing real-time difficulty rating
 
 ## Usage
 
-1. Download from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
+1. Download from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases/latest).
 2. Place the folder inside tosu's `static` directory.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
@@ -86,18 +86,15 @@ RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation
 
 ### v0.1.1
 - HB maps unified as "Hybrid" tag
-- Added Inverse, Technical tag classifiers
-- Removed Anchor tag
+- Added Inverse, Technical tag classifiers; removed Anchor
 - Quadratic FP penalty loss function (reduces over-prediction)
-- Mix maps now display both RC+LN difficulty ratings
-- Mix tag color reverted to orange
-- Fixed HT dual-scaling on progress bar
-- Fixed NC display as "DT+NC"
-- Dan extremes show 0th / Stellium directly
-- Fixed RC maps using wrong SR source for LN Dan
+- Mix maps display both RC+LN difficulty ratings
+- Fixed HT dual-scaling, NC display, and other bugs
 
 ### v0.1.0
-- Initial release: Sigmoid aggregation model + RC/LN sub-models
+- Initial release: Sigmoid aggregation model (k=1.56, C=3.99) + RC/LN sub-models
+- 12-tag decision tree classifier + synthesis tags (RC Mix / LN Mix / Hybrid)
+- Dan mapping (0th~Stellium), difficulty curve, Mod support
 
 ## Notes
 
