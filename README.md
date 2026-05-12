@@ -105,7 +105,7 @@ RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 ## 参考
 
 - [tosu](https://tosu.app) — 运行环境
-- [SPM Rating](https://github.com/ESWAT-omamori/SPMRating_v2_pro) — 算法调参代码库
+- [SPM Rating](https://github.com/Ist1na07/SPMRating) — 算法调参代码库
 
 ## License
 
