@@ -15,86 +15,87 @@ const ENHANCED_PARAMS = {
     D_gamma_e: 0.0,
 
     // Core scaling
-    w_mean: 0.572, rescale_threshold: 9.54, rescale_divisor: 2.0,
-    jack_aggregation_power: 3.98, multi_jack_boost: 0.003,
-    Abar_scale: 1.0159974528704387,
+    w_mean: 0.572, rescale_threshold: 9.417420338567627, rescale_divisor: 2.009376904206021,
+    jack_aggregation_power: 4.271216932836177, multi_jack_boost: 0.00042685730273835614,
+    Abar_scale: 1.0163,
     inverse_peak_width: 2.0,
 
     // Cross / column distance
     cross_dist_exponent: 1.0, cross_same_hand_penalty: 0.3,
-    cross_thumb_bridge_factor: 0.5768675268883898,
+    cross_thumb_bridge_factor: 0.5535622364790934,
 
     // Release (Rbar)
-    release_tail_coeff: 0.1301386626710443,
-    release_tail_to_tap: 2.8102788921489603,
-    release_same_col_bonus: 0.2510782776793202,
-    release_coord_exponent: 0.6855610516647912,
-    release_seq_coeff: 0.07876946297853933,
-    lock_interaction_coeff: 0.13816209949139724,
+    release_tail_coeff: 0.14488009478034738,
+    release_tail_to_tap: 4.224154738413993,
+    release_same_col_bonus: 0.267745272040277,
+    release_coord_exponent: 0.7193118045950513,
+    release_seq_coeff: 0.10849823285734937,
+    lock_interaction_coeff: 0.11648699038253439,
 
     // Stream / Pbar
     stream_booster_scale: 1.75e-07,
-    short_ln_threshold: 200, short_ln_reduction: 0.5,
+    short_ln_threshold: 331.62375992488296, short_ln_reduction: 0.10008962172133994,
 
     // S-mix & alphas
-    S_w1: 0.5127205484014595, S_p: 1.1350727423836298,
-    alpha_P: 0.7243971981192697, alpha_R: 28.68398732935888,
-    alpha_C: 9.597140096247783, alpha_S: 0.5017118508840599,
-    alpha_V: 0.4348924525605874,
+    S_w1: 0.484, S_p: 0.9994,
+    alpha_P: 0.7245387129819947, alpha_R: 32.2385,
+    alpha_C: 11.02053, alpha_S: 0.5554,
+    alpha_V: 0.37139999999999995,
 
     // D formula
-    D_beta1: 1.1645638403719478, D_beta2: 0.3889790083690824,
+    D_beta1: 1.1879, D_beta2: 0.3845,
 
     // Post-processing (percentile weights — kept for skill ratings, not used for SR)
     w_93: 0.1820607086443739, w_83: 0.2338096935124762,
     coeff_93: 0.9642799087643721, coeff_83: 0.6025543835022324,
     mean_power: 2.137380905141331,
 
-    note_norm_N0: 10.0, global_scale: 1.0548667350346,
+    note_norm_N0: 8.208876816969216, global_scale: 1.0549342571808757,
 
     // Inverse (Vbar)
-    inv_amplitude: 3.448859525864742, inv_tau: 32.502710313970894,
-    inv_power: 0.8537687907693771,
-    guide_depth: 0.7971215272422785, guide_center: 78.53359863949761,
-    guide_width: 41.581395044572375, cross_guide_scale: 0.5894104667719972,
-    inverse_same_col_bonus: 2.6084806897704493,
+    inv_amplitude: 3.7118766294981045, inv_tau: 31.906673905517522,
+    inv_power: 0.797883494531484,
+    guide_depth: 0.8539658929253457, guide_center: 83.00337573436185,
+    guide_width: 33.569919335556584, cross_guide_scale: 0.6632104629775328,
+    inverse_same_col_bonus: 2.6796650792734167,
+    V_alpha: 0.435,
 
     // Shield (Sbar)
-    shield_tau_ms: 56.24289518646123,
+    shield_tau_ms: 56.2429,
     shield_anchor_mod: 0.8062210781592527,
     shield_coord_factor: 1.0025438218559561,
 
     // Cross RC/LN blending
-    cross_dist_exponent_rc: 0.9732421726222308,
-    cross_dist_exponent_ln: 0.974803204070658,
-    cross_same_hand_penalty_rc: 0.3613101110984365,
-    cross_same_hand_penalty_ln: 0.30422710249481105,
+    cross_dist_exponent_rc: 0.997293421760749,
+    cross_dist_exponent_ln: 0.9323875832719253,
+    cross_same_hand_penalty_rc: 0.39298900398939857,
+    cross_same_hand_penalty_ln: 0.2954279991821967,
 
     // === SIGMOID AGGREGATION (Total SR) ===
     use_sigmoid_aggregation: 1,
-    agg_sigmoid_k: 1.5636,
-    agg_sigmoid_C: 3.9862,
-    agg_sigmoid_ref_gamma: 0.2011,
-    calib_a: 0.8899,
-    calib_b: 0.0436,
+    agg_sigmoid_k: 2.09,
+    agg_sigmoid_C: 3.968852604627637,
+    agg_sigmoid_ref_gamma: 0.1956208588626766,
+    calib_a: 0.8933406436079341,
+    calib_b: 0.03083150068086804,
     agg_n_segments: 30,
 
     // === RC MODEL PARAMS ===
-    S_w1_rc: 0.5344569049642675, S_p_rc: 1.1252185265585248,
-    alpha_P_rc: 0.7240681334591841,
-    D_beta1_rc: 1.1969384830376526, D_beta2_rc: 0.38628475214559566,
-    Abar_scale_rc: 1.025360108921893,
+    S_w1_rc: 0.5459259100383405, S_p_rc: 0.8586310947122264,
+    alpha_P_rc: 0.5392380666052108,
+    D_beta1_rc: 1.8687574554781872, D_beta2_rc: 0.39363587611423,
+    Abar_scale_rc: 0.9886284358035143,
 
-    calib_a_rc: 0.884304721531611, calib_b_rc: 0.025663962055528566,
-    agg_sigmoid_k_rc: 1.6399048937073588,
-    agg_sigmoid_C_rc: 4.0997824902560405,
-    agg_sigmoid_gamma_rc: 0.1975953705739405,
+    calib_a_rc: 0.858136086223025, calib_b_rc: -0.018668370815569657,
+    agg_sigmoid_k_rc: 2.310438836954186,
+    agg_sigmoid_C_rc: 4.1140868461450575,
+    agg_sigmoid_gamma_rc: 0.20280826962182968,
     agg_n_segments_rc: 30,
 
-    note_norm_N0_rc: 9.271732216447308,
-    rescale_threshold_rc: 9.50273655060929,
-    rescale_divisor_rc: 1.9148953744152124,
-    global_scale_rc: 1.0545841271534262,
+    note_norm_N0_rc: 0.0,
+    rescale_threshold_rc: 9.54091768708962,
+    rescale_divisor_rc: 2.114935396824644,
+    global_scale_rc: 1.0530564601936523,
 
     // === LN-MASKED MODEL PARAMS (fitted on 102 LN-labeled maps, MAE=0.237) ===
     calib_a_ln_masked: 0.953798,
@@ -118,9 +119,9 @@ const CROSS_MATRIX = {
 const HAND_MAP = { 0: "L", 1: "L", 2: "L", 3: "T", 4: "R", 5: "R", 6: "R" };
 
 // === Dan Mapping: piecewise interpolation from JS-measured Dan marathon SR ===
-const RC_MEASURED_SR = [3.5676, 4.1037, 4.7883, 5.3763, 5.6107, 5.9789, 6.5061, 6.8832, 7.3402, 7.7376, 8.2656, 8.9122, 9.5338, 10.3044];
+const RC_MEASURED_SR = [3.5449, 4.1173, 4.7779, 5.3828, 5.6073, 5.9572, 6.5094, 6.8727, 7.3217, 7.6914, 8.2343, 8.8742, 9.4783, 10.2];
 const RC_MEASURED_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.5, 13, 14.5];
-const LN_MEASURED_SR = [3.9353, 4.4534, 4.5152, 5.3042, 5.6696, 6.3481, 6.7442, 6.8826, 7.3257, 7.5288, 8.2812, 8.7196, 9.4486, 10.1702];
+const LN_MEASURED_SR = [3.9941, 4.5493, 4.5658, 5.3636, 5.7113, 6.3932, 6.7573, 6.9029, 7.3674, 7.5645, 8.3404, 8.7503, 9.5141, 10.134];
 const LN_MEASURED_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.5, 13, 14.5];
 
 // Thresholds centered on calibration points so each Dan level maps to its regular label
@@ -215,26 +216,50 @@ function bisectRight(arr, x) {
 }
 
 // ============================================================
-// MAP SORT CLASSIFIER (from train_sort_classifier.py, 99.5% accuracy)
+// MAP SORT CLASSIFIER (4-class: rc/ln/hb/mix, 98.1% accuracy)
 // ============================================================
-function classifyMapSort(lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib) {
-    if (lnRatio <= 0.147477) {
-        return 'RC';
+function classifyMapSort(lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib, topLnContrib, topRcSrRatio, lnDurationRatio, lnDifficultyDominance) {
+  if (lnDurationRatio <= 0.568756) {
+    if (lnContrib <= 0.045978) {
+      return 'RC';
     } else {
-        if (lnRatio <= 0.550000) {
-            if (avgLNDur <= 277.806046) {
-                return 'HB';
-            } else {
-                return 'LN';
-            }
-        } else {
-            return 'LN';
-        }
+      return 'HB';
     }
+  } else {
+    if (lnRatio <= 0.468879) {
+      if (lnDurationRatio <= 0.865882) {
+        return 'MIX';
+      } else {
+        if (lnContrib <= 0.139069) {
+          return 'HB';
+        } else {
+          return 'LN';
+        }
+      }
+    } else {
+      if (lnRatio <= 0.499290) {
+        if (lnContrib <= 0.103493) {
+          return 'HB';
+        } else {
+          return 'LN';
+        }
+      } else {
+        if (lnDurationRatio <= 1.637306) {
+          return 'LN';
+        } else {
+          return 'LN';
+        }
+      }
+    }
+  }
 }
 
-function isMapMix(lnRatio, lnContrib) {
-    return (lnRatio < 0.4500 && lnContrib > 0.1000);
+/** LN dominance rule: LN-heavy maps classified as LN when difficulty is LN-dominated. */
+function applyLNDominance(mapType, lnDurationRatio, lnDifficultyDominance) {
+  // LN difficulty dominance: LN difficulty significantly exceeds RC difficulty
+  // (lnDurationRatio > 0.65 removed — it caught 46/47 HB maps as false positives)
+  if (lnDifficultyDominance > 0.35) return 'LN';
+  return mapType;
 }
 
 function cumsum(x, f) {
@@ -1319,13 +1344,56 @@ function calculate(osuContent, speedRate) {
     const rcSrRatio = rating > 0.01 ? rcRating / rating : 1.0;
     const lnContrib = rating > 0.01 ? Math.max(0, rating - rcRating) / rating : 0;
 
+    // Difficulty-weighted top-20% features
+    let topLnContrib = lnContrib, topRcSrRatio = rcSrRatio;
+    if (D_all && D_all.length > 10) {
+        const sorted = [...D_all].sort((a, b) => a - b);
+        const threshold = sorted[Math.floor(sorted.length * 0.8)];
+        const topMask = D_all.map(d => d >= threshold);
+        const topCount = topMask.filter(Boolean).length;
+        if (topCount > 0 && LN_rep[2].length > 0) {
+            // Top-20% LN contribution
+            let topLnTotal = 0, topRcTotal = 0;
+            for (let i = 0; i < allCorners.length; i++) {
+                if (topMask[i]) {
+                    if (lnMask[i]) topLnTotal += D_all[i];
+                    else topRcTotal += D_all[i];
+                }
+            }
+            const topTotal = topLnTotal + topRcTotal;
+            topLnContrib = topTotal > 0 ? topLnTotal / topTotal : lnContrib;
+            topRcSrRatio = topTotal > 0 ? topRcTotal / topTotal : rcSrRatio;
+        }
+    }
+
+    // LN duration ratio: total LN hold time / total map duration
+    let lnDurationRatio = 0;
+    if (noteSeq.length > 1) {
+        const mapDur = (noteSeq[noteSeq.length - 1].start - noteSeq[0].start) / 1000;
+        let totalLnHold = 0;
+        for (const ln of LNSeq) totalLnHold += Math.max(ln.end - ln.start, 0);
+        lnDurationRatio = mapDur > 0 ? (totalLnHold / 1000) / mapDur : 0;
+    }
+
+    // LN difficulty dominance: LN section D max / total D max
+    let lnDifficultyDominance = 0;
+    if (D_all && D_all.length > 0 && LN_rep[2].length > 0) {
+        const maxD = Math.max(...D_all);
+        let maxLnD = 0;
+        for (let i = 0; i < D_all.length; i++) {
+            if (lnMask[i] && D_all[i] > maxLnD) maxLnD = D_all[i];
+        }
+        lnDifficultyDominance = maxD > 0 ? maxLnD / maxD - rcSrRatio : 0;
+    }
+
     return {
         rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
         params: { total_notes: totalNotes, n_raw: noteSeq.length, n_LN: LNSeq.length, K, od: data.od },
         noteSeq, LNSeq, allCorners, D_all, Jbar: JbarAll, Xbar: XbarTotalAll, Pbar: PbarAll, Rbar: RbarAll,
         rcD_all: rcDresult.D_all, rcEquivD_all,
         LN_rep, lnMask, rcMask,  // HB section masks (reused in processMap)
-        features: { lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib },
+        features: { lnRatio, avgLNDur, maxLNDensity, rcSrRatio, lnContrib,
+                     topLnContrib, topRcSrRatio, lnDurationRatio, lnDifficultyDominance },
     };
 }
 
@@ -1466,7 +1534,14 @@ function _tagDistStats(arr) {
     };
 }
 
-function extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq) {
+function _tagDistStatsTop(arr, topMask) {
+    if (!arr || arr.length === 0) return _tagDistStats(null);
+    if (!topMask || topMask.length !== arr.length) return _tagDistStats(arr);
+    const filtered = arr.filter((_, i) => topMask[i]);
+    return filtered.length > 0 ? _tagDistStats(filtered) : _tagDistStats(null);
+}
+
+function extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq, D_all) {
     const nTotal = noteSeq.length;
     const nLn = LNSeq.length;
     const lnRatio = nLn / Math.max(nTotal, 1);
@@ -1501,11 +1576,24 @@ function extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq) {
     const chordjackFrac = totalSkill > 0 ? chordjackRaw / totalSkill : 0;
     const releaseFrac = totalSkill > 0 ? releaseRaw / totalSkill : 0;
 
-    // Distribution stats
+    // Distribution stats (overall)
     const pStats = _tagDistStats(Pbar);
     const jStats = _tagDistStats(Jbar);
     const xStats = _tagDistStats(Xbar);
     const rStats = _tagDistStats(Rbar);
+
+    // Top-20% difficulty mask (focus on hardest sections)
+    let topMask = null;
+    if (D_all && D_all.length > 10) {
+        const sorted = [...D_all].sort((a, b) => a - b);
+        const threshold = sorted[Math.floor(sorted.length * 0.8)];
+        topMask = D_all.map(d => d >= threshold);
+    }
+
+    const pTop = _tagDistStatsTop(Pbar, topMask);
+    const jTop = _tagDistStatsTop(Jbar, topMask);
+    const xTop = _tagDistStatsTop(Xbar, topMask);
+    const rTop = _tagDistStatsTop(Rbar, topMask);
 
     const rcSrRatio = 1.0 - releaseFrac;
     const lnContrib = releaseFrac;
@@ -1520,140 +1608,146 @@ function extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq) {
         xbarMean: xStats.mean, xbarStd: xStats.std, xbarP90: xStats.p90,
         rbarMean: rStats.mean, rbarStd: rStats.std, rbarP90: rStats.p90,
         rcSrRatio, lnContrib,
+        // Top-20% difficulty features
+        topPbarMean: pTop.mean, topPbarP90: pTop.p90, topPbarMax: pTop.max,
+        topJbarMean: jTop.mean, topJbarP90: jTop.p90, topJbarMax: jTop.max,
+        topXbarMean: xTop.mean, topXbarP90: xTop.p90,
+        topRbarMean: rTop.mean, topRbarP90: rTop.p90,
     };
 }
 
 // ============================================================
 // ML TAG CLASSIFIER — Auto-generated per-tag decision trees
-// Trained on 147 labeled maps (12 individual tags)
-// Exact match: 64.6%, Avg extra: 0.35, Avg missing: 0.12
+// 14 tags (incl. RC Mix, LN Mix), 36 features, per-tag trees.
+// Equal FP/FN weight. Difficulty-weighted features (top-20% D(t)).
+// n_samples: 265, Exact match: 44.2%, Avg extra: 0.53, Avg missing: 0.17
 // ============================================================
 
 function _predictTag_Chordjack(feat) {
-  if (feat.avgChordOverlap <= 0.111276) {
-    if (feat.pbarP90 <= 16.046998) {
-      return 0.333333;
-    } else {
-      return 0.000000;
-    }
-  } else {
-    if (feat.chordjackFrac <= 0.234886) {
-      return 0.000000;
-    } else {
-      if (feat.streamFrac <= 0.297955) {
-        if (feat.jbarMax <= 34.139162) {
-          return 0.333333;
+  if (feat.avgChordOverlap <= 0.143685) {
+    if (feat.avgChordOverlap <= 0.095748) {
+      if (feat.topJbarP90 <= 42.181309) {
+        if (feat.avgLnDur <= 1520.700012) {
+          return 0.000000;
         } else {
-          return 1.000000;
+          return 0.083333;
         }
       } else {
-        return 1.000000;
+        return 0.333333;
       }
+    } else {
+      if (feat.rbarP90 <= 1.721825) {
+        if (feat.avgChordOverlap <= 0.128886) {
+          return 1.000000;
+        } else {
+          return 0.500000;
+        }
+      } else {
+        return 0.000000;
+      }
+    }
+  } else {
+    if (feat.xbarStd <= 2.035738) {
+      if (feat.topPbarMax <= 31.072963) {
+        return 0.333333;
+      } else {
+        return 0.000000;
+      }
+    } else {
+      return 1.000000;
     }
   }
 }
 
 function _predictTag_Coordination(feat) {
-  if (feat.chordjackFrac <= 0.183770) {
-    if (feat.lnRatio <= 0.708388) {
-      if (feat.rbarP90 <= 4.612066) {
-        if (feat.rbarStd <= 1.146641) {
-          return 0.000000;
-        } else {
-          return 0.333333;
-        }
-      } else {
-        return 1.000000;
-      }
-    } else {
-      if (feat.pbarStd <= 4.762462) {
-        if (feat.pbarStd <= 4.203827) {
-          return 0.000000;
-        } else {
-          return 0.600000;
-        }
-      } else {
-        return 0.000000;
-      }
-    }
+  if (feat.topRbarP90 <= 4.601707) {
+    return 0.000000;
   } else {
-    if (feat.techFrac <= 0.148658) {
-      if (feat.techFrac <= 0.147638) {
-        return 0.000000;
+    if (feat.avgChordOverlap <= 0.094565) {
+      if (feat.pbarMax <= 38.042315) {
+        if (feat.pbarP50 <= 22.109717) {
+          return 0.000000;
+        } else {
+          return 0.400000;
+        }
       } else {
-        return 0.333333;
+        if (feat.rbarStd <= 1.925046) {
+          return 0.000000;
+        } else {
+          return 0.400000;
+        }
       }
     } else {
-      return 0.000000;
+      if (feat.topRbarP90 <= 6.211373) {
+        return 1.000000;
+      } else {
+        if (feat.rbarP90 <= 6.388634) {
+          return 0.000000;
+        } else {
+          return 0.666667;
+        }
+      }
     }
   }
 }
 
 function _predictTag_Dense_Chordstream(feat) {
-  if (feat.techFrac <= 0.206743) {
-    if (feat.pbarMax <= 23.179231) {
-      if (feat.chordjackFrac <= 0.243122) {
+  if (feat.techFrac <= 0.211069) {
+    if (feat.topPbarMax <= 23.179231) {
+      if (feat.topJbarP90 <= 12.117770) {
         return 1.000000;
       } else {
         return 0.333333;
       }
     } else {
-      if (feat.avgChordOverlap <= 0.021009) {
-        if (feat.nps <= 18.956896) {
+      if (feat.pbarStd <= 4.501233) {
+        if (feat.techFrac <= 0.167237) {
           return 0.000000;
         } else {
-          return 0.500000;
+          return 0.148148;
         }
-      } else {
-        if (feat.pbarStd <= 3.043700) {
-          return 0.333333;
-        } else {
-          return 0.000000;
-        }
-      }
-    }
-  } else {
-    if (feat.avgChordOverlap <= 0.017460) {
-      if (feat.xbarP90 <= 14.034670) {
-        return 0.333333;
       } else {
         return 0.000000;
       }
-    } else {
-      if (feat.nps <= 26.829497) {
-        if (feat.jbarMax <= 22.385497) {
-          return 0.875000;
+    }
+  } else {
+    if (feat.nps <= 26.888781) {
+      if (feat.pbarP50 <= 16.459879) {
+        return 1.000000;
+      } else {
+        if (feat.avgChordOverlap <= 0.060464) {
+          return 0.407407;
         } else {
-          return 0.222222;
+          return 0.000000;
+        }
+      }
+    } else {
+      if (feat.topPbarP90 <= 45.798162) {
+        if (feat.avgChordOverlap <= 0.018127) {
+          return 0.333333;
+        } else {
+          return 1.000000;
         }
       } else {
-        return 1.000000;
+        return 0.000000;
       }
     }
   }
 }
 
 function _predictTag_Density(feat) {
-  if (feat.rbarMean <= 2.411396) {
+  if (feat.rbarMean <= 2.676811) {
     return 0.000000;
   } else {
-    if (feat.avgLnDur <= 291.869278) {
-      if (feat.jackFrac <= 0.184191) {
-        if (feat.avgChordOverlap <= 0.033891) {
-          return 0.500000;
-        } else {
-          return 1.000000;
-        }
-      } else {
-        if (feat.rbarP90 <= 7.719554) {
-          return 0.125000;
-        } else {
-          return 0.625000;
-        }
-      }
+    if (feat.lnRatio <= 0.397131) {
+      return 1.000000;
     } else {
-      if (feat.lnRatio <= 0.548014) {
-        return 0.666667;
+      if (feat.avgLnDur <= 291.869278) {
+        if (feat.jbarStd <= 5.052872) {
+          return 0.379310;
+        } else {
+          return 0.000000;
+        }
       } else {
         return 0.000000;
       }
@@ -1662,41 +1756,101 @@ function _predictTag_Density(feat) {
 }
 
 function _predictTag_Fast_Chordstream(feat) {
-  if (feat.pbarStd <= 2.598569) {
-    return 0.500000;
-  } else {
-    if (feat.xbarStd <= 8.661942) {
-      if (feat.chordjackFrac <= 0.288750) {
-        if (feat.techFrac <= 0.224652) {
-          return 0.008197;
-        } else {
-          return 0.133333;
-        }
+  if (feat.techFrac <= 0.205766) {
+    if (feat.pbarStd <= 3.133945) {
+      if (feat.avgChordOverlap <= 0.023610) {
+        return 0.666667;
       } else {
-        return 0.333333;
+        return 0.000000;
       }
     } else {
-      return 0.333333;
+      if (feat.avgLnDur <= 1090.500000) {
+        return 0.000000;
+      } else {
+        if (feat.pbarStd <= 4.064734) {
+          return 0.333333;
+        } else {
+          return 0.000000;
+        }
+      }
+    }
+  } else {
+    if (feat.topRbarP90 <= 0.346156) {
+      if (feat.jbarP90 <= 31.316128) {
+        if (feat.streamFrac <= 0.317356) {
+          return 0.000000;
+        } else {
+          return 0.193548;
+        }
+      } else {
+        return 0.400000;
+      }
+    } else {
+      return 0.600000;
     }
   }
 }
 
 function _predictTag_Inverse(feat) {
-  if (feat.pbarMean <= 34.630302) {
-    if (feat.xbarMean <= 1.026996) {
-      if (feat.lnContrib <= 0.127920) {
+  if (feat.lnRatio <= 0.977794) {
+    if (feat.nps <= 8.375918) {
+      if (feat.topRbarMean <= 3.859288) {
         return 1.000000;
       } else {
         return 0.000000;
       }
     } else {
-      return 0.000000;
+      if (feat.pbarMean <= 39.608927) {
+        if (feat.pbarMean <= 33.529957) {
+          return 0.000000;
+        } else {
+          return 0.050000;
+        }
+      } else {
+        return 0.333333;
+      }
     }
   } else {
-    if (feat.lnRatio <= 0.984001) {
+    if (feat.topRbarMean <= 5.340877) {
+      return 1.000000;
+    } else {
+      return 0.000000;
+    }
+  }
+}
+
+function _predictTag_LN_Mix(feat) {
+  if (feat.rbarStd <= 0.996521) {
+    if (feat.rbarMean <= 4.503310) {
       return 0.000000;
     } else {
-      return 1.000000;
+      return 0.333333;
+    }
+  } else {
+    if (feat.xbarStd <= 1.784965) {
+      if (feat.pbarMean <= 15.820693) {
+        if (feat.rbarMean <= 3.071551) {
+          return 0.666667;
+        } else {
+          return 0.000000;
+        }
+      } else {
+        return 0.000000;
+      }
+    } else {
+      if (feat.topJbarMean <= 11.019084) {
+        if (feat.rbarP90 <= 6.505721) {
+          return 1.000000;
+        } else {
+          return 0.500000;
+        }
+      } else {
+        if (feat.pbarP50 <= 28.582686) {
+          return 0.055556;
+        } else {
+          return 0.511628;
+        }
+      }
     }
   }
 }
@@ -1705,14 +1859,58 @@ function _predictTag_Minijack(feat) {
   if (feat.pbarStd <= 2.511311) {
     return 0.666667;
   } else {
-    if (feat.streamFrac <= 0.296863) {
-      if (feat.streamFrac <= 0.285604) {
-        return 0.000000;
-      } else {
-        if (feat.avgChordOverlap <= 0.072175) {
-          return 0.000000;
+    if (feat.avgChordOverlap <= 0.082721) {
+      return 0.000000;
+    } else {
+      if (feat.techFrac <= 0.200435) {
+        if (feat.avgChordOverlap <= 0.091582) {
+          return 0.166667;
         } else {
+          return 0.000000;
+        }
+      } else {
+        if (feat.nps <= 19.811023) {
           return 0.666667;
+        } else {
+          return 0.111111;
+        }
+      }
+    }
+  }
+}
+
+function _predictTag_RC_Mix(feat) {
+  if (feat.streamFrac <= 0.292649) {
+    if (feat.avgChordOverlap <= 0.102825) {
+      if (feat.jbarMax <= 33.700195) {
+        if (feat.nps <= 18.392252) {
+          return 0.666667;
+        } else {
+          return 0.000000;
+        }
+      } else {
+        if (feat.rbarP90 <= 0.292782) {
+          return 0.818182;
+        } else {
+          return 0.333333;
+        }
+      }
+    } else {
+      return 0.000000;
+    }
+  } else {
+    if (feat.topRbarMean <= 2.044410) {
+      if (feat.lnRatio <= 0.001044) {
+        if (feat.nps <= 18.013649) {
+          return 0.190476;
+        } else {
+          return 0.015385;
+        }
+      } else {
+        if (feat.rbarMean <= 0.139635) {
+          return 1.000000;
+        } else {
+          return 0.222222;
         }
       }
     } else {
@@ -1722,57 +1920,57 @@ function _predictTag_Minijack(feat) {
 }
 
 function _predictTag_Release(feat) {
-  if (feat.lnContrib <= 0.129016) {
-    if (feat.rbarMean <= 4.669211) {
-      if (feat.lnContrib <= 0.096907) {
-        return 0.000000;
-      } else {
-        if (feat.avgChordOverlap <= 0.091307) {
-          return 0.000000;
-        } else {
-          return 0.666667;
-        }
-      }
+  if (feat.topRbarMean <= 5.998488) {
+    if (feat.topJbarMean <= 1.933147) {
+      return 1.000000;
     } else {
-      if (feat.avgLnDur <= 211.083199) {
-        if (feat.techFrac <= 0.177414) {
-          return 0.000000;
-        } else {
-          return 0.750000;
-        }
+      if (feat.jbarMax <= 7.315037) {
+        return 0.333333;
       } else {
-        return 1.000000;
+        if (feat.nps <= 55.725218) {
+          return 0.008584;
+        } else {
+          return 0.333333;
+        }
       }
     }
   } else {
-    if (feat.lnRatio <= 0.708388) {
-      return 0.400000;
+    if (feat.releaseFrac <= 0.097595) {
+      return 0.333333;
     } else {
-      return 1.000000;
+      if (feat.lnRatio <= 0.640393) {
+        return 0.666667;
+      } else {
+        return 1.000000;
+      }
     }
   }
 }
 
 function _predictTag_Speed(feat) {
-  if (feat.avgChordOverlap <= 0.018154) {
+  if (feat.avgChordOverlap <= 0.017391) {
     if (feat.pbarStd <= 3.895566) {
-      if (feat.avgChordOverlap <= 0.009878) {
-        return 0.666667;
-      } else {
+      if (feat.streamFrac <= 0.367162) {
         return 0.000000;
+      } else {
+        return 0.666667;
       }
     } else {
-      if (feat.pbarMax <= 28.481691) {
-        return 0.750000;
+      if (feat.jackFrac <= 0.216687) {
+        if (feat.pbarStd <= 5.613053) {
+          return 1.000000;
+        } else {
+          return 0.000000;
+        }
       } else {
         return 1.000000;
       }
     }
   } else {
-    if (feat.techFrac <= 0.202210) {
-      if (feat.avgChordOverlap <= 0.029608) {
-        if (feat.rbarMean <= 2.094883) {
-          return 0.500000;
+    if (feat.techFrac <= 0.244940) {
+      if (feat.topRbarMean <= 0.548972) {
+        if (feat.chordjackFrac <= 0.244021) {
+          return 0.171875;
         } else {
           return 0.000000;
         }
@@ -1780,74 +1978,82 @@ function _predictTag_Speed(feat) {
         return 0.000000;
       }
     } else {
-      if (feat.avgChordOverlap <= 0.113636) {
-        if (feat.techFrac <= 0.239885) {
-          return 0.136364;
-        } else {
-          return 0.666667;
-        }
-      } else {
-        return 0.750000;
-      }
+      return 0.666667;
     }
   }
 }
 
 function _predictTag_Tech(feat) {
-  if (feat.jackFrac <= 0.226271) {
-    if (feat.pbarP50 <= 16.622025) {
-      if (feat.xbarMean <= 6.797189) {
-        return 0.000000;
-      } else {
-        return 1.000000;
-      }
-    } else {
-      return 0.000000;
-    }
-  } else {
-    if (feat.jbarStd <= 4.912884) {
-      if (feat.jbarMax <= 32.182098) {
-        if (feat.pbarMax <= 29.066476) {
-          return 0.200000;
+  if (feat.releaseFrac <= 0.036732) {
+    if (feat.pbarP50 <= 21.510951) {
+      if (feat.topPbarMean <= 24.602554) {
+        if (feat.lnRatio <= 0.002112) {
+          return 0.212766;
         } else {
-          return 0.583333;
+          return 1.000000;
         }
       } else {
-        return 1.000000;
+        if (feat.topPbarMean <= 26.767851) {
+          return 1.000000;
+        } else {
+          return 0.666667;
+        }
       }
     } else {
-      if (feat.pbarP50 <= 34.507318) {
-        return 0.000000;
+      if (feat.avgChordOverlap <= 0.077665) {
+        if (feat.xbarMean <= 20.474854) {
+          return 0.000000;
+        } else {
+          return 0.214286;
+        }
       } else {
-        return 0.500000;
+        if (feat.jbarStd <= 4.856178) {
+          return 0.571429;
+        } else {
+          return 0.000000;
+        }
       }
     }
+  } else {
+    return 0.000000;
   }
 }
 
 function _predictTag_Technical(feat) {
-  if (feat.nps <= 36.539736) {
-    if (feat.rbarMean <= 3.354473) {
+  if (feat.nps <= 33.652042) {
+    if (feat.rbarMean <= 3.488430) {
       return 0.000000;
     } else {
-      if (feat.chordjackFrac <= 0.189611) {
-        return 0.000000;
-      } else {
+      if (feat.avgLnDur <= 177.094902) {
         return 1.000000;
-      }
-    }
-  } else {
-    if (feat.avgLnDur <= 132.488228) {
-      return 1.000000;
-    } else {
-      if (feat.rbarP90 <= 8.054947) {
-        if (feat.pbarMax <= 41.102358) {
+      } else {
+        if (feat.topRbarP90 <= 4.997600) {
           return 0.333333;
         } else {
           return 0.000000;
         }
+      }
+    }
+  } else {
+    if (feat.pbarMean <= 30.029175) {
+      if (feat.topPbarP90 <= 35.618196) {
+        return 0.333333;
       } else {
-        return 0.666667;
+        return 1.000000;
+      }
+    } else {
+      if (feat.rbarP90 <= 6.978027) {
+        if (feat.avgChordOverlap <= 0.105569) {
+          return 0.000000;
+        } else {
+          return 0.333333;
+        }
+      } else {
+        if (feat.topRbarP90 <= 6.788892) {
+          return 1.000000;
+        } else {
+          return 0.000000;
+        }
       }
     }
   }
@@ -1857,10 +2063,18 @@ function _predictTag_Vibro(feat) {
   if (feat.pbarStd <= 2.511311) {
     return 0.666667;
   } else {
-    if (feat.chordjackFrac <= 0.263587) {
-      return 0.000000;
+    if (feat.jackFrac <= 0.284392) {
+      if (feat.chordjackFrac <= 0.264973) {
+        return 0.000000;
+      } else {
+        if (feat.jackFrac <= 0.273251) {
+          return 0.333333;
+        } else {
+          return 0.000000;
+        }
+      }
     } else {
-      if (feat.xbarStd <= 3.430713) {
+      if (feat.topPbarMean <= 22.610747) {
         return 0.666667;
       } else {
         return 0.000000;
@@ -1869,54 +2083,101 @@ function _predictTag_Vibro(feat) {
   }
 }
 
+
 /**
- * ML-based pattern tag prediction with post-processing.
- * - RC maps: only RC-type tags; ≥3 → "RC Mix" (suppresses all others)
- * - LN maps: only LN-type tags; ≥3 → "LN Mix" (suppresses all others)
- * - HB maps: all tags; ≥3 → "Hybrid" (suppresses all others)
- * @param {Object} feat - Features from extractTagFeatures()
- * @param {string} mapType - 'RC' | 'LN' | 'HB' | 'Mix'
- * @returns {string[]} predicted tags
+ * ML-based pattern tag classifier with Mix dual pathway.
+ *
+ * Channel 1 (direct): Per-tag decision trees including RC Mix / LN Mix.
+ * Channel 2 (synthesis): >=3 same-category individual tags -> Mix.
+ * Both channels operate independently; either can trigger Mix output.
+ * HB maps always output ["Hybrid"].
+ * Fallback: if no tag passes threshold, the highest-probability individual tag
+ *   from the applicable category is returned (guarantees at least one tag).
+ *
+ * Tag ordering by importance (left-to-right in Excel): first tag is primary.
  */
 function computePatternTagsML(feat, mapType) {
-    // HB maps: always "Hybrid" — no individual tags
+    // HB maps: always "Hybrid"
     if (mapType === 'HB') return ['Hybrid'];
 
     const RC_TAGS = new Set(['Chordjack', 'Dense Chordstream', 'Fast Chordstream',
-                              'Minijack', 'Speed', 'Tech', 'Vibro']);
-    const LN_TAGS = new Set(['Coordination', 'Density', 'Inverse', 'Release', 'Technical']);
+                              'Minijack', 'Speed', 'Tech', 'Vibro', 'RC Mix']);
+    const LN_TAGS = new Set(['Coordination', 'Density', 'Inverse', 'Release', 'Technical', 'LN Mix']);
 
-    // Collect all individual tag predictions
-    const rawTags = [];
-    if (_predictTag_Chordjack(feat) >= 0.2800) rawTags.push('Chordjack');
-    if (_predictTag_Coordination(feat) >= 0.2800) rawTags.push('Coordination');
-    if (_predictTag_Dense_Chordstream(feat) >= 0.3400) rawTags.push('Dense Chordstream');
-    if (_predictTag_Density(feat) >= 0.2800) rawTags.push('Density');
-    if (_predictTag_Fast_Chordstream(feat) >= 0.2800) rawTags.push('Fast Chordstream');
-    if (_predictTag_Inverse(feat) >= 0.2800) rawTags.push('Inverse');
-    if (_predictTag_Minijack(feat) >= 0.2800) rawTags.push('Minijack');
-    if (_predictTag_Release(feat) >= 0.2800) rawTags.push('Release');
-    if (_predictTag_Speed(feat) >= 0.2800) rawTags.push('Speed');
-    if (_predictTag_Tech(feat) >= 0.2800) rawTags.push('Tech');
-    if (_predictTag_Technical(feat) >= 0.2800) rawTags.push('Technical');
-    if (_predictTag_Vibro(feat) >= 0.2800) rawTags.push('Vibro');
+    // Collect all individual tag predictions with scores
+    const rawScored = [];
+    function _addTag(name, score, threshold) {
+        rawScored.push({name: name, score: score, threshold: threshold});
+    }
+    _addTag('Chordjack',        _predictTag_Chordjack(feat), 0.28);
+    _addTag('Coordination',     _predictTag_Coordination(feat), 0.28);
+    _addTag('Dense Chordstream',_predictTag_Dense_Chordstream(feat), 0.28);
+    _addTag('Density',          _predictTag_Density(feat), 0.28);
+    _addTag('Fast Chordstream', _predictTag_Fast_Chordstream(feat), 0.34);
+    _addTag('Inverse',          _predictTag_Inverse(feat), 0.28);
+    _addTag('LN Mix',           _predictTag_LN_Mix(feat), 0.28);
+    _addTag('Minijack',         _predictTag_Minijack(feat), 0.28);
+    _addTag('RC Mix',           _predictTag_RC_Mix(feat), 0.34);
+    _addTag('Release',          _predictTag_Release(feat), 0.28);
+    _addTag('Speed',            _predictTag_Speed(feat), 0.28);
+    _addTag('Tech',             _predictTag_Tech(feat), 0.28);
+    _addTag('Technical',        _predictTag_Technical(feat), 0.28);
+    _addTag('Vibro',            _predictTag_Vibro(feat), 0.28);
 
-    // Filter by map type: RC maps get only RC tags, LN maps get only LN tags
+    // Tags passing threshold
+    const rawTags = rawScored.filter(function(t) { return t.score >= t.threshold; }).map(function(t) { return t.name; });
+
+    // Filter by map type
     let filtered;
     if (mapType === 'RC') {
         filtered = rawTags.filter(function(t) { return RC_TAGS.has(t); });
     } else if (mapType === 'LN') {
         filtered = rawTags.filter(function(t) { return LN_TAGS.has(t); });
     } else {
-        // Mix: keep all individual tags
+        // Mix sort: keep all individual tags
         filtered = rawTags;
     }
 
-    // Mix synthesis: ≥3 individual tags → suppress all, show only RC Mix / LN Mix / Hybrid
-    if (filtered.length >= 3) {
-        if (mapType === 'RC') return ['RC Mix'];
-        if (mapType === 'LN') return ['LN Mix'];
-        return ['Hybrid'];  // Mix (≥3 tags → diverse patterns)
+    // Channel 2: synthesis — >=3 same-category individual tags -> Mix
+    var rcIndividual = filtered.filter(function(t) {
+        return RC_TAGS.has(t) && t !== 'RC Mix';
+    });
+    var lnIndividual = filtered.filter(function(t) {
+        return LN_TAGS.has(t) && t !== 'LN Mix';
+    });
+
+    if (mapType === 'RC') {
+        // Channel 1: direct RC Mix prediction already in filtered
+        if (filtered.indexOf('RC Mix') >= 0) return ['RC Mix'];
+        // Channel 2: >=3 RC individual tags -> RC Mix
+        if (rcIndividual.length >= 3) return ['RC Mix'];
+    } else if (mapType === 'LN') {
+        // Channel 1: direct LN Mix prediction
+        if (filtered.indexOf('LN Mix') >= 0) return ['LN Mix'];
+        // Channel 2: >=3 LN individual tags -> LN Mix
+        if (lnIndividual.length >= 3) return ['LN Mix'];
+    } else {
+        // Mix sort: keep all individual tags
+        // If >=3 total individual tags -> "Hybrid"
+        var allIndividual = rcIndividual.concat(lnIndividual);
+        if (allIndividual.length >= 3) return ['Hybrid'];
+    }
+
+    // Fallback: ensure at least one tag — pick highest-probability individual tag
+    // (exclude Mix synthesis tags from fallback — they're synthesis, not individual)
+    if (filtered.length === 0) {
+        var candidates;
+        if (mapType === 'RC') {
+            candidates = rawScored.filter(function(t) { return RC_TAGS.has(t.name) && t.name !== 'RC Mix'; });
+        } else if (mapType === 'LN') {
+            candidates = rawScored.filter(function(t) { return LN_TAGS.has(t.name) && t.name !== 'LN Mix'; });
+        } else {
+            candidates = rawScored.filter(function(t) { return t.name !== 'RC Mix' && t.name !== 'LN Mix'; });
+        }
+        if (candidates.length > 0) {
+            candidates.sort(function(a, b) { return b.score - a.score; });
+            filtered.push(candidates[0].name);
+        }
     }
 
     return filtered;
@@ -1936,18 +2197,16 @@ function processMap(osuContent, mode, speedRate) {
     const firstNoteTime = noteSeq.length > 0 ? noteSeq[0].start : 0;
     const lastNoteTime = noteSeq.length > 0 ? noteSeq[noteSeq.length - 1].start : 0;
 
-    // Sort classification using decision tree (99.5% accuracy)
+    // Sort classification (4-class tree: RC/LN/HB/Mix, 98.1% accuracy)
     let mapType = classifyMapSort(
         features.lnRatio, features.avgLNDur, features.maxLNDensity,
-        features.rcSrRatio, features.lnContrib
+        features.rcSrRatio, features.lnContrib,
+        features.topLnContrib, features.topRcSrRatio,
+        features.lnDurationRatio, features.lnDifficultyDominance
     );
 
-    // Mix override: reclassify HB as Mix if heuristic matches
-    let isMix = false;
-    if (mapType === 'HB' && isMapMix(features.lnRatio, features.lnContrib)) {
-        mapType = 'Mix';
-        isMix = true;
-    }
+    // LN dominance override: if LN dominates map time or difficulty, force LN
+    mapType = applyLNDominance(mapType, features.lnDurationRatio, features.lnDifficultyDominance);
 
     // Hybrid→LN reclassification: if RC sections are short/simple but LN dominates
     // rcEquivRating treats LN heads as taps globally → captures "tap difficulty" everywhere
@@ -1961,6 +2220,7 @@ function processMap(osuContent, mode, speedRate) {
     }
 
     const skillRatings = computeSkillRatings(result.Jbar, result.Xbar, result.Pbar, result.Rbar);
+    const isMix = (mapType === 'Mix');
 
     // Per-sort difficulty values
     let displayRcDan, displayLnDan, displayRcRating, displayLnRating;
@@ -2025,7 +2285,7 @@ function processMap(osuContent, mode, speedRate) {
 
     const { sectionDifficulties, sectionTimes } = computeSectionData(allCorners, D_all, firstNoteTime, lastNoteTime);
     // Use ML-based tag prediction (replaces old rule-based computePatternTags)
-    const tagFeatures = extractTagFeatures(result.Jbar, result.Xbar, result.Pbar, result.Rbar, noteSeq, LNSeq);
+    const tagFeatures = extractTagFeatures(result.Jbar, result.Xbar, result.Pbar, result.Rbar, noteSeq, LNSeq, D_all);
     const patternTags = computePatternTagsML(tagFeatures, mapType);
 
     // Dan fields: total SR for RC maps, rcEquiv for LN, rcSection for HB/Mix

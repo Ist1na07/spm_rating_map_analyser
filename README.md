@@ -8,7 +8,7 @@
 
 ## 主要特性
 
-- **实时难度评级**：基于 Sigmoid 聚合模型（k=1.56, C=3.99），使用 S 形准确率曲线模拟玩家表现并求解稳定评级
+- **实时难度评级**：基于 Sigmoid 聚合模型（k=2.09, C=3.97），使用 S 形准确率曲线模拟玩家表现并求解稳定评级
 - **多维度评估**：
   - **Total SR**：全谱面综合难度
   - **RC 难度**：RC 段难度（RC 谱面用 RC 子模型，HB/Mix 用 RC 段掩码）
@@ -16,7 +16,7 @@
 - **谱面分类**：决策树自动识别 RC / LN / HB / Mix 四种类型
 - **难度曲线**：实时绘制全谱面及 RC/LN 分量难度变化图
 - **段位映射**：分段线性插值，将 SR 映射到 7K Dan 段位体系（0th ~ Stellium）
-- **ML 键型标签**：基于 147 张标注谱面训练的 12 标签决策树 + 合成标签（RC Mix / LN Mix / Hybrid）
+- **ML 键型标签**：基于 265 张标注谱面训练的 14 标签决策树 + Mix 双通道（直接预测 + 合成），含 top-20% 难度加权特征
 - **多 Mod 支持**：适配 DT/HT/NC 等速度 Mod（HT 已修复双重缩放）
 
 ## 使用方法
@@ -34,7 +34,7 @@
 
 ## 键型标签
 
-基于 213 张 7K 谱面（148 Dan + 45 Tournament + 20 Graveyard）训练，147 张含个体标签的谱面用于 12 标签决策树训练（64.6% 精确匹配率）。
+基于 311 张 7K 谱面（148 Dan + 57 Tournament + 20 Graveyard + 86 Ranked）训练，265 张含个体标签的谱面用于 14 标签决策树训练（44.2% 精确匹配率）。
 
 **RC 系**: Chordjack, Dense Chordstream, Fast Chordstream, Minijack, Speed, Tech, Vibro
 **LN 系**: Coordination, Density, Inverse, Release, Technical
@@ -65,7 +65,7 @@ HB 谱面始终显示 "Hybrid"。
 
 1. **分量计算**：对每个时间点计算 7 个难度分量 — Pbar(Stream)、Jbar(Jack)、Xbar(Cross)、Abar(Anchor)、Rbar(Release)、Sbar(Shield)、Vbar(Inverse)
 2. **瞬时难度合成**：非线性组合为逐点难度 D(t)
-3. **Sigmoid 聚合**：分段后通过 S 形准确率模型加权求解最终 SR（二分法）
+3. **Sigmoid 聚合**：分段后通过 S 形准确率模型加权求解最终 SR（k=2.09, C=3.97, γ=0.196, 二分法）
 
 RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 
@@ -78,10 +78,15 @@ RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 ├── metadata.txt        # 插件元数据
 ├── dan_constants.json  # 段位常量（由 fit_dan_regression.py 生成）
 ├── classifier_constants.json  # Sort 分类器常量
-└── tag_classifier.json # 12 标签 ML 分类器
+└── tag_classifier.json # 14 标签 ML 分类器（Mix 双通道）
 ```
 
 ## 版本历史
+
+### v0.2.0
+- 底层 SR 算法升级到 **SPM Rating v0.2.0**（k=2.09, C=3.97, γ=0.196）
+- **Sort 分类器重新训练**：4 类决策树（RC/LN/HB/Mix），98.1% 准确率（311 样本）
+- **Tag 分类器重新训练**：14 标签，基于 265 张标注谱面，44.2% 精确匹配率
 
 ### v0.1.1
 - HB 谱面 tag 统一为 "Hybrid"

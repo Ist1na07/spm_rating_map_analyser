@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "n_samples": 147,
-  "n_tags": 12,
+  "n_samples": 265,
+  "n_tags": 14,
   "tags": [
     "Chordjack",
     "Coordination",
@@ -9,7 +9,9 @@
     "Density",
     "Fast Chordstream",
     "Inverse",
+    "LN Mix",
     "Minijack",
+    "RC Mix",
     "Release",
     "Speed",
     "Tech",
@@ -40,168 +42,210 @@
     "release_frac",
     "stream_frac",
     "tech_frac",
+    "top_jbar_max",
+    "top_jbar_mean",
+    "top_jbar_p90",
+    "top_pbar_max",
+    "top_pbar_mean",
+    "top_pbar_p90",
+    "top_rbar_mean",
+    "top_rbar_p90",
+    "top_xbar_mean",
+    "top_xbar_p90",
     "xbar_mean",
     "xbar_p90",
     "xbar_std"
   ],
-  "fn_weight": 3,
-  "exact_match_rate": 0.6462585034013606,
-  "avg_extra_tags": 0.3469387755102041,
-  "avg_missing_tags": 0.11564625850340136,
+  "fn_weight": 1,
+  "exact_match_rate": 0.44150943396226416,
+  "avg_extra_tags": 0.5320754716981132,
+  "avg_missing_tags": 0.1720754716981133,
   "per_tag_results": {
     "Chordjack": {
-      "tp": 20,
-      "fp": 4,
-      "fn": 0,
-      "tn": 123,
-      "precision": 0.8333333333333334,
-      "recall": 1.0,
-      "f1": 0.9090909090909091,
+      "tp": 31,
+      "fp": 6,
+      "fn": 1,
+      "tn": 227,
+      "precision": 0.8378378378378378,
+      "recall": 0.96875,
+      "f1": 0.8985507246376812,
       "threshold": 0.28,
       "top_features": [
         [
           "avg_chord_overlap",
-          0.6384
+          0.6551
         ],
         [
-          "chordjack_frac",
-          0.2695
+          "xbar_std",
+          0.1805
         ],
         [
-          "jbar_max",
-          0.0557
+          "rbar_p90",
+          0.14
         ],
         [
-          "pbar_p90",
-          0.0204
+          "top_jbar_p90",
+          0.0128
         ],
         [
-          "stream_frac",
-          0.0159
+          "top_pbar_max",
+          0.0084
         ]
       ]
     },
     "Coordination": {
-      "tp": 14,
-      "fp": 6,
+      "tp": 23,
+      "fp": 17,
       "fn": 0,
-      "tn": 127,
-      "precision": 0.7,
+      "tn": 225,
+      "precision": 0.575,
       "recall": 1.0,
-      "f1": 0.8235294117647058,
+      "f1": 0.7301587301587301,
       "threshold": 0.28,
       "top_features": [
         [
+          "avg_chord_overlap",
+          0.3904
+        ],
+        [
+          "top_rbar_p90",
+          0.3152
+        ],
+        [
+          "pbar_p50",
+          0.1076
+        ],
+        [
           "rbar_p90",
-          0.2855
+          0.078
         ],
         [
-          "ln_ratio",
-          0.2838
-        ],
-        [
-          "chordjack_frac",
-          0.232
-        ],
-        [
-          "pbar_std",
-          0.148
-        ],
-        [
-          "tech_frac",
-          0.0319
+          "pbar_max",
+          0.0553
         ]
       ]
     },
     "Dense Chordstream": {
-      "tp": 20,
-      "fp": 3,
-      "fn": 5,
-      "tn": 119,
-      "precision": 0.8695652173913043,
-      "recall": 0.8,
-      "f1": 0.8333333333333334,
-      "threshold": 0.3400000000000001,
+      "tp": 31,
+      "fp": 20,
+      "fn": 4,
+      "tn": 210,
+      "precision": 0.6078431372549019,
+      "recall": 0.8857142857142857,
+      "f1": 0.7209302325581395,
+      "threshold": 0.28,
       "top_features": [
         [
           "tech_frac",
-          0.3729
+          0.4724
+        ],
+        [
+          "top_pbar_max",
+          0.1276
         ],
         [
           "avg_chord_overlap",
-          0.1568
+          0.1094
         ],
         [
-          "pbar_max",
-          0.1513
+          "top_pbar_p90",
+          0.0982
         ],
         [
           "nps",
-          0.1222
-        ],
-        [
-          "jbar_max",
-          0.1178
+          0.08
         ]
       ]
     },
     "Density": {
-      "tp": 17,
-      "fp": 7,
-      "fn": 2,
-      "tn": 121,
-      "precision": 0.7083333333333334,
-      "recall": 0.8947368421052632,
-      "f1": 0.7906976744186046,
+      "tp": 26,
+      "fp": 36,
+      "fn": 0,
+      "tn": 203,
+      "precision": 0.41935483870967744,
+      "recall": 1.0,
+      "f1": 0.5909090909090909,
       "threshold": 0.28,
       "top_features": [
         [
           "rbar_mean",
-          0.3131
-        ],
-        [
-          "avg_ln_dur",
-          0.1998
-        ],
-        [
-          "jack_frac",
-          0.1789
-        ],
-        [
-          "rbar_p90",
-          0.124
+          0.3147
         ],
         [
           "ln_ratio",
-          0.1091
+          0.2593
+        ],
+        [
+          "avg_ln_dur",
+          0.2242
+        ],
+        [
+          "jbar_std",
+          0.2018
+        ],
+        [
+          "avg_chord_overlap",
+          0.0
         ]
       ]
     },
     "Fast Chordstream": {
-      "tp": 4,
+      "tp": 7,
       "fp": 6,
-      "fn": 3,
-      "tn": 134,
-      "precision": 0.4,
-      "recall": 0.5714285714285714,
-      "f1": 0.47058823529411764,
+      "fn": 7,
+      "tn": 245,
+      "precision": 0.5384615384615384,
+      "recall": 0.5,
+      "f1": 0.5185185185185185,
+      "threshold": 0.3400000000000001,
+      "top_features": [
+        [
+          "tech_frac",
+          0.2261
+        ],
+        [
+          "top_rbar_p90",
+          0.2232
+        ],
+        [
+          "avg_chord_overlap",
+          0.2068
+        ],
+        [
+          "pbar_std",
+          0.1258
+        ],
+        [
+          "stream_frac",
+          0.1176
+        ]
+      ]
+    },
+    "Inverse": {
+      "tp": 16,
+      "fp": 2,
+      "fn": 1,
+      "tn": 246,
+      "precision": 0.8888888888888888,
+      "recall": 0.9411764705882353,
+      "f1": 0.9142857142857143,
       "threshold": 0.28,
       "top_features": [
         [
-          "pbar_std",
-          0.5233
+          "top_rbar_mean",
+          0.5048
         ],
         [
-          "chordjack_frac",
-          0.1771
+          "ln_ratio",
+          0.3189
         ],
         [
-          "xbar_std",
-          0.1696
+          "nps",
+          0.1507
         ],
         [
-          "tech_frac",
-          0.1301
+          "pbar_mean",
+          0.0256
         ],
         [
           "avg_chord_overlap",
@@ -209,226 +253,258 @@
         ]
       ]
     },
-    "Inverse": {
-      "tp": 15,
-      "fp": 0,
-      "fn": 0,
-      "tn": 132,
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0,
+    "LN Mix": {
+      "tp": 38,
+      "fp": 26,
+      "fn": 1,
+      "tn": 200,
+      "precision": 0.59375,
+      "recall": 0.9743589743589743,
+      "f1": 0.7378640776699029,
       "threshold": 0.28,
       "top_features": [
         [
-          "pbar_mean",
-          0.3954
+          "rbar_std",
+          0.3662
         ],
         [
-          "ln_ratio",
-          0.2475
+          "xbar_std",
+          0.2278
         ],
         [
-          "ln_contrib",
-          0.1856
+          "top_jbar_mean",
+          0.15
         ],
         [
-          "xbar_mean",
-          0.1715
+          "pbar_p50",
+          0.1372
         ],
         [
-          "avg_chord_overlap",
-          0.0
+          "rbar_mean",
+          0.0566
         ]
       ]
     },
     "Minijack": {
       "tp": 4,
       "fp": 2,
-      "fn": 0,
-      "tn": 141,
+      "fn": 2,
+      "tn": 257,
       "precision": 0.6666666666666666,
-      "recall": 1.0,
-      "f1": 0.8,
+      "recall": 0.6666666666666666,
+      "f1": 0.6666666666666666,
       "threshold": 0.28,
       "top_features": [
         [
           "pbar_std",
-          0.4896
+          0.4481
+        ],
+        [
+          "nps",
+          0.2473
+        ],
+        [
+          "tech_frac",
+          0.1918
         ],
         [
           "avg_chord_overlap",
-          0.2606
-        ],
-        [
-          "stream_frac",
-          0.2498
+          0.1128
         ],
         [
           "avg_ln_dur",
           0.0
+        ]
+      ]
+    },
+    "RC Mix": {
+      "tp": 14,
+      "fp": 3,
+      "fn": 10,
+      "tn": 238,
+      "precision": 0.8235294117647058,
+      "recall": 0.5833333333333334,
+      "f1": 0.6829268292682927,
+      "threshold": 0.3400000000000001,
+      "top_features": [
+        [
+          "stream_frac",
+          0.2811
         ],
         [
-          "chordjack_frac",
-          0.0
+          "rbar_mean",
+          0.135
+        ],
+        [
+          "avg_chord_overlap",
+          0.1268
+        ],
+        [
+          "nps",
+          0.1194
+        ],
+        [
+          "jbar_max",
+          0.1151
         ]
       ]
     },
     "Release": {
-      "tp": 23,
-      "fp": 5,
-      "fn": 0,
-      "tn": 119,
-      "precision": 0.8214285714285714,
-      "recall": 1.0,
-      "f1": 0.9019607843137255,
+      "tp": 25,
+      "fp": 7,
+      "fn": 2,
+      "tn": 231,
+      "precision": 0.78125,
+      "recall": 0.9259259259259259,
+      "f1": 0.847457627118644,
       "threshold": 0.28,
       "top_features": [
         [
-          "ln_contrib",
-          0.5815
+          "top_rbar_mean",
+          0.7573
         ],
         [
-          "avg_ln_dur",
-          0.1064
+          "top_jbar_mean",
+          0.1461
         ],
         [
-          "tech_frac",
-          0.1043
+          "release_frac",
+          0.0506
         ],
         [
-          "ln_ratio",
-          0.0775
+          "nps",
+          0.0159
         ],
         [
-          "rbar_mean",
-          0.0748
+          "jbar_max",
+          0.0155
         ]
       ]
     },
     "Speed": {
-      "tp": 21,
-      "fp": 6,
-      "fn": 3,
-      "tn": 117,
-      "precision": 0.7777777777777778,
-      "recall": 0.875,
-      "f1": 0.8235294117647058,
+      "tp": 18,
+      "fp": 2,
+      "fn": 11,
+      "tn": 234,
+      "precision": 0.9,
+      "recall": 0.6206896551724138,
+      "f1": 0.7346938775510204,
       "threshold": 0.28,
       "top_features": [
         [
           "avg_chord_overlap",
-          0.6662
-        ],
-        [
-          "tech_frac",
-          0.1617
+          0.5327
         ],
         [
           "pbar_std",
-          0.1045
+          0.2232
         ],
         [
-          "rbar_mean",
-          0.0549
+          "tech_frac",
+          0.0741
         ],
         [
-          "pbar_max",
-          0.0127
+          "stream_frac",
+          0.0495
+        ],
+        [
+          "chordjack_frac",
+          0.0473
         ]
       ]
     },
     "Tech": {
-      "tp": 17,
-      "fp": 7,
-      "fn": 4,
-      "tn": 119,
-      "precision": 0.7083333333333334,
-      "recall": 0.8095238095238095,
-      "f1": 0.7555555555555555,
+      "tp": 16,
+      "fp": 4,
+      "fn": 13,
+      "tn": 232,
+      "precision": 0.8,
+      "recall": 0.5517241379310345,
+      "f1": 0.6530612244897959,
       "threshold": 0.28,
       "top_features": [
         [
-          "jack_frac",
-          0.2746
+          "release_frac",
+          0.2731
         ],
         [
-          "xbar_mean",
-          0.2005
+          "top_pbar_mean",
+          0.2353
         ],
         [
-          "jbar_max",
-          0.1711
+          "ln_ratio",
+          0.1729
         ],
         [
           "pbar_p50",
-          0.1377
+          0.1551
         ],
         [
           "jbar_std",
-          0.1149
+          0.1017
         ]
       ]
     },
     "Technical": {
-      "tp": 11,
-      "fp": 3,
+      "tp": 14,
+      "fp": 6,
       "fn": 0,
-      "tn": 133,
-      "precision": 0.7857142857142857,
+      "tn": 245,
+      "precision": 0.7,
       "recall": 1.0,
-      "f1": 0.88,
+      "f1": 0.8235294117647058,
       "threshold": 0.28,
       "top_features": [
         [
-          "chordjack_frac",
-          0.4021
-        ],
-        [
-          "nps",
-          0.2468
+          "top_rbar_p90",
+          0.254
         ],
         [
           "avg_ln_dur",
-          0.2047
+          0.2431
+        ],
+        [
+          "pbar_mean",
+          0.1888
+        ],
+        [
+          "nps",
+          0.1221
         ],
         [
           "rbar_p90",
-          0.0838
-        ],
-        [
-          "rbar_mean",
-          0.0363
+          0.0792
         ]
       ]
     },
     "Vibro": {
-      "tp": 4,
-      "fp": 2,
+      "tp": 5,
+      "fp": 4,
       "fn": 0,
-      "tn": 141,
-      "precision": 0.6666666666666666,
+      "tn": 256,
+      "precision": 0.5555555555555556,
       "recall": 1.0,
-      "f1": 0.8,
+      "f1": 0.7142857142857143,
       "threshold": 0.28,
       "top_features": [
         [
           "pbar_std",
-          0.4896
+          0.4382
         ],
         [
-          "xbar_std",
-          0.3475
+          "jack_frac",
+          0.2845
+        ],
+        [
+          "top_pbar_mean",
+          0.2294
         ],
         [
           "chordjack_frac",
-          0.1629
+          0.0478
         ],
         [
           "avg_chord_overlap",
-          0.0
-        ],
-        [
-          "avg_ln_dur",
           0.0
         ]
       ]
@@ -439,239 +515,59 @@
       "tree": {
         "is_leaf": false,
         "feature": 0,
-        "threshold": 0.1112762950360775,
+        "threshold": 0.14368478953838348,
         "left": {
           "is_leaf": false,
-          "feature": 14,
-          "threshold": 16.046997547149658,
+          "feature": 0,
+          "threshold": 0.09574764221906662,
           "left": {
-            "is_leaf": true,
-            "prob": 0.3333333333333333,
-            "counts": [
-              0.6666666666666666,
-              0.3333333333333333
-            ]
-          },
-          "right": {
-            "is_leaf": true,
-            "prob": 0.0,
-            "counts": [
-              1.0,
-              0.0
-            ]
-          }
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 2,
-          "threshold": 0.2348858118057251,
-          "left": {
-            "is_leaf": true,
-            "prob": 0.0,
-            "counts": [
-              1.0,
-              0.0
-            ]
-          },
-          "right": {
             "is_leaf": false,
-            "feature": 21,
-            "threshold": 0.2979552000761032,
+            "feature": 25,
+            "threshold": 42.18130874633789,
             "left": {
               "is_leaf": false,
-              "feature": 4,
-              "threshold": 34.13916206359863,
+              "feature": 1,
+              "threshold": 1520.7000122070312,
               "left": {
                 "is_leaf": true,
-                "prob": 0.3333333333333333,
+                "prob": 0.0,
                 "counts": [
-                  0.6666666666666666,
-                  0.3333333333333333
+                  1.0,
+                  0.0
                 ]
               },
               "right": {
+                "is_leaf": true,
+                "prob": 0.08333333333333333,
+                "counts": [
+                  0.9166666666666666,
+                  0.08333333333333333
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.3333333333333333,
+              "counts": [
+                0.6666666666666666,
+                0.3333333333333333
+              ]
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 17,
+            "threshold": 1.7218251824378967,
+            "left": {
+              "is_leaf": false,
+              "feature": 0,
+              "threshold": 0.12888631969690323,
+              "left": {
                 "is_leaf": true,
                 "prob": 1.0,
                 "counts": [
                   0.0,
                   1.0
-                ]
-              }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            }
-          }
-        }
-      },
-      "threshold": 0.28,
-      "n_samples_pos": 20
-    },
-    "Coordination": {
-      "tree": {
-        "is_leaf": false,
-        "feature": 2,
-        "threshold": 0.18377024680376053,
-        "left": {
-          "is_leaf": false,
-          "feature": 9,
-          "threshold": 0.7083878815174103,
-          "left": {
-            "is_leaf": false,
-            "feature": 17,
-            "threshold": 4.61206579208374,
-            "left": {
-              "is_leaf": false,
-              "feature": 18,
-              "threshold": 1.1466411352157593,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.3333333333333333,
-                "counts": [
-                  0.6666666666666666,
-                  0.3333333333333333
-                ]
-              }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            }
-          },
-          "right": {
-            "is_leaf": false,
-            "feature": 15,
-            "threshold": 4.762462377548218,
-            "left": {
-              "is_leaf": false,
-              "feature": 15,
-              "threshold": 4.203827142715454,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.6,
-                "counts": [
-                  0.4,
-                  0.6
-                ]
-              }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            }
-          }
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 22,
-          "threshold": 0.14865808188915253,
-          "left": {
-            "is_leaf": false,
-            "feature": 22,
-            "threshold": 0.14763817936182022,
-            "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 0.3333333333333333,
-              "counts": [
-                0.6666666666666666,
-                0.3333333333333333
-              ]
-            }
-          },
-          "right": {
-            "is_leaf": true,
-            "prob": 0.0,
-            "counts": [
-              1.0,
-              0.0
-            ]
-          }
-        }
-      },
-      "threshold": 0.28,
-      "n_samples_pos": 14
-    },
-    "Dense Chordstream": {
-      "tree": {
-        "is_leaf": false,
-        "feature": 22,
-        "threshold": 0.20674264430999756,
-        "left": {
-          "is_leaf": false,
-          "feature": 11,
-          "threshold": 23.17923069000244,
-          "left": {
-            "is_leaf": false,
-            "feature": 2,
-            "threshold": 0.24312221258878708,
-            "left": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 0.3333333333333333,
-              "counts": [
-                0.6666666666666666,
-                0.3333333333333333
-              ]
-            }
-          },
-          "right": {
-            "is_leaf": false,
-            "feature": 0,
-            "threshold": 0.021008695475757122,
-            "left": {
-              "is_leaf": false,
-              "feature": 10,
-              "threshold": 18.95689582824707,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
                 ]
               },
               "right": {
@@ -684,36 +580,23 @@
               }
             },
             "right": {
-              "is_leaf": false,
-              "feature": 15,
-              "threshold": 3.0437002182006836,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.3333333333333333,
-                "counts": [
-                  0.6666666666666666,
-                  0.3333333333333333
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
-                ]
-              }
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
             }
           }
         },
         "right": {
           "is_leaf": false,
-          "feature": 0,
-          "threshold": 0.017460462637245655,
+          "feature": 35,
+          "threshold": 2.035738229751587,
           "left": {
             "is_leaf": false,
-            "feature": 24,
-            "threshold": 14.034670352935791,
+            "feature": 26,
+            "threshold": 31.072962760925293,
             "left": {
               "is_leaf": true,
               "prob": 0.3333333333333333,
@@ -732,49 +615,23 @@
             }
           },
           "right": {
-            "is_leaf": false,
-            "feature": 10,
-            "threshold": 26.82949733734131,
-            "left": {
-              "is_leaf": false,
-              "feature": 4,
-              "threshold": 22.385497093200684,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.875,
-                "counts": [
-                  0.125,
-                  0.875
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.2222222222222222,
-                "counts": [
-                  0.7777777777777778,
-                  0.2222222222222222
-                ]
-              }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            }
+            "is_leaf": true,
+            "prob": 1.0,
+            "counts": [
+              0.0,
+              1.0
+            ]
           }
         }
       },
-      "threshold": 0.3400000000000001,
-      "n_samples_pos": 25
+      "threshold": 0.28,
+      "n_samples_pos": 32
     },
-    "Density": {
+    "Coordination": {
       "tree": {
         "is_leaf": false,
-        "feature": 16,
-        "threshold": 2.4113963842391968,
+        "feature": 30,
+        "threshold": 4.601707220077515,
         "left": {
           "is_leaf": true,
           "prob": 0.0,
@@ -785,22 +642,211 @@
         },
         "right": {
           "is_leaf": false,
-          "feature": 1,
-          "threshold": 291.86927795410156,
+          "feature": 0,
+          "threshold": 0.09456519037485123,
           "left": {
             "is_leaf": false,
-            "feature": 3,
-            "threshold": 0.1841910034418106,
+            "feature": 11,
+            "threshold": 38.042314529418945,
+            "left": {
+              "is_leaf": false,
+              "feature": 13,
+              "threshold": 22.10971736907959,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.4,
+                "counts": [
+                  0.6,
+                  0.4
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 18,
+              "threshold": 1.9250459671020508,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.4,
+                "counts": [
+                  0.6,
+                  0.4
+                ]
+              }
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 30,
+            "threshold": 6.211373329162598,
+            "left": {
+              "is_leaf": true,
+              "prob": 1.0,
+              "counts": [
+                0.0,
+                1.0
+              ]
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 17,
+              "threshold": 6.388633966445923,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.6666666666666666,
+                "counts": [
+                  0.3333333333333333,
+                  0.6666666666666666
+                ]
+              }
+            }
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 23
+    },
+    "Dense Chordstream": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 22,
+        "threshold": 0.21106918901205063,
+        "left": {
+          "is_leaf": false,
+          "feature": 26,
+          "threshold": 23.17923069000244,
+          "left": {
+            "is_leaf": false,
+            "feature": 25,
+            "threshold": 12.117769718170166,
+            "left": {
+              "is_leaf": true,
+              "prob": 1.0,
+              "counts": [
+                0.0,
+                1.0
+              ]
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.3333333333333333,
+              "counts": [
+                0.6666666666666666,
+                0.3333333333333333
+              ]
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 15,
+            "threshold": 4.501232624053955,
+            "left": {
+              "is_leaf": false,
+              "feature": 22,
+              "threshold": 0.16723651438951492,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.14814814814814814,
+                "counts": [
+                  0.8518518518518519,
+                  0.14814814814814814
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 10,
+          "threshold": 26.88878059387207,
+          "left": {
+            "is_leaf": false,
+            "feature": 13,
+            "threshold": 16.45987892150879,
+            "left": {
+              "is_leaf": true,
+              "prob": 1.0,
+              "counts": [
+                0.0,
+                1.0
+              ]
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 0,
+              "threshold": 0.06046419404447079,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.4074074074074074,
+                "counts": [
+                  0.5925925925925926,
+                  0.4074074074074074
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 28,
+            "threshold": 45.79816246032715,
             "left": {
               "is_leaf": false,
               "feature": 0,
-              "threshold": 0.03389114420861006,
+              "threshold": 0.01812744326889515,
               "left": {
                 "is_leaf": true,
-                "prob": 0.5,
+                "prob": 0.3333333333333333,
                 "counts": [
-                  0.5,
-                  0.5
+                  0.6666666666666666,
+                  0.3333333333333333
                 ]
               },
               "right": {
@@ -813,31 +859,96 @@
               }
             },
             "right": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 35
+    },
+    "Density": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 16,
+        "threshold": 2.6768113374710083,
+        "left": {
+          "is_leaf": true,
+          "prob": 0.0,
+          "counts": [
+            1.0,
+            0.0
+          ]
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 9,
+          "threshold": 0.3971310704946518,
+          "left": {
+            "is_leaf": true,
+            "prob": 1.0,
+            "counts": [
+              0.0,
+              1.0
+            ]
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 1,
+            "threshold": 291.86927795410156,
+            "left": {
               "is_leaf": false,
-              "feature": 17,
-              "threshold": 7.7195539474487305,
+              "feature": 7,
+              "threshold": 5.052872180938721,
               "left": {
                 "is_leaf": true,
-                "prob": 0.125,
+                "prob": 0.3793103448275862,
                 "counts": [
-                  0.875,
-                  0.125
+                  0.6206896551724138,
+                  0.3793103448275862
                 ]
               },
               "right": {
                 "is_leaf": true,
-                "prob": 0.625,
+                "prob": 0.0,
                 "counts": [
-                  0.375,
-                  0.625
+                  1.0,
+                  0.0
                 ]
               }
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
             }
-          },
-          "right": {
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 26
+    },
+    "Fast Chordstream": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 22,
+        "threshold": 0.2057657167315483,
+        "left": {
+          "is_leaf": false,
+          "feature": 15,
+          "threshold": 3.1339446306228638,
+          "left": {
             "is_leaf": false,
-            "feature": 9,
-            "threshold": 0.5480144917964935,
+            "feature": 0,
+            "threshold": 0.02361011505126953,
             "left": {
               "is_leaf": true,
               "prob": 0.6666666666666666,
@@ -854,89 +965,106 @@
                 0.0
               ]
             }
-          }
-        }
-      },
-      "threshold": 0.28,
-      "n_samples_pos": 19
-    },
-    "Fast Chordstream": {
-      "tree": {
-        "is_leaf": false,
-        "feature": 15,
-        "threshold": 2.5985690355300903,
-        "left": {
-          "is_leaf": true,
-          "prob": 0.5,
-          "counts": [
-            0.5,
-            0.5
-          ]
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 25,
-          "threshold": 8.661941528320312,
-          "left": {
+          },
+          "right": {
             "is_leaf": false,
-            "feature": 2,
-            "threshold": 0.28875042498111725,
+            "feature": 1,
+            "threshold": 1090.5,
             "left": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
+            },
+            "right": {
               "is_leaf": false,
-              "feature": 22,
-              "threshold": 0.22465207427740097,
+              "feature": 15,
+              "threshold": 4.064733505249023,
               "left": {
                 "is_leaf": true,
-                "prob": 0.00819672131147541,
+                "prob": 0.3333333333333333,
                 "counts": [
-                  0.9918032786885246,
-                  0.00819672131147541
+                  0.6666666666666666,
+                  0.3333333333333333
                 ]
               },
               "right": {
                 "is_leaf": true,
-                "prob": 0.13333333333333333,
+                "prob": 0.0,
                 "counts": [
-                  0.8666666666666667,
-                  0.13333333333333333
+                  1.0,
+                  0.0
+                ]
+              }
+            }
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 30,
+          "threshold": 0.34615591168403625,
+          "left": {
+            "is_leaf": false,
+            "feature": 6,
+            "threshold": 31.31612777709961,
+            "left": {
+              "is_leaf": false,
+              "feature": 21,
+              "threshold": 0.3173561841249466,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.1935483870967742,
+                "counts": [
+                  0.8064516129032258,
+                  0.1935483870967742
                 ]
               }
             },
             "right": {
               "is_leaf": true,
-              "prob": 0.3333333333333333,
+              "prob": 0.4,
               "counts": [
-                0.6666666666666666,
-                0.3333333333333333
+                0.6,
+                0.4
               ]
             }
           },
           "right": {
             "is_leaf": true,
-            "prob": 0.3333333333333333,
+            "prob": 0.6,
             "counts": [
-              0.6666666666666666,
-              0.3333333333333333
+              0.4,
+              0.6
             ]
           }
         }
       },
-      "threshold": 0.28,
-      "n_samples_pos": 7
+      "threshold": 0.3400000000000001,
+      "n_samples_pos": 14
     },
     "Inverse": {
       "tree": {
         "is_leaf": false,
-        "feature": 12,
-        "threshold": 34.63030242919922,
+        "feature": 9,
+        "threshold": 0.9777936339378357,
         "left": {
           "is_leaf": false,
-          "feature": 23,
-          "threshold": 1.0269957482814789,
+          "feature": 10,
+          "threshold": 8.375917911529541,
           "left": {
             "is_leaf": false,
-            "feature": 8,
-            "threshold": 0.1279199905693531,
+            "feature": 29,
+            "threshold": 3.8592878580093384,
             "left": {
               "is_leaf": true,
               "prob": 1.0,
@@ -955,6 +1083,53 @@
             }
           },
           "right": {
+            "is_leaf": false,
+            "feature": 12,
+            "threshold": 39.60892677307129,
+            "left": {
+              "is_leaf": false,
+              "feature": 12,
+              "threshold": 33.52995681762695,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.05,
+                "counts": [
+                  0.95,
+                  0.05
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.3333333333333333,
+              "counts": [
+                0.6666666666666666,
+                0.3333333333333333
+              ]
+            }
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 29,
+          "threshold": 5.340876579284668,
+          "left": {
+            "is_leaf": true,
+            "prob": 1.0,
+            "counts": [
+              0.0,
+              1.0
+            ]
+          },
+          "right": {
             "is_leaf": true,
             "prob": 0.0,
             "counts": [
@@ -962,11 +1137,20 @@
               0.0
             ]
           }
-        },
-        "right": {
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 17
+    },
+    "LN Mix": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 18,
+        "threshold": 0.9965205788612366,
+        "left": {
           "is_leaf": false,
-          "feature": 9,
-          "threshold": 0.9840007722377777,
+          "feature": 16,
+          "threshold": 4.503310441970825,
           "left": {
             "is_leaf": true,
             "prob": 0.0,
@@ -977,16 +1161,102 @@
           },
           "right": {
             "is_leaf": true,
-            "prob": 1.0,
+            "prob": 0.3333333333333333,
             "counts": [
-              0.0,
-              1.0
+              0.6666666666666666,
+              0.3333333333333333
             ]
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 35,
+          "threshold": 1.7849652171134949,
+          "left": {
+            "is_leaf": false,
+            "feature": 12,
+            "threshold": 15.820693016052246,
+            "left": {
+              "is_leaf": false,
+              "feature": 16,
+              "threshold": 3.071550726890564,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.6666666666666666,
+                "counts": [
+                  0.3333333333333333,
+                  0.6666666666666666
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 24,
+            "threshold": 11.019084453582764,
+            "left": {
+              "is_leaf": false,
+              "feature": 17,
+              "threshold": 6.5057213306427,
+              "left": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.5,
+                "counts": [
+                  0.5,
+                  0.5
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 13,
+              "threshold": 28.58268642425537,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.05555555555555555,
+                "counts": [
+                  0.9444444444444444,
+                  0.05555555555555555
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.5116279069767442,
+                "counts": [
+                  0.4883720930232558,
+                  0.5116279069767442
+                ]
+              }
+            }
           }
         }
       },
       "threshold": 0.28,
-      "n_samples_pos": 15
+      "n_samples_pos": 39
     },
     "Minijack": {
       "tree": {
@@ -1003,38 +1273,180 @@
         },
         "right": {
           "is_leaf": false,
-          "feature": 21,
-          "threshold": 0.2968634068965912,
+          "feature": 0,
+          "threshold": 0.0827210582792759,
           "left": {
+            "is_leaf": true,
+            "prob": 0.0,
+            "counts": [
+              1.0,
+              0.0
+            ]
+          },
+          "right": {
             "is_leaf": false,
-            "feature": 21,
-            "threshold": 0.28560367226600647,
+            "feature": 22,
+            "threshold": 0.20043474435806274,
             "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
               "is_leaf": false,
               "feature": 0,
-              "threshold": 0.07217542268335819,
+              "threshold": 0.09158207476139069,
               "left": {
+                "is_leaf": true,
+                "prob": 0.16666666666666666,
+                "counts": [
+                  0.8333333333333334,
+                  0.16666666666666666
+                ]
+              },
+              "right": {
                 "is_leaf": true,
                 "prob": 0.0,
                 "counts": [
                   1.0,
                   0.0
                 ]
-              },
-              "right": {
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 10,
+              "threshold": 19.811022758483887,
+              "left": {
                 "is_leaf": true,
                 "prob": 0.6666666666666666,
                 "counts": [
                   0.3333333333333333,
                   0.6666666666666666
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.1111111111111111,
+                "counts": [
+                  0.8888888888888888,
+                  0.1111111111111111
+                ]
+              }
+            }
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 6
+    },
+    "RC Mix": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 21,
+        "threshold": 0.2926490604877472,
+        "left": {
+          "is_leaf": false,
+          "feature": 0,
+          "threshold": 0.10282520577311516,
+          "left": {
+            "is_leaf": false,
+            "feature": 4,
+            "threshold": 33.7001953125,
+            "left": {
+              "is_leaf": false,
+              "feature": 10,
+              "threshold": 18.39225196838379,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.6666666666666666,
+                "counts": [
+                  0.3333333333333333,
+                  0.6666666666666666
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 17,
+              "threshold": 0.2927815243601799,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.8181818181818182,
+                "counts": [
+                  0.18181818181818182,
+                  0.8181818181818182
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.3333333333333333,
+                "counts": [
+                  0.6666666666666666,
+                  0.3333333333333333
+                ]
+              }
+            }
+          },
+          "right": {
+            "is_leaf": true,
+            "prob": 0.0,
+            "counts": [
+              1.0,
+              0.0
+            ]
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 29,
+          "threshold": 2.0444101095199585,
+          "left": {
+            "is_leaf": false,
+            "feature": 9,
+            "threshold": 0.0010443141218274832,
+            "left": {
+              "is_leaf": false,
+              "feature": 10,
+              "threshold": 18.013648986816406,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.19047619047619047,
+                "counts": [
+                  0.8095238095238095,
+                  0.19047619047619047
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.015384615384615385,
+                "counts": [
+                  0.9846153846153847,
+                  0.015384615384615385
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 16,
+              "threshold": 0.13963515311479568,
+              "left": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.2222222222222222,
+                "counts": [
+                  0.7777777777777778,
+                  0.2222222222222222
                 ]
               }
             }
@@ -1049,125 +1461,77 @@
           }
         }
       },
-      "threshold": 0.28,
-      "n_samples_pos": 4
+      "threshold": 0.3400000000000001,
+      "n_samples_pos": 24
     },
     "Release": {
       "tree": {
         "is_leaf": false,
-        "feature": 8,
-        "threshold": 0.12901577353477478,
+        "feature": 29,
+        "threshold": 5.998488426208496,
         "left": {
           "is_leaf": false,
-          "feature": 16,
-          "threshold": 4.669210910797119,
+          "feature": 24,
+          "threshold": 1.933147370815277,
           "left": {
-            "is_leaf": false,
-            "feature": 8,
-            "threshold": 0.09690672904253006,
-            "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
-              "is_leaf": false,
-              "feature": 0,
-              "threshold": 0.0913073793053627,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.6666666666666666,
-                "counts": [
-                  0.3333333333333333,
-                  0.6666666666666666
-                ]
-              }
-            }
-          },
-          "right": {
-            "is_leaf": false,
-            "feature": 1,
-            "threshold": 211.08319854736328,
-            "left": {
-              "is_leaf": false,
-              "feature": 22,
-              "threshold": 0.17741350084543228,
-              "left": {
-                "is_leaf": true,
-                "prob": 0.0,
-                "counts": [
-                  1.0,
-                  0.0
-                ]
-              },
-              "right": {
-                "is_leaf": true,
-                "prob": 0.75,
-                "counts": [
-                  0.25,
-                  0.75
-                ]
-              }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            }
-          }
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 9,
-          "threshold": 0.7083878815174103,
-          "left": {
-            "is_leaf": true,
-            "prob": 0.4,
-            "counts": [
-              0.6,
-              0.4
-            ]
-          },
-          "right": {
             "is_leaf": true,
             "prob": 1.0,
             "counts": [
               0.0,
               1.0
             ]
-          }
-        }
-      },
-      "threshold": 0.28,
-      "n_samples_pos": 23
-    },
-    "Speed": {
-      "tree": {
-        "is_leaf": false,
-        "feature": 0,
-        "threshold": 0.018154333345592022,
-        "left": {
-          "is_leaf": false,
-          "feature": 15,
-          "threshold": 3.895565629005432,
-          "left": {
+          },
+          "right": {
             "is_leaf": false,
-            "feature": 0,
-            "threshold": 0.009878249373286963,
+            "feature": 4,
+            "threshold": 7.31503701210022,
+            "left": {
+              "is_leaf": true,
+              "prob": 0.3333333333333333,
+              "counts": [
+                0.6666666666666666,
+                0.3333333333333333
+              ]
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 10,
+              "threshold": 55.72521781921387,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.008583690987124463,
+                "counts": [
+                  0.9914163090128756,
+                  0.008583690987124463
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.3333333333333333,
+                "counts": [
+                  0.6666666666666666,
+                  0.3333333333333333
+                ]
+              }
+            }
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 20,
+          "threshold": 0.09759547561407089,
+          "left": {
+            "is_leaf": true,
+            "prob": 0.3333333333333333,
+            "counts": [
+              0.6666666666666666,
+              0.3333333333333333
+            ]
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 9,
+            "threshold": 0.6403932869434357,
             "left": {
               "is_leaf": true,
               "prob": 0.6666666666666666,
@@ -1178,24 +1542,72 @@
             },
             "right": {
               "is_leaf": true,
+              "prob": 1.0,
+              "counts": [
+                0.0,
+                1.0
+              ]
+            }
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 27
+    },
+    "Speed": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 0,
+        "threshold": 0.0173910828307271,
+        "left": {
+          "is_leaf": false,
+          "feature": 15,
+          "threshold": 3.895565629005432,
+          "left": {
+            "is_leaf": false,
+            "feature": 21,
+            "threshold": 0.3671620786190033,
+            "left": {
+              "is_leaf": true,
               "prob": 0.0,
               "counts": [
                 1.0,
                 0.0
               ]
+            },
+            "right": {
+              "is_leaf": true,
+              "prob": 0.6666666666666666,
+              "counts": [
+                0.3333333333333333,
+                0.6666666666666666
+              ]
             }
           },
           "right": {
             "is_leaf": false,
-            "feature": 11,
-            "threshold": 28.481691360473633,
+            "feature": 3,
+            "threshold": 0.21668674796819687,
             "left": {
-              "is_leaf": true,
-              "prob": 0.75,
-              "counts": [
-                0.25,
-                0.75
-              ]
+              "is_leaf": false,
+              "feature": 15,
+              "threshold": 5.613052606582642,
+              "left": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
             },
             "right": {
               "is_leaf": true,
@@ -1210,21 +1622,21 @@
         "right": {
           "is_leaf": false,
           "feature": 22,
-          "threshold": 0.20220955461263657,
+          "threshold": 0.24494049698114395,
           "left": {
             "is_leaf": false,
-            "feature": 0,
-            "threshold": 0.02960794698446989,
+            "feature": 29,
+            "threshold": 0.5489719212055206,
             "left": {
               "is_leaf": false,
-              "feature": 16,
-              "threshold": 2.0948828756809235,
+              "feature": 2,
+              "threshold": 0.24402055144309998,
               "left": {
                 "is_leaf": true,
-                "prob": 0.5,
+                "prob": 0.171875,
                 "counts": [
-                  0.5,
-                  0.5
+                  0.828125,
+                  0.171875
                 ]
               },
               "right": {
@@ -1246,19 +1658,62 @@
             }
           },
           "right": {
+            "is_leaf": true,
+            "prob": 0.6666666666666666,
+            "counts": [
+              0.3333333333333333,
+              0.6666666666666666
+            ]
+          }
+        }
+      },
+      "threshold": 0.28,
+      "n_samples_pos": 29
+    },
+    "Tech": {
+      "tree": {
+        "is_leaf": false,
+        "feature": 20,
+        "threshold": 0.0367317721247673,
+        "left": {
+          "is_leaf": false,
+          "feature": 13,
+          "threshold": 21.510951042175293,
+          "left": {
             "is_leaf": false,
-            "feature": 0,
-            "threshold": 0.11363588273525238,
+            "feature": 27,
+            "threshold": 24.602554321289062,
             "left": {
               "is_leaf": false,
-              "feature": 22,
-              "threshold": 0.23988483101129532,
+              "feature": 9,
+              "threshold": 0.002111617592163384,
               "left": {
                 "is_leaf": true,
-                "prob": 0.13636363636363635,
+                "prob": 0.2127659574468085,
                 "counts": [
-                  0.8636363636363636,
-                  0.13636363636363635
+                  0.7872340425531915,
+                  0.2127659574468085
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 27,
+              "threshold": 26.767850875854492,
+              "left": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
                 ]
               },
               "right": {
@@ -1269,133 +1724,77 @@
                   0.6666666666666666
                 ]
               }
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 0.75,
-              "counts": [
-                0.25,
-                0.75
-              ]
-            }
-          }
-        }
-      },
-      "threshold": 0.28,
-      "n_samples_pos": 24
-    },
-    "Tech": {
-      "tree": {
-        "is_leaf": false,
-        "feature": 3,
-        "threshold": 0.22627118974924088,
-        "left": {
-          "is_leaf": false,
-          "feature": 13,
-          "threshold": 16.622024536132812,
-          "left": {
-            "is_leaf": false,
-            "feature": 23,
-            "threshold": 6.797188758850098,
-            "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
             }
           },
           "right": {
-            "is_leaf": true,
-            "prob": 0.0,
-            "counts": [
-              1.0,
-              0.0
-            ]
-          }
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 7,
-          "threshold": 4.912884473800659,
-          "left": {
             "is_leaf": false,
-            "feature": 4,
-            "threshold": 32.182098388671875,
+            "feature": 0,
+            "threshold": 0.07766548916697502,
             "left": {
               "is_leaf": false,
-              "feature": 11,
-              "threshold": 29.066475868225098,
+              "feature": 33,
+              "threshold": 20.474853515625,
               "left": {
                 "is_leaf": true,
-                "prob": 0.2,
+                "prob": 0.0,
                 "counts": [
-                  0.8,
-                  0.2
+                  1.0,
+                  0.0
                 ]
               },
               "right": {
                 "is_leaf": true,
-                "prob": 0.5833333333333334,
+                "prob": 0.21428571428571427,
                 "counts": [
-                  0.4166666666666667,
-                  0.5833333333333334
+                  0.7857142857142857,
+                  0.21428571428571427
                 ]
               }
             },
             "right": {
-              "is_leaf": true,
-              "prob": 1.0,
-              "counts": [
-                0.0,
-                1.0
-              ]
-            }
-          },
-          "right": {
-            "is_leaf": false,
-            "feature": 13,
-            "threshold": 34.5073184967041,
-            "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
-              "is_leaf": true,
-              "prob": 0.5,
-              "counts": [
-                0.5,
-                0.5
-              ]
+              "is_leaf": false,
+              "feature": 7,
+              "threshold": 4.856177806854248,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.5714285714285714,
+                "counts": [
+                  0.42857142857142855,
+                  0.5714285714285714
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
             }
           }
+        },
+        "right": {
+          "is_leaf": true,
+          "prob": 0.0,
+          "counts": [
+            1.0,
+            0.0
+          ]
         }
       },
       "threshold": 0.28,
-      "n_samples_pos": 21
+      "n_samples_pos": 29
     },
     "Technical": {
       "tree": {
         "is_leaf": false,
         "feature": 10,
-        "threshold": 36.53973579406738,
+        "threshold": 33.652042388916016,
         "left": {
           "is_leaf": false,
           "feature": 16,
-          "threshold": 3.3544727563858032,
+          "threshold": 3.4884300231933594,
           "left": {
             "is_leaf": true,
             "prob": 0.0,
@@ -1406,46 +1805,20 @@
           },
           "right": {
             "is_leaf": false,
-            "feature": 2,
-            "threshold": 0.18961061537265778,
+            "feature": 1,
+            "threshold": 177.09490203857422,
             "left": {
-              "is_leaf": true,
-              "prob": 0.0,
-              "counts": [
-                1.0,
-                0.0
-              ]
-            },
-            "right": {
               "is_leaf": true,
               "prob": 1.0,
               "counts": [
                 0.0,
                 1.0
               ]
-            }
-          }
-        },
-        "right": {
-          "is_leaf": false,
-          "feature": 1,
-          "threshold": 132.48822784423828,
-          "left": {
-            "is_leaf": true,
-            "prob": 1.0,
-            "counts": [
-              0.0,
-              1.0
-            ]
-          },
-          "right": {
-            "is_leaf": false,
-            "feature": 17,
-            "threshold": 8.054946899414062,
-            "left": {
+            },
+            "right": {
               "is_leaf": false,
-              "feature": 11,
-              "threshold": 41.10235786437988,
+              "feature": 30,
+              "threshold": 4.997599840164185,
               "left": {
                 "is_leaf": true,
                 "prob": 0.3333333333333333,
@@ -1462,20 +1835,85 @@
                   0.0
                 ]
               }
+            }
+          }
+        },
+        "right": {
+          "is_leaf": false,
+          "feature": 12,
+          "threshold": 30.0291748046875,
+          "left": {
+            "is_leaf": false,
+            "feature": 28,
+            "threshold": 35.61819648742676,
+            "left": {
+              "is_leaf": true,
+              "prob": 0.3333333333333333,
+              "counts": [
+                0.6666666666666666,
+                0.3333333333333333
+              ]
             },
             "right": {
               "is_leaf": true,
-              "prob": 0.6666666666666666,
+              "prob": 1.0,
               "counts": [
-                0.3333333333333333,
-                0.6666666666666666
+                0.0,
+                1.0
               ]
+            }
+          },
+          "right": {
+            "is_leaf": false,
+            "feature": 17,
+            "threshold": 6.97802734375,
+            "left": {
+              "is_leaf": false,
+              "feature": 0,
+              "threshold": 0.10556891933083534,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.3333333333333333,
+                "counts": [
+                  0.6666666666666666,
+                  0.3333333333333333
+                ]
+              }
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 30,
+              "threshold": 6.788892030715942,
+              "left": {
+                "is_leaf": true,
+                "prob": 1.0,
+                "counts": [
+                  0.0,
+                  1.0
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
             }
           }
         }
       },
       "threshold": 0.28,
-      "n_samples_pos": 11
+      "n_samples_pos": 14
     },
     "Vibro": {
       "tree": {
@@ -1492,20 +1930,46 @@
         },
         "right": {
           "is_leaf": false,
-          "feature": 2,
-          "threshold": 0.2635873556137085,
+          "feature": 3,
+          "threshold": 0.28439217805862427,
           "left": {
-            "is_leaf": true,
-            "prob": 0.0,
-            "counts": [
-              1.0,
-              0.0
-            ]
+            "is_leaf": false,
+            "feature": 2,
+            "threshold": 0.2649734616279602,
+            "left": {
+              "is_leaf": true,
+              "prob": 0.0,
+              "counts": [
+                1.0,
+                0.0
+              ]
+            },
+            "right": {
+              "is_leaf": false,
+              "feature": 3,
+              "threshold": 0.2732513099908829,
+              "left": {
+                "is_leaf": true,
+                "prob": 0.3333333333333333,
+                "counts": [
+                  0.6666666666666666,
+                  0.3333333333333333
+                ]
+              },
+              "right": {
+                "is_leaf": true,
+                "prob": 0.0,
+                "counts": [
+                  1.0,
+                  0.0
+                ]
+              }
+            }
           },
           "right": {
             "is_leaf": false,
-            "feature": 25,
-            "threshold": 3.430713176727295,
+            "feature": 27,
+            "threshold": 22.61074733734131,
             "left": {
               "is_leaf": true,
               "prob": 0.6666666666666666,
@@ -1526,8 +1990,8 @@
         }
       },
       "threshold": 0.28,
-      "n_samples_pos": 4
+      "n_samples_pos": 5
     }
   },
-  "javascript": "/**\n * ML-based pattern tag classifier (auto-generated).\n * 12 tags, 26 features, per-tag decision trees.\n * Asymmetric loss: FN > FP (weight=3x).\n * Replaces the old rule-based computePatternTags().\n */\n\nconst DECAY_WEIGHT_TAG = 0.88;\nconst RATING_MULTIPLIER_TAG = 0.090;\n\nfunction _tagAggregate(arr) {\n    if (!arr || arr.length === 0) return 0;\n    let sum = 0; const n = arr.length;\n    for (let i = 0; i < n; i++) if (arr[i] > 0) sum += arr[i];\n    const avg = sum / Math.max(n, 1);\n    const peaks = [...arr].filter(v => v > 0).sort((a, b) => b - a);\n    let weighted = 0, weight = 1;\n    for (let i = 0; i < Math.min(peaks.length, 20); i++) {\n        weighted += peaks[i] * weight;\n        weight *= DECAY_WEIGHT_TAG;\n    }\n    return weighted * RATING_MULTIPLIER_TAG * 0.5 + avg * 0.1;\n}\n\nfunction _tagChordOverlap(noteSeq) {\n    const chords = [];\n    let currentCols = new Set(), currentTime = null;\n    for (const note of noteSeq) {\n        if (currentTime === null || note.start - currentTime > 30) {\n            if (currentCols.size > 0) chords.push(new Set(currentCols));\n            currentCols = new Set([note.col || note[0]]);\n            currentTime = note.start || note[1];\n        } else {\n            currentCols.add(note.col || note[0]);\n        }\n    }\n    if (currentCols.size > 0) chords.push(new Set(currentCols));\n    if (chords.length < 2) return 0;\n    let total = 0;\n    for (let i = 1; i < chords.length; i++) {\n        let intersect = 0;\n        for (const col of chords[i]) if (chords[i - 1].has(col)) intersect++;\n        const union = new Set([...chords[i], ...chords[i - 1]]).size;\n        if (union > 0) total += intersect / union;\n    }\n    return total / (chords.length - 1);\n}\n\nfunction _tagDistStats(arr) {\n    if (!arr || arr.length === 0) return { mean: 0, std: 0, p50: 0, p75: 0, p90: 0, max: 0 };\n    const n = arr.length;\n    const sorted = [...arr].sort((a, b) => a - b);\n    let sum = 0, sumSq = 0;\n    for (const v of arr) { sum += v; sumSq += v * v; }\n    const mean = sum / n;\n    const std = Math.sqrt(sumSq / n - mean * mean);\n    const idx = (p) => Math.max(0, Math.min(n - 1, Math.round(p * (n - 1) / 100)));\n    return {\n        mean, std,\n        p50: sorted[idx(50)],\n        p75: sorted[idx(75)],\n        p90: sorted[idx(90)],\n        max: sorted[n - 1],\n    };\n}\n\nfunction extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq) {\n    const nTotal = noteSeq.length;\n    const nLn = LNSeq.length;\n    const lnRatio = nLn / Math.max(nTotal, 1);\n\n    let avgLnDur = 0;\n    if (nLn > 0) {\n        let sum = 0;\n        for (const ln of LNSeq) sum += Math.max((ln.end - ln.start), 0);\n        avgLnDur = sum / nLn;\n    }\n\n    let nps = 0;\n    if (nTotal > 1) {\n        const dur = (noteSeq[nTotal - 1].start - noteSeq[0].start) / 1000;\n        nps = nTotal / Math.max(dur, 1);\n    }\n\n    const avgChordOverlap = _tagChordOverlap(noteSeq);\n\n    // Skill fractions (exact match with computeSkillRatings)\n    const streamRaw = _tagAggregate(Pbar);\n    const jackRaw = _tagAggregate(Jbar);\n    const techRaw = _tagAggregate(Xbar);\n    const cjArr = Jbar.map((v, i) => v * (1 - Math.exp(-Pbar[i] / 5)));\n    const chordjackRaw = _tagAggregate(cjArr);\n    const releaseRaw = _tagAggregate(Rbar);\n\n    const totalSkill = streamRaw + jackRaw + techRaw + chordjackRaw + releaseRaw;\n    const streamFrac = totalSkill > 0 ? streamRaw / totalSkill : 0;\n    const jackFrac = totalSkill > 0 ? jackRaw / totalSkill : 0;\n    const techFrac = totalSkill > 0 ? techRaw / totalSkill : 0;\n    const chordjackFrac = totalSkill > 0 ? chordjackRaw / totalSkill : 0;\n    const releaseFrac = totalSkill > 0 ? releaseRaw / totalSkill : 0;\n\n    // Distribution stats\n    const pStats = _tagDistStats(Pbar);\n    const jStats = _tagDistStats(Jbar);\n    const xStats = _tagDistStats(Xbar);\n    const rStats = _tagDistStats(Rbar);\n\n    const rcSrRatio = 1.0 - releaseFrac;\n    const lnContrib = releaseFrac;\n\n    return {\n        streamFrac, jackFrac, techFrac, chordjackFrac, releaseFrac,\n        avgChordOverlap, nps, lnRatio, avgLnDur,\n        pbarMean: pStats.mean, pbarStd: pStats.std,\n        pbarP50: pStats.p50, pbarP90: pStats.p90, pbarMax: pStats.max,\n        jbarMean: jStats.mean, jbarStd: jStats.std,\n        jbarP90: jStats.p90, jbarMax: jStats.max,\n        xbarMean: xStats.mean, xbarStd: xStats.std, xbarP90: xStats.p90,\n        rbarMean: rStats.mean, rbarStd: rStats.std, rbarP90: rStats.p90,\n        rcSrRatio, lnContrib,\n    };\n}\n\nfunction _predictTag_Chordjack(feat) {\n  if (feat.avgChordOverlap <= 0.111276) {\n    if (feat.pbarP90 <= 16.046998) {\n      return 0.333333;\n    } else {\n      return 0.000000;\n    }\n  } else {\n    if (feat.chordjackFrac <= 0.234886) {\n      return 0.000000;\n    } else {\n      if (feat.streamFrac <= 0.297955) {\n        if (feat.jbarMax <= 34.139162) {\n          return 0.333333;\n        } else {\n          return 1.000000;\n        }\n      } else {\n        return 1.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Coordination(feat) {\n  if (feat.chordjackFrac <= 0.183770) {\n    if (feat.lnRatio <= 0.708388) {\n      if (feat.rbarP90 <= 4.612066) {\n        if (feat.rbarStd <= 1.146641) {\n          return 0.000000;\n        } else {\n          return 0.333333;\n        }\n      } else {\n        return 1.000000;\n      }\n    } else {\n      if (feat.pbarStd <= 4.762462) {\n        if (feat.pbarStd <= 4.203827) {\n          return 0.000000;\n        } else {\n          return 0.600000;\n        }\n      } else {\n        return 0.000000;\n      }\n    }\n  } else {\n    if (feat.techFrac <= 0.148658) {\n      if (feat.techFrac <= 0.147638) {\n        return 0.000000;\n      } else {\n        return 0.333333;\n      }\n    } else {\n      return 0.000000;\n    }\n  }\n}\n\nfunction _predictTag_Dense_Chordstream(feat) {\n  if (feat.techFrac <= 0.206743) {\n    if (feat.pbarMax <= 23.179231) {\n      if (feat.chordjackFrac <= 0.243122) {\n        return 1.000000;\n      } else {\n        return 0.333333;\n      }\n    } else {\n      if (feat.avgChordOverlap <= 0.021009) {\n        if (feat.nps <= 18.956896) {\n          return 0.000000;\n        } else {\n          return 0.500000;\n        }\n      } else {\n        if (feat.pbarStd <= 3.043700) {\n          return 0.333333;\n        } else {\n          return 0.000000;\n        }\n      }\n    }\n  } else {\n    if (feat.avgChordOverlap <= 0.017460) {\n      if (feat.xbarP90 <= 14.034670) {\n        return 0.333333;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.nps <= 26.829497) {\n        if (feat.jbarMax <= 22.385497) {\n          return 0.875000;\n        } else {\n          return 0.222222;\n        }\n      } else {\n        return 1.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Density(feat) {\n  if (feat.rbarMean <= 2.411396) {\n    return 0.000000;\n  } else {\n    if (feat.avgLnDur <= 291.869278) {\n      if (feat.jackFrac <= 0.184191) {\n        if (feat.avgChordOverlap <= 0.033891) {\n          return 0.500000;\n        } else {\n          return 1.000000;\n        }\n      } else {\n        if (feat.rbarP90 <= 7.719554) {\n          return 0.125000;\n        } else {\n          return 0.625000;\n        }\n      }\n    } else {\n      if (feat.lnRatio <= 0.548014) {\n        return 0.666667;\n      } else {\n        return 0.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Fast_Chordstream(feat) {\n  if (feat.pbarStd <= 2.598569) {\n    return 0.500000;\n  } else {\n    if (feat.xbarStd <= 8.661942) {\n      if (feat.chordjackFrac <= 0.288750) {\n        if (feat.techFrac <= 0.224652) {\n          return 0.008197;\n        } else {\n          return 0.133333;\n        }\n      } else {\n        return 0.333333;\n      }\n    } else {\n      return 0.333333;\n    }\n  }\n}\n\nfunction _predictTag_Inverse(feat) {\n  if (feat.pbarMean <= 34.630302) {\n    if (feat.xbarMean <= 1.026996) {\n      if (feat.lnContrib <= 0.127920) {\n        return 1.000000;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      return 0.000000;\n    }\n  } else {\n    if (feat.lnRatio <= 0.984001) {\n      return 0.000000;\n    } else {\n      return 1.000000;\n    }\n  }\n}\n\nfunction _predictTag_Minijack(feat) {\n  if (feat.pbarStd <= 2.511311) {\n    return 0.666667;\n  } else {\n    if (feat.streamFrac <= 0.296863) {\n      if (feat.streamFrac <= 0.285604) {\n        return 0.000000;\n      } else {\n        if (feat.avgChordOverlap <= 0.072175) {\n          return 0.000000;\n        } else {\n          return 0.666667;\n        }\n      }\n    } else {\n      return 0.000000;\n    }\n  }\n}\n\nfunction _predictTag_Release(feat) {\n  if (feat.lnContrib <= 0.129016) {\n    if (feat.rbarMean <= 4.669211) {\n      if (feat.lnContrib <= 0.096907) {\n        return 0.000000;\n      } else {\n        if (feat.avgChordOverlap <= 0.091307) {\n          return 0.000000;\n        } else {\n          return 0.666667;\n        }\n      }\n    } else {\n      if (feat.avgLnDur <= 211.083199) {\n        if (feat.techFrac <= 0.177414) {\n          return 0.000000;\n        } else {\n          return 0.750000;\n        }\n      } else {\n        return 1.000000;\n      }\n    }\n  } else {\n    if (feat.lnRatio <= 0.708388) {\n      return 0.400000;\n    } else {\n      return 1.000000;\n    }\n  }\n}\n\nfunction _predictTag_Speed(feat) {\n  if (feat.avgChordOverlap <= 0.018154) {\n    if (feat.pbarStd <= 3.895566) {\n      if (feat.avgChordOverlap <= 0.009878) {\n        return 0.666667;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.pbarMax <= 28.481691) {\n        return 0.750000;\n      } else {\n        return 1.000000;\n      }\n    }\n  } else {\n    if (feat.techFrac <= 0.202210) {\n      if (feat.avgChordOverlap <= 0.029608) {\n        if (feat.rbarMean <= 2.094883) {\n          return 0.500000;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.avgChordOverlap <= 0.113636) {\n        if (feat.techFrac <= 0.239885) {\n          return 0.136364;\n        } else {\n          return 0.666667;\n        }\n      } else {\n        return 0.750000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Tech(feat) {\n  if (feat.jackFrac <= 0.226271) {\n    if (feat.pbarP50 <= 16.622025) {\n      if (feat.xbarMean <= 6.797189) {\n        return 0.000000;\n      } else {\n        return 1.000000;\n      }\n    } else {\n      return 0.000000;\n    }\n  } else {\n    if (feat.jbarStd <= 4.912884) {\n      if (feat.jbarMax <= 32.182098) {\n        if (feat.pbarMax <= 29.066476) {\n          return 0.200000;\n        } else {\n          return 0.583333;\n        }\n      } else {\n        return 1.000000;\n      }\n    } else {\n      if (feat.pbarP50 <= 34.507318) {\n        return 0.000000;\n      } else {\n        return 0.500000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Technical(feat) {\n  if (feat.nps <= 36.539736) {\n    if (feat.rbarMean <= 3.354473) {\n      return 0.000000;\n    } else {\n      if (feat.chordjackFrac <= 0.189611) {\n        return 0.000000;\n      } else {\n        return 1.000000;\n      }\n    }\n  } else {\n    if (feat.avgLnDur <= 132.488228) {\n      return 1.000000;\n    } else {\n      if (feat.rbarP90 <= 8.054947) {\n        if (feat.pbarMax <= 41.102358) {\n          return 0.333333;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 0.666667;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Vibro(feat) {\n  if (feat.pbarStd <= 2.511311) {\n    return 0.666667;\n  } else {\n    if (feat.chordjackFrac <= 0.263587) {\n      return 0.000000;\n    } else {\n      if (feat.xbarStd <= 3.430713) {\n        return 0.666667;\n      } else {\n        return 0.000000;\n      }\n    }\n  }\n}\n"
+  "javascript": "/**\n * ML-based pattern tag classifier (auto-generated).\n * 14 tags, 36 features, per-tag decision trees.\n * Equal FP/FN weight. Tag ordering: first tag most important.\n * Difficulty-weighted features (top-20% D(t) sections).\n */\n\nconst DECAY_WEIGHT_TAG = 0.88;\nconst RATING_MULTIPLIER_TAG = 0.090;\n\nfunction _tagAggregate(arr) {\n    if (!arr || arr.length === 0) return 0;\n    let sum = 0; const n = arr.length;\n    for (let i = 0; i < n; i++) if (arr[i] > 0) sum += arr[i];\n    const avg = sum / Math.max(n, 1);\n    const peaks = [...arr].filter(v => v > 0).sort((a, b) => b - a);\n    let weighted = 0, weight = 1;\n    for (let i = 0; i < Math.min(peaks.length, 20); i++) {\n        weighted += peaks[i] * weight;\n        weight *= DECAY_WEIGHT_TAG;\n    }\n    return weighted * RATING_MULTIPLIER_TAG * 0.5 + avg * 0.1;\n}\n\nfunction _tagChordOverlap(noteSeq) {\n    const chords = [];\n    let currentCols = new Set(), currentTime = null;\n    for (const note of noteSeq) {\n        if (currentTime === null || note.start - currentTime > 30) {\n            if (currentCols.size > 0) chords.push(new Set(currentCols));\n            currentCols = new Set([note.col || note[0]]);\n            currentTime = note.start || note[1];\n        } else {\n            currentCols.add(note.col || note[0]);\n        }\n    }\n    if (currentCols.size > 0) chords.push(new Set(currentCols));\n    if (chords.length < 2) return 0;\n    let total = 0;\n    for (let i = 1; i < chords.length; i++) {\n        let intersect = 0;\n        for (const col of chords[i]) if (chords[i - 1].has(col)) intersect++;\n        const union = new Set([...chords[i], ...chords[i - 1]]).size;\n        if (union > 0) total += intersect / union;\n    }\n    return total / (chords.length - 1);\n}\n\nfunction _tagDistStats(arr) {\n    if (!arr || arr.length === 0) return { mean: 0, std: 0, p50: 0, p75: 0, p90: 0, max: 0 };\n    const n = arr.length;\n    const sorted = [...arr].sort((a, b) => a - b);\n    let sum = 0, sumSq = 0;\n    for (const v of arr) { sum += v; sumSq += v * v; }\n    const mean = sum / n;\n    const std = Math.sqrt(sumSq / n - mean * mean);\n    const idx = (p) => Math.max(0, Math.min(n - 1, Math.round(p * (n - 1) / 100)));\n    return {\n        mean, std,\n        p50: sorted[idx(50)],\n        p75: sorted[idx(75)],\n        p90: sorted[idx(90)],\n        max: sorted[n - 1],\n    };\n}\n\nfunction _tagDistStatsTop(arr, topMask) {\n    if (!arr || arr.length === 0) return _tagDistStats(null);\n    if (!topMask || topMask.length !== arr.length) return _tagDistStats(arr);\n    const filtered = [];\n    for (let i = 0; i < arr.length; i++) {\n        if (topMask[i]) filtered.push(arr[i]);\n    }\n    return filtered.length > 0 ? _tagDistStats(filtered) : _tagDistStats(null);\n}\n\nfunction extractTagFeatures(Jbar, Xbar, Pbar, Rbar, noteSeq, LNSeq, D_all) {\n    const nTotal = noteSeq.length;\n    const nLn = LNSeq.length;\n    const lnRatio = nLn / Math.max(nTotal, 1);\n\n    let avgLnDur = 0;\n    if (nLn > 0) {\n        let sum = 0;\n        for (const ln of LNSeq) sum += Math.max((ln.end - ln.start), 0);\n        avgLnDur = sum / nLn;\n    }\n\n    let nps = 0;\n    if (nTotal > 1) {\n        const dur = (noteSeq[nTotal - 1].start - noteSeq[0].start) / 1000;\n        nps = nTotal / Math.max(dur, 1);\n    }\n\n    const avgChordOverlap = _tagChordOverlap(noteSeq);\n\n    // Skill fractions (exact match with computeSkillRatings)\n    const streamRaw = _tagAggregate(Pbar);\n    const jackRaw = _tagAggregate(Jbar);\n    const techRaw = _tagAggregate(Xbar);\n    const cjArr = Jbar.map((v, i) => v * (1 - Math.exp(-Pbar[i] / 5)));\n    const chordjackRaw = _tagAggregate(cjArr);\n    const releaseRaw = _tagAggregate(Rbar);\n\n    const totalSkill = streamRaw + jackRaw + techRaw + chordjackRaw + releaseRaw;\n    const streamFrac = totalSkill > 0 ? streamRaw / totalSkill : 0;\n    const jackFrac = totalSkill > 0 ? jackRaw / totalSkill : 0;\n    const techFrac = totalSkill > 0 ? techRaw / totalSkill : 0;\n    const chordjackFrac = totalSkill > 0 ? chordjackRaw / totalSkill : 0;\n    const releaseFrac = totalSkill > 0 ? releaseRaw / totalSkill : 0;\n\n    // Distribution stats (overall)\n    const pStats = _tagDistStats(Pbar);\n    const jStats = _tagDistStats(Jbar);\n    const xStats = _tagDistStats(Xbar);\n    const rStats = _tagDistStats(Rbar);\n\n    // Top-20% difficulty mask (focus on hardest sections)\n    let topMask = null;\n    if (D_all && D_all.length > 10) {\n        const sorted = [...D_all].sort((a, b) => a - b);\n        const threshold = sorted[Math.floor(sorted.length * 0.8)];\n        topMask = D_all.map(d => d >= threshold);\n    }\n\n    const pTop = _tagDistStatsTop(Pbar, topMask);\n    const jTop = _tagDistStatsTop(Jbar, topMask);\n    const xTop = _tagDistStatsTop(Xbar, topMask);\n    const rTop = _tagDistStatsTop(Rbar, topMask);\n\n    const rcSrRatio = 1.0 - releaseFrac;\n    const lnContrib = releaseFrac;\n\n    return {\n        streamFrac, jackFrac, techFrac, chordjackFrac, releaseFrac,\n        avgChordOverlap, nps, lnRatio, avgLnDur,\n        pbarMean: pStats.mean, pbarStd: pStats.std,\n        pbarP50: pStats.p50, pbarP90: pStats.p90, pbarMax: pStats.max,\n        jbarMean: jStats.mean, jbarStd: jStats.std,\n        jbarP90: jStats.p90, jbarMax: jStats.max,\n        xbarMean: xStats.mean, xbarStd: xStats.std, xbarP90: xStats.p90,\n        rbarMean: rStats.mean, rbarStd: rStats.std, rbarP90: rStats.p90,\n        rcSrRatio, lnContrib,\n        // Top-20% difficulty features\n        topPbarMean: pTop.mean, topPbarP90: pTop.p90, topPbarMax: pTop.max,\n        topJbarMean: jTop.mean, topJbarP90: jTop.p90, topJbarMax: jTop.max,\n        topXbarMean: xTop.mean, topXbarP90: xTop.p90,\n        topRbarMean: rTop.mean, topRbarP90: rTop.p90,\n    };\n}\n\nfunction _predictTag_Chordjack(feat) {\n  if (feat.avgChordOverlap <= 0.143685) {\n    if (feat.avgChordOverlap <= 0.095748) {\n      if (feat.topJbarP90 <= 42.181309) {\n        if (feat.avgLnDur <= 1520.700012) {\n          return 0.000000;\n        } else {\n          return 0.083333;\n        }\n      } else {\n        return 0.333333;\n      }\n    } else {\n      if (feat.rbarP90 <= 1.721825) {\n        if (feat.avgChordOverlap <= 0.128886) {\n          return 1.000000;\n        } else {\n          return 0.500000;\n        }\n      } else {\n        return 0.000000;\n      }\n    }\n  } else {\n    if (feat.xbarStd <= 2.035738) {\n      if (feat.topPbarMax <= 31.072963) {\n        return 0.333333;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      return 1.000000;\n    }\n  }\n}\n\nfunction _predictTag_Coordination(feat) {\n  if (feat.topRbarP90 <= 4.601707) {\n    return 0.000000;\n  } else {\n    if (feat.avgChordOverlap <= 0.094565) {\n      if (feat.pbarMax <= 38.042315) {\n        if (feat.pbarP50 <= 22.109717) {\n          return 0.000000;\n        } else {\n          return 0.400000;\n        }\n      } else {\n        if (feat.rbarStd <= 1.925046) {\n          return 0.000000;\n        } else {\n          return 0.400000;\n        }\n      }\n    } else {\n      if (feat.topRbarP90 <= 6.211373) {\n        return 1.000000;\n      } else {\n        if (feat.rbarP90 <= 6.388634) {\n          return 0.000000;\n        } else {\n          return 0.666667;\n        }\n      }\n    }\n  }\n}\n\nfunction _predictTag_Dense_Chordstream(feat) {\n  if (feat.techFrac <= 0.211069) {\n    if (feat.topPbarMax <= 23.179231) {\n      if (feat.topJbarP90 <= 12.117770) {\n        return 1.000000;\n      } else {\n        return 0.333333;\n      }\n    } else {\n      if (feat.pbarStd <= 4.501233) {\n        if (feat.techFrac <= 0.167237) {\n          return 0.000000;\n        } else {\n          return 0.148148;\n        }\n      } else {\n        return 0.000000;\n      }\n    }\n  } else {\n    if (feat.nps <= 26.888781) {\n      if (feat.pbarP50 <= 16.459879) {\n        return 1.000000;\n      } else {\n        if (feat.avgChordOverlap <= 0.060464) {\n          return 0.407407;\n        } else {\n          return 0.000000;\n        }\n      }\n    } else {\n      if (feat.topPbarP90 <= 45.798162) {\n        if (feat.avgChordOverlap <= 0.018127) {\n          return 0.333333;\n        } else {\n          return 1.000000;\n        }\n      } else {\n        return 0.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Density(feat) {\n  if (feat.rbarMean <= 2.676811) {\n    return 0.000000;\n  } else {\n    if (feat.lnRatio <= 0.397131) {\n      return 1.000000;\n    } else {\n      if (feat.avgLnDur <= 291.869278) {\n        if (feat.jbarStd <= 5.052872) {\n          return 0.379310;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 0.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Fast_Chordstream(feat) {\n  if (feat.techFrac <= 0.205766) {\n    if (feat.pbarStd <= 3.133945) {\n      if (feat.avgChordOverlap <= 0.023610) {\n        return 0.666667;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.avgLnDur <= 1090.500000) {\n        return 0.000000;\n      } else {\n        if (feat.pbarStd <= 4.064734) {\n          return 0.333333;\n        } else {\n          return 0.000000;\n        }\n      }\n    }\n  } else {\n    if (feat.topRbarP90 <= 0.346156) {\n      if (feat.jbarP90 <= 31.316128) {\n        if (feat.streamFrac <= 0.317356) {\n          return 0.000000;\n        } else {\n          return 0.193548;\n        }\n      } else {\n        return 0.400000;\n      }\n    } else {\n      return 0.600000;\n    }\n  }\n}\n\nfunction _predictTag_Inverse(feat) {\n  if (feat.lnRatio <= 0.977794) {\n    if (feat.nps <= 8.375918) {\n      if (feat.topRbarMean <= 3.859288) {\n        return 1.000000;\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.pbarMean <= 39.608927) {\n        if (feat.pbarMean <= 33.529957) {\n          return 0.000000;\n        } else {\n          return 0.050000;\n        }\n      } else {\n        return 0.333333;\n      }\n    }\n  } else {\n    if (feat.topRbarMean <= 5.340877) {\n      return 1.000000;\n    } else {\n      return 0.000000;\n    }\n  }\n}\n\nfunction _predictTag_LN_Mix(feat) {\n  if (feat.rbarStd <= 0.996521) {\n    if (feat.rbarMean <= 4.503310) {\n      return 0.000000;\n    } else {\n      return 0.333333;\n    }\n  } else {\n    if (feat.xbarStd <= 1.784965) {\n      if (feat.pbarMean <= 15.820693) {\n        if (feat.rbarMean <= 3.071551) {\n          return 0.666667;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 0.000000;\n      }\n    } else {\n      if (feat.topJbarMean <= 11.019084) {\n        if (feat.rbarP90 <= 6.505721) {\n          return 1.000000;\n        } else {\n          return 0.500000;\n        }\n      } else {\n        if (feat.pbarP50 <= 28.582686) {\n          return 0.055556;\n        } else {\n          return 0.511628;\n        }\n      }\n    }\n  }\n}\n\nfunction _predictTag_Minijack(feat) {\n  if (feat.pbarStd <= 2.511311) {\n    return 0.666667;\n  } else {\n    if (feat.avgChordOverlap <= 0.082721) {\n      return 0.000000;\n    } else {\n      if (feat.techFrac <= 0.200435) {\n        if (feat.avgChordOverlap <= 0.091582) {\n          return 0.166667;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        if (feat.nps <= 19.811023) {\n          return 0.666667;\n        } else {\n          return 0.111111;\n        }\n      }\n    }\n  }\n}\n\nfunction _predictTag_RC_Mix(feat) {\n  if (feat.streamFrac <= 0.292649) {\n    if (feat.avgChordOverlap <= 0.102825) {\n      if (feat.jbarMax <= 33.700195) {\n        if (feat.nps <= 18.392252) {\n          return 0.666667;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        if (feat.rbarP90 <= 0.292782) {\n          return 0.818182;\n        } else {\n          return 0.333333;\n        }\n      }\n    } else {\n      return 0.000000;\n    }\n  } else {\n    if (feat.topRbarMean <= 2.044410) {\n      if (feat.lnRatio <= 0.001044) {\n        if (feat.nps <= 18.013649) {\n          return 0.190476;\n        } else {\n          return 0.015385;\n        }\n      } else {\n        if (feat.rbarMean <= 0.139635) {\n          return 1.000000;\n        } else {\n          return 0.222222;\n        }\n      }\n    } else {\n      return 0.000000;\n    }\n  }\n}\n\nfunction _predictTag_Release(feat) {\n  if (feat.topRbarMean <= 5.998488) {\n    if (feat.topJbarMean <= 1.933147) {\n      return 1.000000;\n    } else {\n      if (feat.jbarMax <= 7.315037) {\n        return 0.333333;\n      } else {\n        if (feat.nps <= 55.725218) {\n          return 0.008584;\n        } else {\n          return 0.333333;\n        }\n      }\n    }\n  } else {\n    if (feat.releaseFrac <= 0.097595) {\n      return 0.333333;\n    } else {\n      if (feat.lnRatio <= 0.640393) {\n        return 0.666667;\n      } else {\n        return 1.000000;\n      }\n    }\n  }\n}\n\nfunction _predictTag_Speed(feat) {\n  if (feat.avgChordOverlap <= 0.017391) {\n    if (feat.pbarStd <= 3.895566) {\n      if (feat.streamFrac <= 0.367162) {\n        return 0.000000;\n      } else {\n        return 0.666667;\n      }\n    } else {\n      if (feat.jackFrac <= 0.216687) {\n        if (feat.pbarStd <= 5.613053) {\n          return 1.000000;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 1.000000;\n      }\n    }\n  } else {\n    if (feat.techFrac <= 0.244940) {\n      if (feat.topRbarMean <= 0.548972) {\n        if (feat.chordjackFrac <= 0.244021) {\n          return 0.171875;\n        } else {\n          return 0.000000;\n        }\n      } else {\n        return 0.000000;\n      }\n    } else {\n      return 0.666667;\n    }\n  }\n}\n\nfunction _predictTag_Tech(feat) {\n  if (feat.releaseFrac <= 0.036732) {\n    if (feat.pbarP50 <= 21.510951) {\n      if (feat.topPbarMean <= 24.602554) {\n        if (feat.lnRatio <= 0.002112) {\n          return 0.212766;\n        } else {\n          return 1.000000;\n        }\n      } else {\n        if (feat.topPbarMean <= 26.767851) {\n          return 1.000000;\n        } else {\n          return 0.666667;\n        }\n      }\n    } else {\n      if (feat.avgChordOverlap <= 0.077665) {\n        if (feat.xbarMean <= 20.474854) {\n          return 0.000000;\n        } else {\n          return 0.214286;\n        }\n      } else {\n        if (feat.jbarStd <= 4.856178) {\n          return 0.571429;\n        } else {\n          return 0.000000;\n        }\n      }\n    }\n  } else {\n    return 0.000000;\n  }\n}\n\nfunction _predictTag_Technical(feat) {\n  if (feat.nps <= 33.652042) {\n    if (feat.rbarMean <= 3.488430) {\n      return 0.000000;\n    } else {\n      if (feat.avgLnDur <= 177.094902) {\n        return 1.000000;\n      } else {\n        if (feat.topRbarP90 <= 4.997600) {\n          return 0.333333;\n        } else {\n          return 0.000000;\n        }\n      }\n    }\n  } else {\n    if (feat.pbarMean <= 30.029175) {\n      if (feat.topPbarP90 <= 35.618196) {\n        return 0.333333;\n      } else {\n        return 1.000000;\n      }\n    } else {\n      if (feat.rbarP90 <= 6.978027) {\n        if (feat.avgChordOverlap <= 0.105569) {\n          return 0.000000;\n        } else {\n          return 0.333333;\n        }\n      } else {\n        if (feat.topRbarP90 <= 6.788892) {\n          return 1.000000;\n        } else {\n          return 0.000000;\n        }\n      }\n    }\n  }\n}\n\nfunction _predictTag_Vibro(feat) {\n  if (feat.pbarStd <= 2.511311) {\n    return 0.666667;\n  } else {\n    if (feat.jackFrac <= 0.284392) {\n      if (feat.chordjackFrac <= 0.264973) {\n        return 0.000000;\n      } else {\n        if (feat.jackFrac <= 0.273251) {\n          return 0.333333;\n        } else {\n          return 0.000000;\n        }\n      }\n    } else {\n      if (feat.topPbarMean <= 22.610747) {\n        return 0.666667;\n      } else {\n        return 0.000000;\n      }\n    }\n  }\n}\n"
 }
