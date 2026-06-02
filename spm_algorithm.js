@@ -100,6 +100,24 @@ const ENHANCED_PARAMS = {
     // === LN-MASKED MODEL PARAMS (fitted on 102 LN-labeled maps, MAE=0.237) ===
     calib_a_ln_masked: 0.953798,
     calib_b_ln_masked: -0.402804,
+
+    // === CORRECTION LAYER (7 features, L2 λ=0.01, CV Test Loss=0.862) ===
+    correction_chord:   -0.71420012109205,
+    correction_fj:       0.26523765756302176,
+    correction_hs:       0.04346521445328749,
+    correction_lb:       0.020229065240061,
+    correction_speed:   -0.0380996735738698,
+    correction_burst:   -0.025148794588902998,
+    correction_pj:      -0.0050070390858298125,
+    // Correction postprocess (jointly optimized)
+    note_norm_N0_corr:        0.00048019189651536405,
+    rescale_threshold_corr:   9.398828546361862,
+    rescale_divisor_corr:     1.9841881487426187,
+    global_scale_corr:        1.0614719389587273,
+    // Feature computation params (fixed, not optimized)
+    corr_spd_dt: 150, corr_spd_dc: 3,
+    corr_bst_dt: 100, corr_ch_order: 4,
+    corr_hs_dt: 200, corr_lb_dt: 150, corr_fj_dt: 100,
 };
 
 // ============================================================
@@ -1024,7 +1042,99 @@ function solveDBisection(D_seg, w_seg, k, C, gamma, highWeightPower, delta, tol,
     return (lo + hi) / 2;
 }
 
-function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p) {
+// ============================================================
+// CORRECTION LAYER — 7 chart-level features
+// ============================================================
+function computeCorrectionFeatures(noteSeq, Jbar_base, Pbar_base) {
+    const p = ENHANCED_PARAMS;
+    const n = noteSeq.length;
+    if (n < 2) return { speed: 0, burst: 0, chord: 0, pj: 1.5, hs: 0, lb: 0, fj: 0 };
+
+    const times = new Float64Array(n);
+    const cols = new Int32Array(n);
+    for (let i = 0; i < n; i++) {
+        times[i] = noteSeq[i].start;
+        cols[i] = noteSeq[i].col;
+    }
+    const duration_s = Math.max((times[n - 1] - times[0]) / 1000.0, 1.0);
+
+    // Consecutive diffs
+    const nm1 = n - 1;
+    const dt = new Float64Array(nm1);
+    const dc = new Int32Array(nm1);
+    for (let i = 0; i < nm1; i++) {
+        dt[i] = times[i + 1] - times[i];
+        dc[i] = Math.abs(cols[i + 1] - cols[i]);
+    }
+
+    const feat = {};
+
+    // speed: fast cross-hand notes/sec (dt < spd_dt && dc >= spd_dc)
+    const spdDt = p.corr_spd_dt, spdDc = Math.round(p.corr_spd_dc);
+    let speedCount = 0;
+    for (let i = 0; i < nm1; i++) {
+        if (dt[i] < spdDt && dc[i] >= spdDc) speedCount++;
+    }
+    feat.speed = speedCount / duration_s;
+
+    // burst: triplet density/sec (times[j] - times[j-2] < bst_dt)
+    const bstDt = p.corr_bst_dt;
+    let burstCount = 0;
+    for (let j = 2; j < n; j++) {
+        if (times[j] - times[j - 2] < bstDt) burstCount++;
+    }
+    feat.burst = burstCount / duration_s;
+
+    // chord: fraction of notes in >=ch_order simultaneous groups (2ms window)
+    const chOrder = Math.round(p.corr_ch_order);
+    let chordCount = 0;
+    for (let j = 0; j < n; j++) {
+        const t = times[j];
+        let cnt = 1, k = j - 1;
+        while (k >= 0 && Math.abs(times[k] - t) < 2) { cnt++; k--; }
+        if (cnt >= chOrder) chordCount++;
+    }
+    feat.chord = chordCount / Math.max(n, 1);
+
+    // pj: Pbar_mean / (Jbar_mean + 1)
+    if (Jbar_base && Jbar_base.length > 0 && Pbar_base && Pbar_base.length > 0) {
+        let jSum = 0, pSum = 0;
+        for (let i = 0; i < Jbar_base.length; i++) jSum += Jbar_base[i];
+        for (let i = 0; i < Pbar_base.length; i++) pSum += Pbar_base[i];
+        feat.pj = (pSum / Pbar_base.length) / (jSum / Jbar_base.length + 1);
+    } else {
+        feat.pj = 1.5;
+    }
+
+    // hs: hand-switch density (cross-hand with dt < hs_dt)
+    const hsDt = p.corr_hs_dt;
+    let hsCount = 0;
+    for (let i = 0; i < nm1; i++) {
+        const crossHand = (cols[i] < 3 && cols[i + 1] >= 4) || (cols[i] >= 4 && cols[i + 1] < 3);
+        if (crossHand && dt[i] < hsDt) hsCount++;
+    }
+    feat.hs = hsCount / duration_s;
+
+    // lb: 4-note burst density (times[j] - times[j-3] < lb_dt)
+    const lbDt = p.corr_lb_dt;
+    let lbCount = 0;
+    for (let j = 3; j < n; j++) {
+        if (times[j] - times[j - 3] < lbDt) lbCount++;
+    }
+    feat.lb = lbCount / duration_s;
+
+    // fj: same-column fast jack density (dc==0 && dt < fj_dt)
+    const fjDt = p.corr_fj_dt;
+    let fjCount = 0;
+    for (let i = 0; i < nm1; i++) {
+        if (dc[i] === 0 && dt[i] < fjDt) fjCount++;
+    }
+    feat.fj = fjCount / duration_s;
+
+    return feat;
+}
+
+function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction) {
     const n = allCorners.length;
 
     // Effective weights: C_arr * gap width
@@ -1043,6 +1153,12 @@ function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p) {
         D_calib = D_all.map(d => calib_a * d + calib_b);
     }
 
+    // Apply correction layer (scalar shift to D_calib)
+    const corr = correction || 0;
+    if (Math.abs(corr) > 1e-12) {
+        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
+    }
+
     // Segment by difficulty
     const nSeg = p.agg_n_segments || 30;
     const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
@@ -1058,16 +1174,23 @@ function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p) {
 
     let SR = D_solved;
 
+    // Post-processing: use correction-layer params when correction is active
+    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
+    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
+    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
+    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
+    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
+
     // Note count normalization
-    SR *= totalNotes / (totalNotes + p.note_norm_N0);
+    SR *= totalNotes / (totalNotes + N0);
 
     // Rescale high SR
-    if (SR > p.rescale_threshold) {
-        SR = p.rescale_threshold + (SR - p.rescale_threshold) / p.rescale_divisor;
+    if (SR > thresh) {
+        SR = thresh + (SR - thresh) / div;
     }
 
     // Global scale
-    SR *= p.global_scale;
+    SR *= scale;
 
     return SR;
 }
@@ -1255,17 +1378,28 @@ function calculate(osuContent, speedRate) {
     const AbarAll = interpValues(allCorners, A_corners, Abar_A);
     const { C_step, Ks_step } = computeCandKs(K, noteSeq, keyUsage, baseCorners);
 
-    // Cross: use RC params for RC model, total params for total model
-    // For total model, use the base cross params
-    const XbarTotalBase = computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p);
-
-    // For RC model, temporarily override cross params
-    const p_rc = Object.assign({}, p, {
-        cross_dist_exponent: p.cross_dist_exponent_rc || p.cross_dist_exponent,
-        cross_same_hand_penalty: p.cross_same_hand_penalty_rc || p.cross_same_hand_penalty,
+    // Cross: Total model uses LN-ratio blended params (matching Python combine())
+    // ln_ratio=0 → pure RC params, ln_ratio=1 → pure LN params
+    const lnRatio = LNSeq.length / Math.max(noteSeq.length, 1);
+    const distExpRC = p.cross_dist_exponent_rc !== undefined ? p.cross_dist_exponent_rc : (p.cross_dist_exponent || 1.0);
+    const distExpLN = p.cross_dist_exponent_ln !== undefined ? p.cross_dist_exponent_ln : (p.cross_dist_exponent || 1.0);
+    const penaltyRC = p.cross_same_hand_penalty_rc !== undefined ? p.cross_same_hand_penalty_rc : (p.cross_same_hand_penalty || 0.3);
+    const penaltyLN = p.cross_same_hand_penalty_ln !== undefined ? p.cross_same_hand_penalty_ln : (p.cross_same_hand_penalty || 0.3);
+    const blendedDistExp = distExpRC + (distExpLN - distExpRC) * lnRatio;
+    const blendedPenalty = penaltyRC + (penaltyLN - penaltyRC) * lnRatio;
+    const p_total = Object.assign({}, p, {
+        cross_dist_exponent: blendedDistExp,
+        cross_same_hand_penalty: blendedPenalty,
     });
-    const XbarRCBase = (Math.abs((p.cross_dist_exponent_rc || 1.0) - 1.0) < 1e-6 &&
-                         Math.abs((p.cross_same_hand_penalty_rc || 0.3) - 0.3) < 1e-6)
+    const XbarTotalBase = computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p_total);
+
+    // For RC model, use pure RC cross params
+    const p_rc = Object.assign({}, p, {
+        cross_dist_exponent: distExpRC,
+        cross_same_hand_penalty: penaltyRC,
+    });
+    const XbarRCBase = (Math.abs(distExpRC - blendedDistExp) < 1e-6 &&
+                         Math.abs(penaltyRC - blendedPenalty) < 1e-6)
         ? XbarTotalBase  // Reuse if params are same
         : computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p_rc);
 
@@ -1310,8 +1444,19 @@ function calculate(osuContent, speedRate) {
         totalNotes += 0.5 * d / 200;
     }
 
-    // ===== Total SR (sigmoid) =====
-    const rating = computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p);
+    // ===== Correction Layer =====
+    const corrFeat = computeCorrectionFeatures(noteSeq, JbarBase, PbarBase);
+    const correction =
+        (p.correction_chord  || 0) * (corrFeat.chord  || 0) +
+        (p.correction_fj     || 0) * (corrFeat.fj     || 0) +
+        (p.correction_hs     || 0) * (corrFeat.hs     || 0) +
+        (p.correction_lb     || 0) * (corrFeat.lb     || 0) +
+        (p.correction_speed  || 0) * (corrFeat.speed  || 0) +
+        (p.correction_burst  || 0) * (corrFeat.burst  || 0) +
+        (p.correction_pj     || 0) * (corrFeat.pj     || 0);
+
+    // ===== Total SR (sigmoid + correction layer) =====
+    const rating = computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction);
 
     // ===== RC SR (RC model) =====
     const rcRating = computeRC_SR(allCorners, baseCorners, JbarAll, XbarRCAll, PbarAll, AbarAll,
@@ -1335,8 +1480,7 @@ function calculate(osuContent, speedRate) {
     const rcSectionRating = computeRCSectionSR(allCorners, rcDresult.D_all, rcDresult.C_arr,
         rcMask, totalNotes, p);
 
-    // Classifier features
-    const lnRatio = LNSeq.length / Math.max(noteSeq.length, 1);
+    // Classifier features (lnRatio already computed above for cross-param blending)
     const avgLNDur = LNSeq.length > 0
         ? LNSeq.reduce((s, ln) => s + Math.max(ln.end - ln.start, 0), 0) / LNSeq.length
         : 0;
@@ -1386,8 +1530,25 @@ function calculate(osuContent, speedRate) {
         lnDifficultyDominance = maxD > 0 ? maxLnD / maxD - rcSrRatio : 0;
     }
 
+    // D_all diagnostics (for parity testing)
+    let D_sum = 0, D_min = Infinity, D_max = -Infinity;
+    for (let i = 0; i < D_all.length; i++) {
+        D_sum += D_all[i];
+        if (D_all[i] < D_min) D_min = D_all[i];
+        if (D_all[i] > D_max) D_max = D_all[i];
+    }
+    const D_mean = D_all.length > 0 ? D_sum / D_all.length : 0;
+
     return {
         rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
+        correction, corrFeat,
+        _diag: {
+            D_mean, D_min, D_max, D_len: D_all.length,
+            noteSeq_len: noteSeq.length, LNSeq_len: LNSeq.length,
+            allCorners_len: allCorners.length, baseCorners_len: baseCorners.length,
+            totalNotes,
+            calib_a: p.calib_a, calib_b: p.calib_b,
+        },
         params: { total_notes: totalNotes, n_raw: noteSeq.length, n_LN: LNSeq.length, K, od: data.od },
         noteSeq, LNSeq, allCorners, D_all, Jbar: JbarAll, Xbar: XbarTotalAll, Pbar: PbarAll, Rbar: RbarAll,
         rcD_all: rcDresult.D_all, rcEquivD_all,
@@ -2190,6 +2351,12 @@ function processMap(osuContent, mode, speedRate) {
 
     const result = calculate(osuContent, speedRate);
     if (result.error) return null;
+
+    // Diagnostic: log intermediate values for parity testing
+    if (result._diag) {
+        console.log('[SPM Diag]', JSON.stringify(result._diag));
+        console.log('[SPM Corr]', JSON.stringify(result.corrFeat), 'total:', result.correction.toFixed(6));
+    }
 
     const { rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
             noteSeq, LNSeq, allCorners,

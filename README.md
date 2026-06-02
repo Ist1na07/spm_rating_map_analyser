@@ -66,6 +66,7 @@ HB 谱面始终显示 "Hybrid"。
 1. **分量计算**：对每个时间点计算 7 个难度分量 — Pbar(Stream)、Jbar(Jack)、Xbar(Cross)、Abar(Anchor)、Rbar(Release)、Sbar(Shield)、Vbar(Inverse)
 2. **瞬时难度合成**：非线性组合为逐点难度 D(t)
 3. **Sigmoid 聚合**：分段后通过 S 形准确率模型加权求解最终 SR（k=2.09, C=3.97, γ=0.196, 二分法）
+4. **特征修正层**：7 个谱面级特征（speed, burst, chord, pj, hs, lb, fj）通过 L2 正则化线性模型捕捉 D 公式的系统性偏差，标量修正叠加到 D_calib 后重新聚合
 
 RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 
@@ -82,6 +83,13 @@ RC/LN 子模型：RC 禁用 Rbar/Sbar/Vbar；LN 仅对 LN 段掩码聚合。
 ```
 
 ## 版本历史
+
+### v0.3.0
+- 底层 SR 算法升级到 **SPM Rating v0.3.0**（特征修正层）
+- Total SR 新增 **7 特征修正层**（chord, fj, hs, lb, speed, burst, pj），L2 正则化 λ=0.01
+- 后处理参数与修正层联合重优化（N0=0.0005, threshold=9.40, divisor=1.98, scale=1.06）
+- In-sample Loss: 0.932 → 0.770（-17.4%），MAE: 0.218 → 0.213
+- RC/LN 子模型保持不变（偏差模式不同，需独立训练）
 
 ### v0.2.0
 - 底层 SR 算法升级到 **SPM Rating v0.2.0**（k=2.09, C=3.97, γ=0.196）

@@ -67,6 +67,7 @@ Core SPM Rating pipeline:
 1. **Component Calculation**: 7 per-point components — Pbar(Stream), Jbar(Jack), Xbar(Cross), Abar(Anchor), Rbar(Release), Sbar(Shield), Vbar(Inverse)
 2. **Instant Difficulty**: Non-linear combination into per-point D(t)
 3. **Sigmoid Aggregation**: Segmented difficulty aggregated through S-curve accuracy model (k=2.09, C=3.97, γ=0.196), solving for stable rating via bisection
+4. **Feature Correction Layer**: 7 chart-level features (speed, burst, chord, pj, hs, lb, fj) via L2-regularized linear model capture systematic D-formula biases; scalar correction is added to D_calib before re-aggregation
 
 RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation.
 
@@ -83,6 +84,13 @@ RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation
 ```
 
 ## Version History
+
+### v0.3.0
+- Core SR algorithm upgraded to **SPM Rating v0.3.0** (feature correction layer)
+- Total SR enhanced with **7-feature correction layer** (chord, fj, hs, lb, speed, burst, pj), L2-regularized (λ=0.01)
+- Post-processing parameters jointly re-optimized with correction layer (N0=0.0005, threshold=9.40, divisor=1.98, scale=1.06)
+- In-sample Loss: 0.932 → 0.770 (-17.4%), MAE: 0.218 → 0.213
+- RC/LN sub-models unchanged (different bias patterns, require independent training)
 
 ### v0.2.0
 - Core SR algorithm upgraded to **SPM Rating v0.2.0** (k=2.09, C=3.97, γ=0.196)
