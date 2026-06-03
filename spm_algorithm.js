@@ -907,14 +907,16 @@ function computeD(allCorners, baseCorners, Abar, Jbar, Xbar, Pbar, Rbar, C_step,
 // RC D FORMULA (Rbar=Sbar=Vbar=0, RC-specific params)
 // ============================================================
 function computeD_rc(allCorners, baseCorners, Abar, Jbar, Xbar, Pbar, C_step, Ks_step, p) {
-    const Abar_scale_rc = p.Abar_scale_rc || 1.016;
-    const scaledAbar = Abar.map(v => v * Abar_scale_rc);
+    // Use Total model params (not RC-specific) so RC sub-model is consistent with Total SR.
+    // For pure RC maps: Rbar/Sbar/Vbar are ~0, so D_rc ≈ D_total → rcRating ≈ Total SR.
+    // For HB/Mix: Rbar/Sbar/Vbar are explicitly zeroed, giving a "RC-only" D on masked sections.
+    const scaledAbar = Abar.map(v => v * p.Abar_scale);
     const C_arr = stepInterp(allCorners, baseCorners, C_step);
     const Ks_arr = stepInterp(allCorners, baseCorners, Ks_step);
 
-    const S_w1 = p.S_w1_rc, S_p = p.S_p_rc;
-    const alpha_P = p.alpha_P_rc;
-    const D_beta1 = p.D_beta1_rc, D_beta2 = p.D_beta2_rc;
+    const S_w1 = p.S_w1, S_p = p.S_p;
+    const alpha_P = p.alpha_P;
+    const D_beta1 = p.D_beta1, D_beta2 = p.D_beta2;
 
     const D_all = new Array(allCorners.length);
     const S_all = new Array(allCorners.length);
@@ -1200,18 +1202,24 @@ function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction) 
  * Uses precomputed Jbar/Pbar/Xbar/Abar (all from cache), Rbar=Sbar=Vbar=0.
  */
 function computeRC_SR(allCorners, baseCorners, JbarAll, XbarAll, PbarAll, AbarAll,
-                      C_step, Ks_step, totalNotes, p) {
-    // Compute RC D
+                      C_step, Ks_step, totalNotes, p, correction) {
+    // Compute RC D (uses Total model params, Rbar=Sbar=Vbar=0)
     const { D_all, C_arr } = computeD_rc(
         allCorners, baseCorners, AbarAll, JbarAll, XbarAll, PbarAll,
         C_step, Ks_step, p
     );
 
-    // RC D calibration
-    const calib_a = p.calib_a_rc || 1.0, calib_b = p.calib_b_rc || 0.0;
+    // Use Total model calibration (not RC-specific)
+    const calib_a = p.calib_a || 1.0, calib_b = p.calib_b || 0.0;
     let D_calib = D_all;
     if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
         D_calib = D_all.map(d => calib_a * d + calib_b);
+    }
+
+    // Apply correction layer (same scalar shift as Total, since features are chart-level)
+    const corr = correction || 0;
+    if (Math.abs(corr) > 1e-12) {
+        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
     }
 
     // Effective weights
@@ -1224,29 +1232,30 @@ function computeRC_SR(allCorners, baseCorners, JbarAll, XbarAll, PbarAll, AbarAl
     for (let i = 0; i < n; i++) eff_w[i] = C_arr[i] * gaps[i];
 
     // Segment
-    const nSeg = p.agg_n_segments_rc || 30;
+    const nSeg = p.agg_n_segments || 30;
     const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
 
     if (D_seg.length === 0) return 0;
 
-    // RC sigmoid bisection
+    // Use Total model sigmoid (not RC-specific)
     const D_solved = solveDBisection(
         D_seg, w_seg,
-        p.agg_sigmoid_k_rc, p.agg_sigmoid_C_rc, p.agg_sigmoid_gamma_rc,
+        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
         0.0, 5.0, 0.0001, 100
     );
 
     let SR = D_solved;
 
-    // RC post-processing
-    const N0 = p.note_norm_N0_rc || 10.0;
+    // Use Total model post-processing (correction-jointly-optimized params when correction active)
+    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
+    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
+    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
+    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
+    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
+
     SR *= totalNotes / (totalNotes + N0);
-
-    const thresh = p.rescale_threshold_rc || 9.54;
-    const div = p.rescale_divisor_rc || 2.0;
     if (SR > thresh) SR = thresh + (SR - thresh) / div;
-
-    SR *= (p.global_scale_rc || 1.055);
+    SR *= scale;
 
     return SR;
 }
@@ -1310,7 +1319,7 @@ function computeLNMaskedSR(allCorners, D_all, C_arr, lnMask, totalNotes, p) {
  * This prevents LN-head-as-tap areas from being seen as "recovery" by the sigmoid,
  * which would otherwise underestimate RC difficulty on HB maps.
  */
-function computeRCSectionSR(allCorners, rcD_all, C_arr_rc, rcMask, totalNotes, p) {
+function computeRCSectionSR(allCorners, rcD_all, C_arr_rc, rcMask, totalNotes, p, correction) {
     const n = allCorners.length;
 
     // Only RC sections contribute weight (C_arr → 0 in LN sections)
@@ -1325,34 +1334,44 @@ function computeRCSectionSR(allCorners, rcD_all, C_arr_rc, rcMask, totalNotes, p
     const eff_w = new Array(n);
     for (let i = 0; i < n; i++) eff_w[i] = C_rc[i] * gaps[i];
 
-    // RC D calibration
-    const calib_a = p.calib_a_rc || 1.0, calib_b = p.calib_b_rc || 0.0;
+    // Use Total model calibration (not RC-specific)
+    const calib_a = p.calib_a || 1.0, calib_b = p.calib_b || 0.0;
     let D_calib = rcD_all;
     if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
         D_calib = rcD_all.map(d => calib_a * d + calib_b);
     }
 
-    const nSeg = p.agg_n_segments_rc || 30;
+    // Apply correction layer (same scalar shift as Total)
+    const corr = correction || 0;
+    if (Math.abs(corr) > 1e-12) {
+        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
+    }
+
+    const nSeg = p.agg_n_segments || 30;
     const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
 
     const totalWeight = w_seg.reduce((a, b) => a + b, 0);
     if (D_seg.length === 0 || totalWeight <= 0) return 0;
 
+    // Use Total model sigmoid (not RC-specific)
     const D_solved = solveDBisection(
         D_seg, w_seg,
-        p.agg_sigmoid_k_rc, p.agg_sigmoid_C_rc, p.agg_sigmoid_gamma_rc,
+        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
         0.0, 5.0, 0.0001, 100
     );
 
     let SR = D_solved;
-    const N0 = p.note_norm_N0_rc || 10.0;
+
+    // Use Total model post-processing
+    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
+    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
+    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
+    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
+    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
+
     SR *= totalNotes / (totalNotes + N0);
-
-    const thresh = p.rescale_threshold_rc || 9.54;
-    const div = p.rescale_divisor_rc || 2.0;
     if (SR > thresh) SR = thresh + (SR - thresh) / div;
-
-    SR *= (p.global_scale_rc || 1.055);
+    SR *= scale;
 
     return SR;
 }
@@ -1458,9 +1477,9 @@ function calculate(osuContent, speedRate) {
     // ===== Total SR (sigmoid + correction layer) =====
     const rating = computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction);
 
-    // ===== RC SR (RC model) =====
+    // ===== RC SR (RC model, uses Total pipeline + correction) =====
     const rcRating = computeRC_SR(allCorners, baseCorners, JbarAll, XbarRCAll, PbarAll, AbarAll,
-        C_step, Ks_step, totalNotes, p);
+        C_step, Ks_step, totalNotes, p, correction);
 
     // ===== RC-Equivalent SR (total algo, no LNs) =====
     const rcEquivRating = computeSR_sigmoid(allCorners, C_arr, rcEquivD_all, totalNotes_raw, p);
@@ -1478,7 +1497,7 @@ function calculate(osuContent, speedRate) {
     const rcDresult = computeD_rc(allCorners, baseCorners, AbarAll, JbarAll, XbarRCAll, PbarAll,
         C_step, Ks_step, p);
     const rcSectionRating = computeRCSectionSR(allCorners, rcDresult.D_all, rcDresult.C_arr,
-        rcMask, totalNotes, p);
+        rcMask, totalNotes, p, correction);
 
     // Classifier features (lnRatio already computed above for cross-param blending)
     const avgLNDur = LNSeq.length > 0
@@ -2395,10 +2414,10 @@ function processMap(osuContent, mode, speedRate) {
     let mainD_all = D_all;  // default main curve
 
     if (mapType === 'RC') {
-        // RC maps: use RC model rating; show LN rating if map has long notes
-        displayRcRating = rcRating;
+        // RC maps: RC difficulty = Total SR (same as LN maps showing Total SR as LN difficulty)
+        displayRcRating = rating;
         displayLnRating = LNSeq.length > 0 ? lnMaskedRating : null;
-        displayRcDan = ratingToDanRC(rcRating);
+        displayRcDan = ratingToDanRC(rating);
         displayLnDan = LNSeq.length > 0 ? ratingToDanLN(lnMaskedRating) : null;
         rcSectionDiffs = computeSectionData(allCorners, rcD_all, firstNoteTime, lastNoteTime).sectionDifficulties;
         // Show total D as green curve if map has LNs
