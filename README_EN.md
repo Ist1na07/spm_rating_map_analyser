@@ -4,20 +4,19 @@
 
 ---
 
-A [tosu](https://tosu.app) in-game overlay providing real-time difficulty ratings and pattern analysis for osu!mania **7K** beatmaps, powered by the **SPM Rating** algorithm.
+A [tosu](https://tosu.app) in-game overlay providing real-time difficulty ratings and pattern analysis for osu!mania **7K** beatmaps, powered by the **SPM Rating v0.4.0** algorithm.
 
 ## Features
 
-- **Real-time Difficulty Rating**: Sigmoid aggregation model (k=2.09, C=3.97) — S-curve accuracy simulation with bisection solving
-- **Multi-source Estimation**:
-  - **Total SR**: Full-map composite difficulty
-  - **RC Difficulty**: RC-section difficulty (RC maps use RC sub-model; HB/Mix use RC section masking)
-  - **LN Difficulty**: LN-section difficulty (LN maps use Total SR; HB/Mix use LN masked model)
-- **Map Classification**: Decision tree auto-detection of RC / LN / HB / Mix types
-- **Difficulty Curve**: Real-time graph plotting full-map and RC/LN component difficulty
-- **Dan Mapping**: Piecewise linear interpolation mapping SR to 7K Dan system (0th ~ Stellium)
-- **ML Pattern Tags**: 14-tag decision tree + synthesis tags (RC Mix / LN Mix / Hybrid), trained on 265 labeled maps
-- **Mod Support**: Rate-changing mods (DT/HT/NC), HT dual-scaling fix included
+- **Real-time Difficulty Rating**: Sigmoid aggregation model (k=2.09, C=3.97) simulates player performance with an S-curve accuracy model; stable rating solved via bisection
+- **Dual Difficulty**: each map shows both an RC difficulty and an LN difficulty
+  - The dominant type uses Total SR (RC difficulty for RC maps, LN difficulty for LN maps)
+  - The non-dominant side, and both sides of HB/Mix maps, use section-masked difficulty (sigmoid aggregation over only that type's note sections)
+- **Map Classification**: 4-class decision tree auto-detects RC / LN / HB / Mix
+- **Difficulty Curve**: real-time graph of full-map and RC/LN section difficulty
+- **Dan Mapping**: piecewise linear interpolation maps SR to the 7K Dan system (0th ~ Stellium)
+- **ML Pattern Tags**: 42-feature decision trees (36 base + 6 correction-layer, with top-20% difficulty-weighted features); 12 individual tags + Mix synthesized at runtime
+- **Mod Support**: rate-changing mods (DT/HT/NC); HT dual-scaling fixed
 
 ## Usage
 
@@ -29,84 +28,94 @@ A [tosu](https://tosu.app) in-game overlay providing real-time difficulty rating
 
 | Setting | Description | Default |
 |---------|-------------|---------|
+| Show Skill Breakdown | Display individual skill ratings (stream/jack/tech/chordjack/release) | On |
 | Show Pattern Tags | Show ML-detected pattern tags | On |
 | Accent Color | Rating number accent color | #ffffff |
 
 ## Pattern Tags
 
-Trained on 311 7K maps (148 Dan + 57 Tournament + 20 Graveyard + 86 Ranked), 265 with individual tags for the 14-tag decision tree training (44.2% exact match rate).
+12 individual tags are predicted per-tag by decision trees and filtered by their own thresholds:
 
 **RC**: Chordjack, Dense Chordstream, Fast Chordstream, Minijack, Speed, Tech, Vibro
 **LN**: Coordination, Density, Inverse, Release, Technical
 
-When ≥3 individual tags are detected: RC maps → "RC Mix", LN maps → "LN Mix", HB/Mix maps → "Hybrid".
-HB maps always display "Hybrid".
+**Mix synthesis**: when ≥3 same-category individual tags are detected, they are replaced by a single synthesis tag — RC maps → "RC Mix", LN maps → "LN Mix", HB/Mix maps → "Hybrid". HB maps always output "Hybrid".
+(Mix tags are not trained separately; they are synthesized at runtime from individual tags. "Mix" means multiple same-category patterns co-occur.)
 
 ## Dan Reference
 
-Based on 14 Dan marathon maps, piecewise linear interpolation:
+Piecewise linear interpolation from measured Dan marathon SR. Since v0.4.0, nodes are measured on path B (correction-layer-applied, player-visible SR), so displayed SR maps directly to the Dan calibration basis.
 
 | Dan | RC SR Reference | LN SR Reference |
 |-----|----------------|-----------------|
-| 0th Dan | ~3.6 | ~3.9 |
-| 1st Dan | ~4.1 | ~4.5 |
+| 0th Dan | ~3.5 | ~3.8 |
+| 1st Dan | ~4.0 | ~4.4 |
 | 5th Dan | ~6.0 | ~6.3 |
 | 8th Dan | ~7.3 | ~7.3 |
 | 10th Dan | ~8.3 | ~8.3 |
 | Gamma | ~8.9 | ~8.7 |
-| Azimuth | ~9.5 | ~9.5 |
-| Zenith | ~10.3 | ~10.2 |
-| Stellium | >10.3 | >10.2 |
+| Azimuth | ~9.4 | ~9.5 |
+| Zenith | ~10.2 | ~10.1 |
+| Stellium | >10.2 | >10.1 |
 
-Note: Full piecewise linear interpolation covers 15 Dan levels (0th~Stellium). The table above lists key reference points only. Display labels use "low" / "" / "high" for within-Dan position.
+Note: Full piecewise linear interpolation covers 15 Dan levels (0th~Stellium). The table above lists key reference points only; Stellium is extrapolated. Within-Dan position is shown as "low" / "" / "high".
 
 ## Algorithm
 
 Core SPM Rating pipeline:
 
 1. **Component Calculation**: 7 per-point components — Pbar(Stream), Jbar(Jack), Xbar(Cross), Abar(Anchor), Rbar(Release), Sbar(Shield), Vbar(Inverse)
-2. **Instant Difficulty**: Non-linear combination into per-point D(t)
-3. **Sigmoid Aggregation**: Segmented difficulty aggregated through S-curve accuracy model (k=2.09, C=3.97, γ=0.196), solving for stable rating via bisection
-4. **Feature Correction Layer**: 7 chart-level features (speed, burst, chord, pj, hs, lb, fj) via L2-regularized linear model capture systematic D-formula biases; scalar correction is added to D_calib before re-aggregation
+2. **Instant Difficulty**: non-linear combination into per-point D(t)
+3. **Sigmoid Aggregation**: segmented difficulty aggregated through an S-curve accuracy model (k=2.09, C=3.97, γ=0.196), solving for stable rating via bisection
+4. **Feature Correction Layer**: 9 chart-level features (speed, burst, chord, pj, hs, lb, fj, nps_std, chord2) via an L2-regularized linear model capture systematic D-formula biases; the scalar correction is added to D_calib before re-aggregation (path B). Sub-model ratings use the base formula (path A).
 
 RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation.
 
 ## Files
 
 ```
-├── index.html          # Plugin UI
-├── spm_algorithm.js    # Core algorithm (ENHANCED_PARAMS + decision trees)
-├── settings.json       # tosu settings
-├── metadata.txt        # Plugin metadata
-├── dan_constants.json  # Dan constants (generated by fit_dan_regression.py)
-├── classifier_constants.json  # Sort classifier
-└── tag_classifier.json # 14-tag ML classifier
+├── index.html                 # Plugin UI
+├── spm_algorithm.js           # Core algorithm (ENHANCED_PARAMS + decision trees)
+├── settings.json              # tosu settings
+├── metadata.txt               # Plugin metadata
+├── dan_constants.json         # Dan constants (generated by fit_dan_regression.py)
+├── classifier_constants.json  # Sort 4-class classifier
+└── tag_classifier.json        # 12 individual-tag ML classifier (Mix synthesized at runtime)
 ```
 
 ## Version History
 
+### v0.4.0
+- Core SR algorithm upgraded to **SPM Rating v0.4.0** (correction layer expansion)
+- Correction-layer features 7 → **9**, adding **nps_std** (500ms-window NPS standard deviation, density temporal variance) and **chord2** (2-note chord density, 5ms tolerance clustering)
+- All 9 feature weights refitted; correction-layer post-processing jointly re-optimized (N0=1.029, threshold=9.11, divisor=1.97, scale=1.094)
+- In-sample Loss: 0.770 → 0.694 (-9.9%), MAE: 0.213 → 0.207, paired t-test p=0.0007
+- **Dan mapping re-measured**: nodes measured on path B (correction-layer, player-visible SR); RC/LN linear regression R²=0.997 / 0.993
+- **LN-masked model calibration refit**: calib_a/b refit on the subset with LN reference labels (5-fold CV test MAE=0.215), preserving the HB/Mix dual-difficulty semantics
+- **Tag classifier rebuilt**: 42 features (36 base + 6 correction-layer), 12 individual-tag decision trees; Mix tags synthesized at runtime from ≥3 same-category individual tags (replace, not append); exact match 48.9%, RC Mix synthesis 96%, LN Mix 97%
+- Difficulty curves now use calibrated D arrays so curve quantities are consistent with the rating
+
 ### v0.3.0
 - Core SR algorithm upgraded to **SPM Rating v0.3.0** (feature correction layer)
-- Total SR enhanced with **7-feature correction layer** (chord, fj, hs, lb, speed, burst, pj), L2-regularized (λ=0.01)
-- Post-processing parameters jointly re-optimized with correction layer (N0=0.0005, threshold=9.40, divisor=1.98, scale=1.06)
+- Total SR enhanced with a **7-feature correction layer** (chord, fj, hs, lb, speed, burst, pj), L2-regularized (λ=0.01)
+- Post-processing parameters jointly re-optimized with the correction layer (N0=0.0005, threshold=9.40, divisor=1.98, scale=1.06)
 - In-sample Loss: 0.932 → 0.770 (-17.4%), MAE: 0.218 → 0.213
 - RC/LN sub-models unchanged (different bias patterns, require independent training)
 
 ### v0.2.0
 - Core SR algorithm upgraded to **SPM Rating v0.2.0** (k=2.09, C=3.97, γ=0.196)
-- **Sort classifier retrained**: 4-class decision tree (RC/LN/HB/Mix), 98.1% accuracy (311 samples)
-- **Tag classifier retrained**: 14 tags, 265 labeled maps, 44.2% exact match rate
+- **Sort classifier retrained**: 4-class decision tree (RC/LN/HB/Mix), 98.1% accuracy
+- **Tag classifier retrained**: individual-tag decision trees + Mix synthesis
 
 ### v0.1.1
 - HB maps unified as "Hybrid" tag
 - Added Inverse, Technical tag classifiers; removed Anchor
-- Quadratic FP penalty loss function (reduces over-prediction)
 - Mix maps display both RC+LN difficulty ratings
 - Fixed HT dual-scaling, NC display, and other bugs
 
 ### v0.1.0
-- Initial release: Sigmoid aggregation model (k=1.56, C=3.99) + RC/LN sub-models
-- 12-tag decision tree classifier + synthesis tags (RC Mix / LN Mix / Hybrid)
+- Initial release: Sigmoid aggregation model + RC/LN sub-models
+- Individual-tag decision tree classifier + synthesis tags (RC Mix / LN Mix / Hybrid)
 - Dan mapping (0th~Stellium), difficulty curve, Mod support
 
 ## Notes
