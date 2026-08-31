@@ -4,7 +4,7 @@
 
 ---
 
-A [tosu](https://tosu.app) in-game overlay providing real-time difficulty ratings and pattern analysis for osu!mania **7K** beatmaps, powered by the **SPM Rating v0.4.0** algorithm.
+A [tosu](https://tosu.app) in-game overlay providing real-time difficulty ratings and pattern analysis for osu!mania **7K** beatmaps, powered by the **SPM Rating v0.4.0** algorithm. Since v0.5.0 it ships with a **segment-based pattern classification engine** (TagClassifier): the map is automatically split into sections, each section's pattern is classified, and the overlay follows your play position live.
 
 ## Features
 
@@ -12,10 +12,12 @@ A [tosu](https://tosu.app) in-game overlay providing real-time difficulty rating
 - **Dual Difficulty**: each map shows both an RC difficulty and an LN difficulty
   - The dominant type uses Total SR (RC difficulty for RC maps, LN difficulty for LN maps)
   - The non-dominant side, and both sides of HB/Mix maps, use section-masked difficulty (sigmoid aggregation over only that type's note sections)
-- **Map Classification**: 4-class decision tree auto-detects RC / LN / HB / Mix
-- **Difficulty Curve**: real-time graph of full-map and RC/LN section difficulty
+- **Segment Pattern Timeline**: change-point detection splits the map into segments; each segment's pattern is classified and shown as a colored band; Break segments are dimmed
+- **Live Current Segment**: follows play progress and shows the current position's pattern tag, confidence, and equivalent BPM (jack/stream types, 16th-note basis)
+- **Map Sort**: derived from segment aggregation (RC / LN / HB by LN-weighted section share)
+- **Overall Pattern Tags**: segment tags aggregated by duration × confidence into whole-map tags (with RC Mix / LN Mix / Hybrid synthesis)
+- **Difficulty Curve**: real-time graph of full-map and RC/LN section difficulty with playhead cursor
 - **Dan Mapping**: piecewise linear interpolation maps SR to the 7K Dan system (0th ~ Stellium)
-- **ML Pattern Tags**: 42-feature decision trees (36 base + 6 correction-layer, with top-20% difficulty-weighted features); 12 individual tags + Mix synthesized at runtime
 - **Mod Support**: rate-changing mods (DT/HT/NC); HT dual-scaling fixed
 
 ## Usage
@@ -28,19 +30,27 @@ A [tosu](https://tosu.app) in-game overlay providing real-time difficulty rating
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Show Skill Breakdown | Display individual skill ratings (stream/jack/tech/chordjack/release) | On |
-| Show Pattern Tags | Show ML-detected pattern tags | On |
+| Show Pattern Tags | Show overall pattern tag chips (plus major segment share chips) | On |
+| Show Current Segment | Show the live segment tag and equivalent BPM at the playhead | On |
+| Show Segment Timeline | Show the full-map segment pattern color band with playhead | On |
+| Show Break Segments | Show "Break" text during rest sections (timeline always shows them dimmed) | On |
 | Accent Color | Rating number accent color | #ffffff |
 
-## Pattern Tags
+## Pattern Tags (v0.5.0 new classifier)
 
-12 individual tags are predicted per-tag by decision trees and filtered by their own thresholds:
+Pipeline: `.osu parse → rows (rice + LN heads; LN tails tracked separately) → 1s sliding window features (0.25s step) → change-point segmentation → per-segment family softmax model → temporal smoothing → whole-map aggregation`.
 
-**RC**: Chordjack, Dense Chordstream, Fast Chordstream, Minijack, Speed, Tech, Vibro
-**LN**: Coordination, Density, Inverse, Release, Technical
+**RC**: Chordjack, Minijack, Dense Chordstream, Fast Chordstream, Tech, Speed, Vibro, Wildcard (fallback)
+**LN**: Coordination, Density, Inverse, Technical, Release, LN Wildcard (fallback)
+**Special**: Break (rest sections, excluded from aggregation)
 
-**Mix synthesis**: when ≥3 same-category individual tags are detected, they are replaced by a single synthesis tag — RC maps → "RC Mix", LN maps → "LN Mix", HB/Mix maps → "Hybrid". HB maps always output "Hybrid".
-(Mix tags are not trained separately; they are synthesized at runtime from individual tags. "Mix" means multiple same-category patterns co-occur.)
+The segment model is a 56-feature softmax linear model trained per family (RC/LN) on 162 single-label maps plus 6 hand-segmented maps with extra weight.
+
+**Overall aggregation**: non-Break segments weighted by duration × confidence; a top share ≥52% yields a single tag; ≥3 significant tags (each ≥7%) without a dominant one synthesize RC Mix / LN Mix / Hybrid; two close tags yield a dual label.
+
+**Sort**: by LN-weighted segment duration share — <18% RC, >68% LN, HB in between.
+
+**Metrics** (334-map impression-labeled dataset): sort accuracy 91.3%, overall tag exact-set match 58.7%; on 6 hand-segmented maps, strict segment hit-time ratio 68.6%.
 
 ## Dan Reference
 
@@ -62,7 +72,7 @@ Note: Full piecewise linear interpolation covers 15 Dan levels (0th~Stellium). T
 
 ## Algorithm
 
-Core SPM Rating pipeline:
+Difficulty rating (SPM Rating v0.4.0, unchanged in this release):
 
 1. **Component Calculation**: 7 per-point components — Pbar(Stream), Jbar(Jack), Xbar(Cross), Abar(Anchor), Rbar(Release), Sbar(Shield), Vbar(Inverse)
 2. **Instant Difficulty**: non-linear combination into per-point D(t)
@@ -71,19 +81,31 @@ Core SPM Rating pipeline:
 
 RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation.
 
+Pattern classification (v0.5.0 new engine — see the header comment of `tag_engine.js` and the TagClassifier project): segment-level 56-dimensional features (row-rate/chord statistics, jack-run evidence, hold/release morphology, grid fitting, rhythm regularity, etc.) → per-family softmax → segment smoothing → whole-map aggregation. The classifier does not run on non-7K maps.
+
 ## Files
 
 ```
-├── index.html                 # Plugin UI
-├── spm_algorithm.js           # Core algorithm (ENHANCED_PARAMS + decision trees)
+├── index.html                 # Plugin UI (including segment pattern UI)
+├── spm_algorithm.js           # Difficulty rating core (ENHANCED_PARAMS + sigmoid aggregation)
+├── tag_engine.js              # Segment pattern classifier (bundled from TagClassifier, model embedded)
 ├── settings.json              # tosu settings
 ├── metadata.txt               # Plugin metadata
-├── dan_constants.json         # Dan constants (generated by fit_dan_regression.py)
-├── classifier_constants.json  # Sort 4-class classifier
-└── tag_classifier.json        # 12 individual-tag ML classifier (Mix synthesized at runtime)
+└── dan_constants.json         # Dan constants (generated by fit_dan_regression.py)
 ```
 
 ## Version History
+
+### v0.5.0
+- **Sort/Tag classifiers fully replaced by the segment-based pattern engine** (TagClassifier): removed the old 4-class sort decision tree and the 42-feature 12-tree tag classifier (including `classifier_constants.json` and `tag_classifier.json`)
+- **New: segment tag prediction** — change-point segmentation → per-segment softmax classification (56 features, separate RC/LN family models) → temporal smoothing; colored segment timeline with playhead
+- **New: live current-segment display** — follows play progress showing the current pattern tag, secondary tag, confidence, and equivalent BPM (jack/stream types use the row-rate convention 15000 / median adjacent-row interval; hidden when intervals are irregular)
+- Overall tags now aggregate segments by duration × confidence and render as colored chips (with major segment-share outline chips)
+- Sort now derives from LN-weighted segment duration share (RC < 18% / LN > 68% / HB between), 91.3% accuracy on the 334-map dataset
+- Difficulty rating algorithm (SPM Rating v0.4.0) unchanged — SR values are bit-identical to v0.4.0
+- **Non-7K maps** (4K etc.): the classifier no longer runs; sort badge, pattern tags, and segment UI are hidden automatically — difficulty rating, dan mapping, and the difficulty curve remain
+- Settings now actually take effect (they were unread in previous versions): added Show Current Segment / Show Segment Timeline / Show Break Segments; removed Show Skill Breakdown (no such UI)
+- Unified visual redesign: RC is always the cool blue family, LN always the warm orange family — sort badge, sub-ratings, dan values, difficulty curves, pattern tags, and the timeline share one color semantics; pattern tags render as tinted outline chips, and a divider separates the difficulty zone from the pattern zone
 
 ### v0.4.0
 - Core SR algorithm upgraded to **SPM Rating v0.4.0** (correction layer expansion)
@@ -120,15 +142,16 @@ RC/LN sub-models: RC disables Rbar/Sbar/Vbar; LN uses LN-only masked aggregation
 
 ## Notes
 
-1. **7K only** — 4K/6K will show as unavailable.
+1. Both difficulty rating and pattern classification target **7K**. Non-7K maps (4K etc.) show difficulty rating, dan mapping, and difficulty curve only; the sort badge, pattern tags, and segment UI are hidden automatically.
 2. Ratings are estimates for reference only.
-3. ML pattern classifier trained on limited data; rare patterns may misclassify.
+3. The pattern classifier is trained on limited labeled data (334 impression-labeled maps + 6 hand-segmented maps); niche patterns may misclassify, and algorithmic segment boundaries may differ from human ones.
 4. Legacy osu!stable maps (v12 and below) may fail to parse.
 
 ## References
 
 - [tosu](https://tosu.app) — Runtime environment
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — Algorithm tuning codebase
+- TagClassifier — source project of the v0.5.0 segment pattern engine
 
 ## License
 

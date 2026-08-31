@@ -1,16 +1,30 @@
 [
   {
-    "uniqueID": "showSkills",
-    "type": "checkbox",
-    "title": "Show Skill Breakdown",
-    "description": "Display individual skill ratings (stream/jack/tech/chordjack/release)",
-    "value": true
-  },
-  {
     "uniqueID": "showTags",
     "type": "checkbox",
     "title": "Show Pattern Tags",
-    "description": "Display pattern type tags below the rating",
+    "description": "Display overall pattern tag chips below the rating",
+    "value": true
+  },
+  {
+    "uniqueID": "showSegmentTag",
+    "type": "checkbox",
+    "title": "Show Current Segment",
+    "description": "Display the live segment tag and equivalent bpm at the playhead",
+    "value": true
+  },
+  {
+    "uniqueID": "showTimeline",
+    "type": "checkbox",
+    "title": "Show Segment Timeline",
+    "description": "Display the full-map segment tag color band with playhead",
+    "value": true
+  },
+  {
+    "uniqueID": "showBreak",
+    "type": "checkbox",
+    "title": "Show Break Segments",
+    "description": "Display 'Break' text during rest sections (timeline always shows them faded)",
     "value": true
   },
   {

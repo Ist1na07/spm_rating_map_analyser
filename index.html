@@ -6,50 +6,71 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
     background: transparent;
-    color: #fff;
+    color: #eef1f5;
     font-family: 'Segoe UI', 'Arial', sans-serif;
     overflow: hidden;
     user-select: none;
 }
+/* ---------- v0.5.0 design system ----------
+   Two family anchors are used consistently everywhere: RC = cool
+   (#58a6ff), LN = warm (#ff8c5a). Sort badge, sub-ratings, dan values,
+   difficulty curves, tag chips and the segment timeline all follow this
+   mapping, so a color always means the same family. */
 #container {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding: 14px 20px;
-    background: rgba(0, 0, 0, 0.60);
-    border-radius: 14px;
+    gap: 6px;
+    padding: 12px 16px 13px;
+    background: rgba(13, 15, 18, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
     backdrop-filter: blur(4px);
-    min-width: 374px;
+    min-width: 380px;
 }
 #header {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
+    align-items: center;
+    gap: 8px;
 }
 #rating {
-    font-size: 48px;
-    font-weight: 700;
+    font-size: 42px;
+    font-weight: 800;
     color: #fff;
     letter-spacing: -0.5px;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    margin-right: 2px;
 }
 #type-badge {
-    font-size: 20px;
-    font-weight: 600;
-    padding: 3px 12px;
-    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 3px 11px;
+    border-radius: 999px;
     text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #14171c;
+}
+#type-badge.rc  { background: #58a6ff; }
+#type-badge.ln  { background: #ff8c5a; }
+#type-badge.hb  { background: #c7cdd6; }
+#type-badge.mix { background: #8f97a3; }
+#keys-badge {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: rgba(238, 241, 245, 0.55);
     letter-spacing: 0.5px;
 }
-#type-badge.rc { background: rgba(66, 165, 245, 0.7); }
-#type-badge.ln { background: rgba(239, 83, 80, 0.7); }
-#type-badge.hb { background: rgba(255, 183, 77, 0.7); color: #1a1a1a; }
-#type-badge.mix { background: rgba(255, 152, 0, 0.7); color: #1a1a1a; }
 #mod-badge {
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     padding: 2px 10px;
-    border-radius: 5px;
-    background: rgba(171, 71, 188, 0.6);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #e8ecf1;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -57,37 +78,35 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 18px;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 #rc-ln-row .sub-item {
     display: flex;
     flex-direction: column;
-    gap: 1px;
 }
 #rc-ln-row .sub-label {
-    font-size: 14px;
-    font-weight: 600;
-    opacity: 0.5;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(238, 241, 245, 0.45);
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.8px;
 }
 #rc-ln-row .sub-value {
     font-weight: 700;
-    font-size: 22px;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
 }
-#rc-ln-row .sub-value.rc { color: #64b5f6; }
-#rc-ln-row .sub-value.ln { color: #81c784; }
+#rc-ln-row .sub-value.rc { color: #58a6ff; }
+#rc-ln-row .sub-value.ln { color: #ff8c5a; }
 #rc-ln-row .sep {
-    color: rgba(255,255,255,0.15);
-    font-size: 22px;
-    margin: 0 4px;
+    color: rgba(255, 255, 255, 0.12);
+    font-size: 20px;
+    margin: 0 2px;
 }
 #dan-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 16px;
+    gap: 10px;
     line-height: 1.3;
 }
 #dan-row .dan-item {
@@ -96,20 +115,21 @@ body {
     gap: 6px;
 }
 #dan-row .dan-label {
-    font-size: 13px;
-    font-weight: 600;
-    opacity: 0.45;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(238, 241, 245, 0.4);
     text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 #dan-row .dan-value {
     font-weight: 700;
-    font-size: 17px;
+    font-size: 15px;
 }
-#dan-row .dan-value.rc-dan { color: #64b5f6; }
-#dan-row .dan-value.ln-dan { color: #81c784; }
+#dan-row .dan-value.rc-dan { color: #58a6ff; }
+#dan-row .dan-value.ln-dan { color: #ff8c5a; }
 #dan-row .dan-sep {
-    color: rgba(255,255,255,0.15);
-    font-size: 16px;
+    color: rgba(255, 255, 255, 0.12);
+    font-size: 14px;
 }
 #dan-row.rc-only .dan-item.ln-dan-row { display: none; }
 #dan-row.rc-only .dan-sep { display: none; }
@@ -119,39 +139,179 @@ body {
 #dan-row.hb .total-dan-item { display: inline-flex; }
 #dan-row.mix .total-dan-sep,
 #dan-row.mix .total-dan-item { display: inline-flex; }
-#tags {
-    font-size: 19px;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.3;
-    max-width: 408px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 #curve-container {
-    margin-top: 7px;
+    margin-top: 2px;
     position: relative;
 }
 #curve-canvas {
     width: 100%;
-    height: 102px;
-    border-radius: 7px;
-    background: rgba(0,0,0,0.3);
+    height: 96px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 #curve-legend {
     display: flex;
-    gap: 20px;
-    font-size: 15px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 3px;
+    gap: 14px;
+    font-size: 11px;
+    color: rgba(238, 241, 245, 0.5);
+    margin-top: 4px;
 }
-#curve-legend .legend-rc { color: #64b5f6; }
-#curve-legend .legend-ln { color: #81c784; }
+#curve-legend span { display: inline-flex; align-items: center; gap: 5px; }
+#curve-legend i {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+#curve-legend .legend-rc i { background: #58a6ff; }
+#curve-legend .legend-ln i { background: #ff8c5a; }
+.divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+    margin: 4px 0 2px;
+}
+/* ---- overall pattern tags (chips tinted with family color) ---- */
+#tags-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    min-height: 20px;
+    max-width: 440px;
+}
+.ov-tag {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.ov-share {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    white-space: nowrap;
+}
+.ov-share .pct { opacity: 0.6; margin-left: 3px; }
+/* ---- live segment row ---- */
+#seg-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-height: 27px;
+    margin-top: 2px;
+}
+#seg-bpm {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    min-width: 44px;
+    text-align: right;
+    flex: none;
+    color: #eef1f5;
+}
+#seg-bpm::after {
+    content: 'bpm';
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(238, 241, 245, 0.35);
+    margin-left: 3px;
+}
+#seg-bpm:empty::after { content: ''; }
+#seg-tag {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.2s;
+}
+#seg-tag .secondary {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(238, 241, 245, 0.45);
+    margin-left: 6px;
+}
+#seg-conf {
+    font-size: 11px;
+    color: rgba(238, 241, 245, 0.35);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+}
+#seg-dur {
+    margin-left: auto;
+    flex: none;
+    font-size: 11.5px;
+    color: rgba(238, 241, 245, 0.4);
+    font-variant-numeric: tabular-nums;
+}
+/* ---- segment tag timeline ---- */
+#seg-timeline-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+#seg-timeline {
+    position: relative;
+    height: 14px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    overflow: hidden;
+}
+.tl-seg {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    opacity: 0.85;
+    border-right: 1px solid rgba(0, 0, 0, 0.4);
+}
+.tl-seg.tl-break { opacity: 0.3; }
+#seg-cursor {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 18px;
+    background: #fff;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+    z-index: 2;
+    left: 0;
+}
+#seg-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    font-size: 10.5px;
+    color: rgba(238, 241, 245, 0.5);
+}
+#seg-legend .lg-item {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+#seg-legend .lg-item i {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
 #loading {
-    font-size: 20px;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: 18px;
+    color: rgba(238, 241, 245, 0.4);
     text-align: center;
-    padding: 17px;
+    padding: 16px;
 }
 .hidden { display: none !important; }
 </style>
@@ -161,6 +321,7 @@ body {
     <div id="header">
         <span id="rating">0.00</span>
         <span id="type-badge" class="rc">RC</span>
+        <span id="keys-badge" class="hidden"></span>
         <span id="mod-badge" class="hidden"></span>
     </div>
     <div id="rc-ln-row">
@@ -190,31 +351,93 @@ body {
             <span class="dan-value" id="total-dan">-</span>
         </div>
     </div>
-    <div id="tags"></div>
     <div id="curve-container">
         <canvas id="curve-canvas"></canvas>
         <div id="curve-legend">
-            <span class="legend-rc">— RC</span>
-            <span class="legend-ln">— LN</span>
+            <span class="legend-rc"><i></i>RC</span>
+            <span class="legend-ln"><i></i>LN</span>
         </div>
+    </div>
+    <div class="divider" id="divider"></div>
+    <div id="tags-row"></div>
+    <div id="seg-row">
+        <span id="seg-bpm"></span>
+        <span id="seg-tag">—</span>
+        <span id="seg-conf"></span>
+        <span id="seg-dur"></span>
+    </div>
+    <div id="seg-timeline-wrap">
+        <div id="seg-timeline"><div id="seg-cursor"></div></div>
+        <div id="seg-legend"></div>
     </div>
 </div>
 <div id="loading">SPM Map Analyser</div>
 
 <script src="spm_algorithm.js"></script>
+<script src="tag_engine.js"></script>
 <script>
 (function() {
     const TOSU_PORT = 24050;
     const MOD_BIT_FLAGS = { EZ: 2, HR: 16, DT: 64, HT: 256, NC: 512 };
+
+    // v0.5.0 design system: two family anchors reused across badges,
+    // sub-ratings, dan values, difficulty curves, tag chips and the
+    // segment timeline — a hue always means the same family.
+    // RC = cool hues (the "clean" family), LN = warm hues, composites
+    // blend their family, hybrid/break are neutral.
+    // (tag set mirrors tagclassifier src/config.ts)
+    const FAMILY = { rc: '#58a6ff', ln: '#ff8c5a', hb: '#c7cdd6', mix: '#8f97a3' };
+    const TAG_LABELS = {
+        'chordjack': 'Chordjack', 'minijack': 'Minijack',
+        'dense chordstream': 'Dense Chordstream', 'fast chordstream': 'Fast Chordstream',
+        'tech': 'Tech', 'speed': 'Speed', 'wildcard': 'Wildcard', 'vibro': 'Vibro',
+        'coordination': 'Coordination', 'density': 'Density', 'inverse': 'Inverse',
+        'technical': 'Technical', 'release': 'Release', 'ln wildcard': 'LN Wildcard',
+        'break': 'Break', 'rc mix': 'RC Mix', 'ln mix': 'LN Mix', 'hybrid': 'Hybrid',
+    };
+    const TAG_COLORS = {
+        // RC family — cool ramp (blue → sky → cyan → teal → green, indigo/violet accents)
+        'chordjack': '#4f9cff', 'minijack': '#7fc4ff',
+        'dense chordstream': '#3cc8d8', 'fast chordstream': '#2fc4a8',
+        'speed': '#4ade80', 'tech': '#8b9df0', 'vibro': '#b48cf2',
+        'wildcard': '#9aa1ac',
+        // LN family — warm ramp (red → orange → amber → yellow, rose accent)
+        'inverse': '#ff6b5e', 'coordination': '#ffa257',
+        'density': '#e8b23e', 'release': '#f2d060',
+        'technical': '#ee82a8', 'ln wildcard': '#a89e94',
+        // composites / special
+        'rc mix': '#79b8ff', 'ln mix': '#ffab7a', 'hybrid': '#d7dde6',
+        'break': '#454b54',
+    };
+    function tagLabel(t) { return TAG_LABELS[t] || t; }
+    function tagColor(t) { return TAG_COLORS[t] || '#9aa1ac'; }
+    function hexA(hex, a) {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.slice(0, 2), 16);
+        const g = parseInt(h.slice(2, 4), 16);
+        const b = parseInt(h.slice(4, 6), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+
+    let settings = {
+        showTags: true,
+        showSegmentTag: true,
+        showTimeline: true,
+        showBreak: true,
+        accentColor: '#ffffff',
+    };
 
     let ws = null;
     let currentChecksum = null;
     let currentModSignature = null;
     let currentSpeedRate = 1.0;
     let cachedResult = null;
+    let cachedTagResult = null;   // v0.5.0: segment classifier result (7K only)
+    let cachedKeyCount = 7;
     let cachedOsuContent = null;
     let reconnectTimer = null;
     let animFrameId = null;
+    let lastSegIndex = -2;
 
     let songTimeMs = null;
     let prevSongTimeMs = null;
@@ -225,6 +448,7 @@ body {
     const elLoading = document.getElementById('loading');
     const elRating = document.getElementById('rating');
     const elTypeBadge = document.getElementById('type-badge');
+    const elKeysBadge = document.getElementById('keys-badge');
     const elModBadge = document.getElementById('mod-badge');
     const elRcRating = document.getElementById('rc-rating');
     const elLnRating = document.getElementById('ln-rating');
@@ -233,9 +457,19 @@ body {
     const elLnDan = document.getElementById('ln-dan');
     const elTotalDan = document.getElementById('total-dan');
     const elDanRow = document.getElementById('dan-row');
-    const elTags = document.getElementById('tags');
+    const elDivider = document.getElementById('divider');
+    const elTagsRow = document.getElementById('tags-row');
+    const elSegRow = document.getElementById('seg-row');
+    const elSegBpm = document.getElementById('seg-bpm');
+    const elSegTag = document.getElementById('seg-tag');
+    const elSegConf = document.getElementById('seg-conf');
+    const elSegDur = document.getElementById('seg-dur');
     const elCanvas = document.getElementById('curve-canvas');
     const elCurveLegend = document.getElementById('curve-legend');
+    const elTimelineWrap = document.getElementById('seg-timeline-wrap');
+    const elTimeline = document.getElementById('seg-timeline');
+    const elSegCursor = document.getElementById('seg-cursor');
+    const elSegLegend = document.getElementById('seg-legend');
 
     function getModData(data) {
         const client = String(data?.client || '').toLowerCase();
@@ -336,6 +570,14 @@ body {
         return songTimeMs + rate * (now - songTimeReceiveTs);
     }
 
+    function parseKeyCount(content) {
+        const m = content.match(/^\s*CircleSize\s*:\s*([0-9.]+)/m);
+        if (!m) return 7;
+        const v = parseFloat(m[1]);
+        if (!Number.isFinite(v) || v <= 0) return 7;
+        return Math.round(v);
+    }
+
     function drawCurve(sectionDiffs, rcSectionDiffs, mapType, cursorTimeMs, sectionTimes, firstNoteTime, lastNoteTime, lnSectionDiffs) {
         const canvas = elCanvas;
         const dpr = window.devicePixelRatio || 1;
@@ -354,7 +596,8 @@ body {
         const showBoth = rcSectionDiffs && rcSectionDiffs.length > 0 && lnSectionDiffs && lnSectionDiffs.length > 0;
 
         if (showBoth) {
-            // Blue = RC D (full/smooth RC-equiv), Green = LN D (near 0 in RC sections)
+            // RC line = cool family anchor, LN line = warm family anchor —
+            // same colors as the sort badge and the RC/LN sub-ratings
             const allMax = Math.max(
                 Math.max(...rcSectionDiffs, 0.01),
                 lnSectionDiffs && lnSectionDiffs.length > 0 ? Math.max(...lnSectionDiffs, 0.01) : 0.01
@@ -365,7 +608,7 @@ body {
                 ctx.beginPath();
                 ctx.strokeStyle = color;
                 ctx.globalAlpha = alpha;
-                ctx.lineWidth = 2.5;
+                ctx.lineWidth = 2;
                 for (let i = 0; i < data.length; i++) {
                     const x = pad + (i / Math.max(data.length - 1, 1)) * (w - 2 * pad);
                     const y = h - pad - (data[i] / allMax) * (h - 2 * pad);
@@ -376,7 +619,7 @@ body {
                 ctx.globalAlpha = 1.0;
 
                 ctx.beginPath();
-                ctx.globalAlpha = alpha * 0.12;
+                ctx.globalAlpha = alpha * 0.10;
                 ctx.fillStyle = color;
                 ctx.moveTo(pad, h - pad);
                 for (let i = 0; i < data.length; i++) {
@@ -390,18 +633,19 @@ body {
                 ctx.globalAlpha = 1.0;
             }
 
-            drawLine(rcSectionDiffs, '#64b5f6', 0.7);      // RC-equiv D (full) — blue
+            drawLine(rcSectionDiffs, FAMILY.rc, 0.85);       // RC-equiv D (full) — cool
             if (lnSectionDiffs && lnSectionDiffs.length > 0) {
-                drawLine(lnSectionDiffs, '#81c784', 0.9);  // LN-masked D — green
+                drawLine(lnSectionDiffs, FAMILY.ln, 0.9);    // LN-masked D — warm
             }
             elCurveLegend.classList.remove('hidden');
         } else if (sectionDiffs && sectionDiffs.length > 0) {
             const maxVal = Math.max(...sectionDiffs, 0.01);
-            const curveColor = isMix ? '#ce93d8' : '#64b5f6';  // purple for Mix fallback, blue for RC
+            // single-line fallback follows the map's family
+            const curveColor = mapType === 'LN' ? FAMILY.ln : (isMix ? FAMILY.mix : FAMILY.rc);
             ctx.beginPath();
             ctx.strokeStyle = curveColor;
             ctx.globalAlpha = 0.9;
-            ctx.lineWidth = 2.5;
+            ctx.lineWidth = 2;
             for (let i = 0; i < sectionDiffs.length; i++) {
                 const x = pad + (i / Math.max(sectionDiffs.length - 1, 1)) * (w - 2 * pad);
                 const y = h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad);
@@ -412,7 +656,7 @@ body {
             ctx.globalAlpha = 1.0;
 
             ctx.beginPath();
-            ctx.globalAlpha = 0.12;
+            ctx.globalAlpha = 0.10;
             ctx.fillStyle = curveColor;
             ctx.moveTo(pad, h - pad);
             for (let i = 0; i < sectionDiffs.length; i++) {
@@ -456,12 +700,170 @@ body {
         }
     }
 
+    // ---- v0.5.0: segment classification rendering ----
+
+    function fmtTimeShort(ms) {
+        const m = Math.floor(ms / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        return m + ':' + String(s).padStart(2, '0');
+    }
+
+    /** Overall tag chips + top-share outline chips (rendered once per map).
+        Solid chips are tinted with the family color; share chips are
+        border-only with a dimmed percentage. */
+    function renderOverallTags(tagRes) {
+        elTagsRow.innerHTML = '';
+        if (!tagRes) return;
+        const tags = tagRes.overall.tags || [];
+        for (const t of tags) {
+            const c = tagColor(t);
+            const chip = document.createElement('span');
+            chip.className = 'ov-tag';
+            chip.style.background = hexA(c, 0.16);
+            chip.style.borderColor = hexA(c, 0.38);
+            chip.style.color = c;
+            chip.textContent = tagLabel(t);
+            elTagsRow.appendChild(chip);
+        }
+        // outline chips: top duration shares not already shown as solid tags
+        const first = tagRes.map.firstNote, last = tagRes.map.lastNote;
+        const span = Math.max(1, last - first);
+        const acc = new Map();
+        for (const s of tagRes.segments) {
+            if (s.tag === 'break') continue;
+            acc.set(s.tag, (acc.get(s.tag) || 0) + (s.end - s.start) / span);
+        }
+        const shares = [...acc.entries()].sort((a, b) => b[1] - a[1]);
+        let shown = tags.length;
+        for (const [t, share] of shares) {
+            if (shown >= 4) break;
+            if (tags.includes(t)) continue;
+            const c = tagColor(t);
+            const chip = document.createElement('span');
+            chip.className = 'ov-share';
+            chip.style.borderColor = hexA(c, 0.30);
+            chip.style.color = hexA(c, 0.9);
+            chip.textContent = tagLabel(t);
+            const pct = document.createElement('span');
+            pct.className = 'pct';
+            pct.textContent = Math.round(share * 100) + '%';
+            chip.appendChild(pct);
+            elTagsRow.appendChild(chip);
+            shown++;
+        }
+    }
+
+    function renderSegTimeline(tagRes) {
+        // keep the cursor node; strip segment nodes only
+        elTimeline.querySelectorAll('.tl-seg').forEach((n) => n.remove());
+        elSegLegend.innerHTML = '';
+        if (!tagRes) return;
+        const first = tagRes.map.firstNote, last = tagRes.map.lastNote;
+        const span = Math.max(1, last - first);
+        const used = [];
+        for (const seg of tagRes.segments) {
+            const d = document.createElement('div');
+            d.className = 'tl-seg' + (seg.tag === 'break' ? ' tl-break' : '');
+            d.style.left = (((seg.start - first) / span) * 100) + '%';
+            d.style.width = Math.max(0.15, ((seg.end - seg.start) / span) * 100) + '%';
+            d.style.background = tagColor(seg.tag);
+            d.title = fmtTimeShort(seg.start) + ' ' + tagLabel(seg.tag) + (seg.equivBpm ? ' @' + seg.equivBpm : '');
+            elTimeline.appendChild(d);
+            if (seg.tag !== 'break' && !used.includes(seg.tag)) used.push(seg.tag);
+        }
+        elTimeline.appendChild(elSegCursor);
+        for (const t of used) {
+            const item = document.createElement('span');
+            item.className = 'lg-item';
+            const dot = document.createElement('i');
+            dot.style.background = tagColor(t);
+            item.appendChild(dot);
+            item.appendChild(document.createTextNode(tagLabel(t)));
+            elSegLegend.appendChild(item);
+        }
+    }
+
+    function findSegment(segments, t) {
+        let lo = 0, hi = segments.length - 1, ans = -1;
+        while (lo <= hi) {
+            const m = (lo + hi) >> 1;
+            if (segments[m].start <= t) { ans = m; lo = m + 1; }
+            else hi = m - 1;
+        }
+        if (ans < 0 || t >= segments[ans].end) return -1;
+        return ans;
+    }
+
+    /** Per-frame: current segment row + timeline cursor. */
+    function updateSegmentLive(cursorTime) {
+        if (!cachedTagResult || cursorTime === null) return;
+        const segments = cachedTagResult.segments;
+        const idx = findSegment(segments, cursorTime);
+
+        if (idx !== lastSegIndex) {
+            lastSegIndex = idx;
+            if (idx < 0) {
+                elSegTag.textContent = '—';
+                elSegTag.style.color = 'rgba(238,241,245,0.4)';
+                elSegTag.style.opacity = '1';
+                elSegBpm.textContent = '';
+                elSegConf.textContent = '';
+                elSegDur.textContent = '';
+            } else {
+                const seg = segments[idx];
+                if (seg.tag === 'break') {
+                    elSegTag.textContent = settings.showBreak ? 'Break' : '—';
+                    elSegTag.style.color = '#5b6470';
+                    elSegTag.style.opacity = '1';
+                    elSegBpm.textContent = '';
+                    elSegConf.textContent = '';
+                } else {
+                    elSegTag.textContent = tagLabel(seg.tag);
+                    if (seg.secondary) {
+                        const sec = document.createElement('span');
+                        sec.className = 'secondary';
+                        sec.textContent = '+ ' + tagLabel(seg.secondary);
+                        elSegTag.appendChild(sec);
+                    }
+                    elSegTag.style.color = tagColor(seg.tag);
+                    elSegTag.style.opacity = seg.confidence < 0.45 ? '0.6' : '1';
+                    elSegBpm.textContent = seg.equivBpm ? String(seg.equivBpm) : '';
+                    elSegConf.textContent = Math.round(seg.confidence * 100) + '%';
+                }
+                elSegDur.textContent = ((seg.end - seg.start) / 1000).toFixed(1) + 's';
+            }
+        }
+
+        const first = cachedTagResult.map.firstNote, last = cachedTagResult.map.lastNote;
+        const pct = Math.max(0, Math.min(100, ((cursorTime - first) / Math.max(1, last - first)) * 100));
+        elSegCursor.style.left = pct + '%';
+    }
+
+    /** Show/hide the classification-related blocks (sort badge, tags, segment UI). */
+    function applyClassificationVisibility() {
+        const classified = !!(cachedResult && cachedResult.classified);
+        elTypeBadge.classList.toggle('hidden', !classified);
+        elKeysBadge.classList.toggle('hidden', classified);
+        if (!classified) {
+            elKeysBadge.textContent = cachedKeyCount + 'K';
+        }
+        elTagsRow.classList.toggle('hidden', !classified || !settings.showTags);
+        elSegRow.classList.toggle('hidden', !classified || !settings.showSegmentTag);
+        elTimelineWrap.classList.toggle('hidden', !classified || !settings.showTimeline);
+        // the divider separates the difficulty zone from the pattern zone —
+        // hide it when the whole pattern zone is gone (non-7K or all toggled off)
+        const anyPatternVisible = classified &&
+            (settings.showTags || settings.showSegmentTag || settings.showTimeline);
+        elDivider.classList.toggle('hidden', !anyPatternVisible);
+    }
+
     function showResult(result) {
         elLoading.classList.add('hidden');
         elContainer.classList.remove('hidden');
 
         // Main rating = total SR
         elRating.textContent = result.rating.toFixed(2);
+        elRating.style.color = settings.accentColor || '#ffffff';
         elTypeBadge.textContent = result.mapType;
         elTypeBadge.className = result.mapType.toLowerCase();
 
@@ -488,7 +890,14 @@ body {
             elDanRow.classList.add('mix');
         }
 
-        elTags.textContent = result.patternTags.join(', ');
+        // v0.5.0: classification blocks (hidden automatically for non-7K maps)
+        applyClassificationVisibility();
+        if (result.classified && cachedTagResult) {
+            renderOverallTags(cachedTagResult);
+            renderSegTimeline(cachedTagResult);
+            lastSegIndex = -2; // force refresh of the live row
+            updateSegmentLive(getInterpolatedTime());
+        }
 
         const cursorTime = getInterpolatedTime();
         drawCurve(
@@ -518,7 +927,23 @@ body {
             }
 
             cachedOsuContent = content;
-            const result = processMap(content, 'full', speedRate);
+            cachedKeyCount = parseKeyCount(content);
+
+            // v0.5.0: segment-based sort/tag classification (7K only)
+            cachedTagResult = null;
+            let sortType = null;
+            if (cachedKeyCount === 7 && typeof TagClassifier !== 'undefined') {
+                try {
+                    cachedTagResult = TagClassifier.analyzeMap(content, { speedRate });
+                    sortType = String(cachedTagResult.overall.sort || '').toUpperCase();
+                } catch (e) {
+                    console.error('SPM Map Analyser: tag classification failed:', e);
+                    cachedTagResult = null;
+                    sortType = null;
+                }
+            }
+
+            const result = processMap(content, 'full', speedRate, sortType);
             if (!result) {
                 showLoading('No notes found');
                 cachedResult = null;
@@ -545,6 +970,7 @@ body {
                     cachedResult.firstNoteTime, cachedResult.lastNoteTime,
                     cachedResult.lnSectionDifficulties
                 );
+                updateSegmentLive(cursorTime);
             }
             animFrameId = requestAnimationFrame(tick);
         }
@@ -555,6 +981,32 @@ body {
         if (animFrameId) {
             cancelAnimationFrame(animFrameId);
             animFrameId = null;
+        }
+    }
+
+    /** tosu counter settings (best-effort; falls back to defaults). */
+    async function loadSettings() {
+        try {
+            const name = encodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
+            if (!name) return;
+            const res = await fetch(`/api/counters/settings/${name}`);
+            const arr = await res.json();
+            if (!Array.isArray(arr)) return;
+            for (const s of arr) {
+                if (!s || typeof s.uniqueID !== 'string') continue;
+                if (s.uniqueID === 'showTags') settings.showTags = !!s.value;
+                else if (s.uniqueID === 'showSegmentTag') settings.showSegmentTag = !!s.value;
+                else if (s.uniqueID === 'showTimeline') settings.showTimeline = !!s.value;
+                else if (s.uniqueID === 'showBreak') settings.showBreak = !!s.value;
+                else if (s.uniqueID === 'accentColor' && typeof s.value === 'string') settings.accentColor = s.value;
+            }
+            if (cachedResult) {
+                applyClassificationVisibility();
+                elRating.style.color = settings.accentColor || '#ffffff';
+                lastSegIndex = -2;
+            }
+        } catch {
+            /* settings unavailable — keep defaults */
         }
     }
 
@@ -589,8 +1041,9 @@ body {
             if (mode !== 3) {
                 if (cachedResult !== null) {
                     cachedResult = null;
+                    cachedTagResult = null;
                     stopAnimationLoop();
-                    showLoading('Not Mania 7K');
+                    showLoading('Not Mania');
                 }
                 return;
             }
@@ -641,6 +1094,7 @@ body {
     }
 
     showLoading('Connecting to tosu...');
+    loadSettings();
     connect();
 })();
 </script>
