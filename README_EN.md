@@ -96,6 +96,12 @@ Pattern classification (v0.5.0 new engine — see the header comment of `tag_eng
 
 ## Version History
 
+### v0.5.1
+- **Performance optimization**: full-map analysis (pattern classification + difficulty rating) 641ms → 188ms on average (3.4x); worst-case map 13.6s → 1.2s (11.7x — LN-dense marathon maps no longer stall the overlay)
+- Difficulty rating: lock/shield/inverse precomputation changed from O(n²) scans to per-column bisected windows; smoothing/interpolation routines now use monotone two-pointers; Xbar distance weights tabulated; section data computed in a single pass
+- Tag engine: whole-map reference medians computed once per map (previously re-sorted per segment); grid fitting and LN window scans use bisected ranges
+- Output is **bit-identical** to v0.5.0 (full 332-map regression: no difference in SR, segments, tags, sort, or confidence)
+
 ### v0.5.0
 - **Sort/Tag classifiers fully replaced by the segment-based pattern engine** (TagClassifier): removed the old 4-class sort decision tree and the 42-feature 12-tree tag classifier (including `classifier_constants.json` and `tag_classifier.json`)
 - **New: segment tag prediction** — change-point segmentation → per-segment softmax classification (56 features, separate RC/LN family models) → temporal smoothing; colored segment timeline with playhead

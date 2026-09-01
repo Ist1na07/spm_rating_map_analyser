@@ -324,10 +324,17 @@ var TagClassifier = (() => {
     }
     return onGrid / n;
   }
-  function fitGrid(rows, tStart, tEnd) {
+  function fitGrid(rows, tStart, tEnd, lo, hi) {
     const times = [];
-    for (const r of rows) {
-      if (r.hits > 0 && r.t >= tStart && r.t <= tEnd) times.push(r.t);
+    if (lo !== void 0 && hi !== void 0) {
+      for (let i = lo; i < hi; i++) {
+        const r = rows[i];
+        if (r.hits > 0) times.push(r.t);
+      }
+    } else {
+      for (const r of rows) {
+        if (r.hits > 0 && r.t >= tStart && r.t <= tEnd) times.push(r.t);
+      }
     }
     const n = times.length;
     if (n < 4) return { spacing: 0, ratio: 0, equivBpm: 0 };
@@ -393,10 +400,12 @@ var TagClassifier = (() => {
     }
     allEvents.sort((a, b) => a.t - b.t);
     lnTails.sort((a, b) => a.t - b.t);
+    let lnMaxDur = 0;
+    for (const h of lnHeads) if (h.dur > lnMaxDur) lnMaxDur = h.dur;
     const riceArr = map.notes.filter((n) => n.lnEnd == null).map((n) => n.t);
     riceArr.sort((a, b) => a - b);
     const riceTimes = Float64Array.from(riceArr);
-    return { map, rows, held, cols, boundaryTimes, lnHeads, lnTails, allEvents, riceTimes };
+    return { map, rows, held, cols, boundaryTimes, lnHeads, lnTails, lnMaxDur, allEvents, riceTimes };
   }
   function lowerBound(arr, t) {
     let lo = 0, hi = arr.length;
@@ -412,6 +421,15 @@ var TagClassifier = (() => {
     while (lo < hi) {
       const mid = lo + hi >> 1;
       if (key(arr[mid]) < t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+  function upperBoundObj(arr, t, key) {
+    let lo = 0, hi = arr.length;
+    while (lo < hi) {
+      const mid = lo + hi >> 1;
+      if (key(arr[mid]) <= t) lo = mid + 1;
       else hi = mid;
     }
     return lo;
@@ -505,7 +523,9 @@ var TagClassifier = (() => {
       invGapScore: 0
     };
     if (rowCount === 0) return f;
-    const grid = fitGrid(rows, t0, t1 - 1);
+    const gridLo = lowerBoundObj(rows, t0, (r) => r.t);
+    const gridHi = upperBoundObj(rows, t1 - 1, (r) => r.t);
+    const grid = fitGrid(rows, t0, t1 - 1, gridLo, gridHi);
     f.equivBpm = grid.equivBpm;
     f.gridRatio = grid.ratio;
     if (ivs.length >= 3) {
@@ -668,13 +688,17 @@ var TagClassifier = (() => {
         const hs = ctx.lnHeads;
         const ts = ctx.lnTails;
         const active = [];
-        for (const h of hs) {
-          if (h.t > t1) break;
-          if (h.t + h.dur >= t0 && h.t < t1) active.push({ start: h.t, end: h.t + h.dur });
+        const aLo = lowerBoundObj(hs, t0 - ctx.lnMaxDur, (h) => h.t);
+        const aHi = lowerBoundObj(hs, t1, (h) => h.t);
+        for (let i = aLo; i < aHi; i++) {
+          const h = hs[i];
+          if (h.t + h.dur >= t0) active.push({ start: h.t, end: h.t + h.dur });
         }
-        for (const tl of ts) {
-          if (tl.t > t1) break;
-          if (tl.start < t0 && tl.t >= t0) active.push({ start: tl.start, end: tl.t });
+        const tLo = lowerBoundObj(ts, t0, (x) => x.t);
+        const tHi = upperBoundObj(ts, t1, (x) => x.t);
+        for (let i = tLo; i < tHi; i++) {
+          const tl = ts[i];
+          if (tl.start < t0) active.push({ start: tl.start, end: tl.t });
         }
         let area = 0;
         for (const ln of active) {
@@ -712,15 +736,8 @@ var TagClassifier = (() => {
         const varDur = durs.reduce((a, b) => a + (b - meanDur) ** 2, 0) / durs.length;
         f.tailScatter = meanDur > 0 ? Math.sqrt(varDur) / meanDur : 0;
         let shortLn = 0;
-        for (const h of ctx.lnHeads) {
-          if (h.t >= t0 && h.t < t1 && h.dur < 300) shortLn++;
-        }
-        const nLnHeads = (() => {
-          const hs = ctx.lnHeads;
-          const a = lowerBoundObj(hs, t0, (h) => h.t);
-          const b = lowerBoundObj(hs, t1, (h) => h.t);
-          return b - a;
-        })();
+        for (let i = hFrom; i < hTo; i++) if (heads[i].dur < 300) shortLn++;
+        const nLnHeads = hTo - hFrom;
         f.shortLnRatio = nLnHeads ? shortLn / nLnHeads : 0;
         if (gaps.length >= 3) {
           const mg = gaps.reduce((a, b) => a + b, 0) / gaps.length;
@@ -1491,19 +1508,24 @@ var TagClassifier = (() => {
     vals.sort((a, b) => a - b);
     return vals[Math.floor(vals.length / 2)];
   }
-  function medianWindowFeatures(windows, from, to) {
+  function computeMapMedians(windows) {
+    const n = Math.max(1, windows.length);
+    return {
+      mapChordMedian: medianOf(windows, 0, n, "chordMean"),
+      mapLargeMedian: medianOf(windows, 0, n, "largeChordRatio"),
+      mapNpsMedian: medianOf(windows, 0, n, "nps")
+    };
+  }
+  function medianWindowFeatures(windows, from, to, mapMedians) {
     const out = {};
     for (const k of MEDIAN_KEYS) out[k] = 0;
     for (const k of MEDIAN_KEYS) {
       out[k] = medianOf(windows, from, to, k);
     }
-    const n = Math.max(1, windows.length);
     return {
       ...out,
       // humans judge cut size relative to the map's own baseline, not absolutely
-      mapChordMedian: medianOf(windows, 0, n, "chordMean"),
-      mapLargeMedian: medianOf(windows, 0, n, "largeChordRatio"),
-      mapNpsMedian: medianOf(windows, 0, n, "nps")
+      ...mapMedians ?? computeMapMedians(windows)
     };
   }
 
@@ -1794,7 +1816,8 @@ var TagClassifier = (() => {
   function classifySegments(cm, opts = {}) {
     const out = [];
     const lnDom = opts.lnDominantRatio ?? CONFIG.lnDominantRatio;
-    const segF = cm.rawSegs.map((s, i) => cm.extras[i].rowCount ? medianWindowFeatures(cm.windows, s.windowRange[0], s.windowRange[1]) : null);
+    const mapMeds = computeMapMedians(cm.windows);
+    const segF = cm.rawSegs.map((s, i) => cm.extras[i].rowCount ? medianWindowFeatures(cm.windows, s.windowRange[0], s.windowRange[1], mapMeds) : null);
     const npsAll = segF.filter((f) => f !== null).map((f) => f.nps).sort((a, b) => a - b);
     const mapNps = npsAll.length ? npsAll[Math.floor(npsAll.length / 2)] : 0;
     for (let i = 0; i < cm.rawSegs.length; i++) {
@@ -1861,7 +1884,7 @@ var TagClassifier = (() => {
         scores
       });
     }
-    const medians = out.map((_, i) => medianWindowFeatures(cm.windows, cm.rawSegs[i].windowRange[0], cm.rawSegs[i].windowRange[1]));
+    const medians = out.map((_, i) => segF[i] ?? medianWindowFeatures(cm.windows, cm.rawSegs[i].windowRange[0], cm.rawSegs[i].windowRange[1], mapMeds));
     const diffs = out.map((seg, i) => {
       if (seg.family === "break") return Infinity;
       return medians[i].nps * (0.5 + medians[i].chordMean / 3) * (0.6 + medians[i].jackSpeedBpm / 150);

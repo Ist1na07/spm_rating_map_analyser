@@ -250,33 +250,52 @@ function cumsum(x, f) {
     return F;
 }
 
-function queryCumsum(q, x, F, f) {
-    if (q <= x[0]) return 0.0;
-    if (q >= x[x.length - 1]) return F[F.length - 1];
-    let i = bisectRight(x, q) - 1;
-    i = Math.max(0, Math.min(i, x.length - 2));
-    return F[i] + f[i] * (q - x[i]);
-}
-
 function smoothOnCorners(x, f, window, scale, mode) {
+    // Perf: queryCumsum's binary searches are replaced by monotone pointers —
+    // a and b never decrease because x is sorted ascending. The arithmetic
+    // (F[j] + f[j] * (q - x[j]), subtract b-side minus a-side) is unchanged,
+    // so results are bit-identical to the bisect version.
+    const n = x.length;
     const F = cumsum(x, f);
-    const g = new Array(x.length);
-    for (let i = 0; i < x.length; i++) {
-        const s = x[i], a = Math.max(s - window, x[0]), b = Math.min(s + window, x[x.length - 1]);
+    const g = new Array(n);
+    const x0 = x[0], xL = x[n - 1], FL = F[n - 1];
+    let iA = 0, iB = 0;
+    for (let i = 0; i < n; i++) {
+        const s = x[i], a = Math.max(s - window, x0), b = Math.min(s + window, xL);
         if (b - a <= 0) { g[i] = 0.0; continue; }
-        const integral = queryCumsum(b, x, F, f) - queryCumsum(a, x, F, f);
+        let intB;
+        if (b >= xL) intB = FL;
+        else {
+            while (iB + 1 < n && x[iB + 1] <= b) iB++;
+            const j = Math.min(iB, n - 2);
+            intB = F[j] + f[j] * (b - x[j]);
+        }
+        let intA;
+        if (a <= x0) intA = 0.0;
+        else if (a >= xL) intA = FL;
+        else {
+            while (iA + 1 < n && x[iA + 1] <= a) iA++;
+            const j = Math.min(iA, n - 2);
+            intA = F[j] + f[j] * (a - x[j]);
+        }
+        const integral = intB - intA;
         g[i] = mode === 'avg' ? integral / (b - a) : scale * integral;
     }
     return g;
 }
 
 function interpValues(newX, oldX, oldVals) {
+    // Perf: monotone pointer instead of per-point bisect. Requires newX and
+    // oldX sorted ascending (all call sites pass corner grids, which are).
+    // Pointer invariant equals bisectRight(oldX, x) - 1, so identical output.
     const result = new Array(newX.length);
+    const n = oldX.length;
+    let idx = 0;
     for (let i = 0; i < newX.length; i++) {
         const x = newX[i];
         if (x <= oldX[0]) { result[i] = oldVals[0]; continue; }
-        if (x >= oldX[oldX.length - 1]) { result[i] = oldVals[oldVals.length - 1]; continue; }
-        const idx = bisectRight(oldX, x) - 1;
+        if (x >= oldX[n - 1]) { result[i] = oldVals[n - 1]; continue; }
+        while (idx + 1 < n && oldX[idx + 1] <= x) idx++;
         const t = (x - oldX[idx]) / (oldX[idx + 1] - oldX[idx]);
         result[i] = oldVals[idx] + t * (oldVals[idx + 1] - oldVals[idx]);
     }
@@ -284,11 +303,14 @@ function interpValues(newX, oldX, oldVals) {
 }
 
 function stepInterp(newX, oldX, oldVals) {
+    // Perf: same monotone-pointer rewrite; clamp semantics preserved.
     const result = new Array(newX.length);
+    const n = oldX.length;
+    let iP = -1;
     for (let i = 0; i < newX.length; i++) {
-        let idx = bisectRight(oldX, newX[i]) - 1;
-        idx = Math.max(0, Math.min(idx, oldVals.length - 1));
-        result[i] = oldVals[idx];
+        const x = newX[i];
+        while (iP + 1 < n && oldX[iP + 1] <= x) iP++;
+        result[i] = oldVals[Math.max(0, Math.min(iP, n - 1))];
     }
     return result;
 }
@@ -539,6 +561,22 @@ function computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, 
         if (h1 === "T" || h2 === "T") return 1.0 - p.cross_thumb_bridge_factor * (1.0 / Math.max(rd, 1));
         return 1.0 - p.cross_same_hand_penalty * Math.min(rd / K, 1.0);
     }
+    // Perf: dw only depends on the two columns — tabulate the K×K weights
+    // once instead of recomputing pow() per note pair.
+    const dwTable = [];
+    for (let a = 0; a < K; a++) {
+        const row = new Float64Array(K);
+        for (let b = 0; b < K; b++) row[b] = getDistWeight(a, b);
+        dwTable.push(row);
+    }
+    // Perf: activeColumns as bitmasks (col c active ⇔ bit c set).
+    const activeMask = new Int32Array(activeColumns.length);
+    for (let i = 0; i < activeColumns.length; i++) {
+        const cols = activeColumns[i];
+        let m = 0;
+        for (let j = 0; j < cols.length; j++) m |= (1 << cols[j]);
+        activeMask[i] = m;
+    }
     const cc = CROSS_MATRIX[K] || CROSS_MATRIX[7];
     const X_ks = {}, fast_cross = {};
     for (let k = 0; k <= K; k++) {
@@ -554,17 +592,21 @@ function computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, 
             const li = bisectLeft(baseCorners, notesInPair[i - 1].start), ri = bisectLeft(baseCorners, notesInPair[i].start);
             if (ri <= li) continue;
             const delta = 0.001 * (notesInPair[i].start - notesInPair[i - 1].start);
-            const dw = getDistWeight(notesInPair[i - 1].col, notesInPair[i].col);
+            const dw = dwTable[notesInPair[i - 1].col][notesInPair[i].col];
             let val = 0.16 * dw * Math.pow(Math.max(x, delta), -2);
             const colA = k - 1, colB = k;
-            const aS = activeColumns[li] || [];
-            const aRi = Math.min(ri, activeColumns.length - 1);
-            const aE = activeColumns[aRi] || [];
-            if ((!aS.includes(colA) && !aE.includes(colA)) || (!aS.includes(colB) && !aE.includes(colB)))
+            const aRi = Math.min(ri, activeMask.length - 1);
+            const mm = activeMask[li] | activeMask[aRi];
+            // colA/colB out of range (k=0 → colA=-1, k=K → colB=K) counts as
+            // "not active", matching the old includes() semantics
+            if ((colA < 0 || ((mm >> colA) & 1) === 0) || (colB >= K || ((mm >> colB) & 1) === 0))
                 val *= (1 - cc[k]);
+            // fast_cross value is constant per note pair — hoist the pow()
+            // out of the per-corner write loop
+            const fcVal = Math.max(0, 0.4 * Math.pow(Math.max(delta, 0.06, 0.75 * x), -2) - 80);
             for (let j = li; j < ri && j < baseCorners.length; j++) {
                 X_ks[k][j] = val;
-                fast_cross[k][j] = Math.max(0, 0.4 * Math.pow(Math.max(delta, 0.06, 0.75 * x), -2) - 80);
+                fast_cross[k][j] = fcVal;
             }
         }
     }
@@ -633,10 +675,14 @@ function precomputeReleaseData(K, x, noteSeqByColumn, tailSeq, noteSeq) {
     const nTails = tailSeq.length;
     if (nTails === 0) return { tails: [], I_list: [], lock_data: [], K, x };
 
+    // Perf: hoist per-column head-time arrays (were rebuilt per tail).
+    // noteSeqByColumn preserves noteSeq's start ordering, so they are sorted.
+    const colHeadTimes = noteSeqByColumn.map(col => col.map(n => n.start));
+
     const I_list = [];
     for (let i = 0; i < nTails; i++) {
         const [k, h_i, t_i] = [tailSeq[i].col, tailSeq[i].start, tailSeq[i].end];
-        const times = noteSeqByColumn[k].map(n => n.start);
+        const times = colHeadTimes[k];
         const idx = bisectLeft(times, h_i);
         const nextNote = idx + 1 < noteSeqByColumn[k].length ? noteSeqByColumn[k][idx + 1] : null;
         const h_j = nextNote ? nextNote.start : 1e9;
@@ -666,16 +712,20 @@ function precomputeReleaseData(K, x, noteSeqByColumn, tailSeq, noteSeq) {
         });
     }
 
+    // Perf: lock detection was O(nTails^2 * K). Same-column LNs never
+    // overlap, so at most one LN per column can contain t_i — found by
+    // binary search on per-column start-sorted LN lists.
+    const lnByCol = noteSeqByColumn.map(col => col.filter(n => n.isLN));
+    const lnStartsByCol = lnByCol.map(col => col.map(n => n.start));
     const lock_data = [];
     for (let i = 0; i < nTails; i++) {
-        const [k_i, , t_i] = [tailSeq[i].col, tailSeq[i].start, tailSeq[i].end];
+        const k_i = tailSeq[i].col, t_i = tailSeq[i].end;
         const locks = [];
         for (let j = 0; j < K; j++) {
             if (j === k_i) continue;
-            for (const ln of tailSeq) {
-                if (ln.col !== j) continue;
-                if (ln.start <= t_i && t_i <= ln.end) { locks.push([j, coordWeight(k_i, j)]); break; }
-            }
+            const starts = lnStartsByCol[j];
+            const idx = bisectRight(starts, t_i) - 1;  // last LN with start <= t_i
+            if (idx >= 0 && lnByCol[j][idx].end >= t_i) locks.push([j, coordWeight(k_i, j)]);
         }
         lock_data.push(locks);
     }
@@ -731,15 +781,25 @@ function computeRbarEnhanced(releaseData, baseCorners, p) {
 
 function precomputeShieldData(K, noteSeqByColumn, LNSeq) {
     const colHeadTimes = noteSeqByColumn.map(col => col.map(n => n.start));
+    // Perf: per-column start-sorted LN lists for O(log) lock queries
+    // (was LNSeq.find per column per LN → O(K * nLN^2)).
+    const lnByCol = noteSeqByColumn.map(col => col.filter(n => n.isLN));
+    const lnStartsByCol = lnByCol.map(col => col.map(n => n.start));
     const data = [];
     for (const ln of LNSeq) {
         const [k, h, t] = [ln.col, ln.start, ln.end];
-        const prevDts = colHeadTimes[k].filter(nh => nh < h && h - nh <= 500).map(nh => h - nh);
+        // Perf: window slice via bisect (was full-column filter per LN).
+        // Same set and same ascending-nh order as nh < h && h - nh <= 500.
+        const times = colHeadTimes[k];
+        const lo = bisectLeft(times, h - 500), hi = bisectLeft(times, h);
+        const prevDts = [];
+        for (let j = lo; j < hi; j++) prevDts.push(h - times[j]);
         const lockCols = [];
         for (let j = 0; j < K; j++) {
             if (j === k) continue;
-            const found = LNSeq.find(ol => ol.col === j && ol.start <= h && h <= ol.end);
-            if (found) lockCols.push(j);
+            // same-column LNs never overlap → at most one contains h
+            const idx = bisectRight(lnStartsByCol[j], h) - 1;
+            if (idx >= 0 && lnByCol[j][idx].end >= h) lockCols.push(j);
         }
         if (prevDts.length > 0) data.push({ col: k, head_time: h, tail_time: t, prev_dts: prevDts, lock_cols: lockCols });
     }
@@ -770,13 +830,18 @@ function precomputeInverseData(K, noteSeqByColumn, LNSeq) {
     for (const ln of LNSeq) {
         const [k, h, t] = [ln.col, ln.start, ln.end];
         if (t < 0) continue;
-        const sameDts = colHeadTimes[k].filter(nh => nh > t && nh - t <= 200).map(nh => nh - t);
+        // Perf: window scans via bisect (were full-column filters per LN →
+        // O(nLN * totalNotes) for crossDts). Same ascending order.
+        const sameDts = [];
+        const own = colHeadTimes[k];
+        for (let j = bisectRight(own, t); j < own.length && own[j] - t <= 200; j++)
+            sameDts.push(own[j] - t);
         const crossDts = [], crossK1 = [], crossK2 = [];
         for (let ok = 0; ok < K; ok++) {
             if (ok === k) continue;
-            for (const nh of colHeadTimes[ok]) {
-                const dt = nh - t;
-                if (dt > 0 && dt <= 200) { crossDts.push(dt); crossK1.push(k); crossK2.push(ok); }
+            const times = colHeadTimes[ok];
+            for (let j = bisectRight(times, t); j < times.length && times[j] - t <= 200; j++) {
+                crossDts.push(times[j] - t); crossK1.push(k); crossK2.push(ok);
             }
         }
         if (sameDts.length > 0 || crossDts.length > 0)
@@ -1556,12 +1621,17 @@ function computeSectionData(allCorners, D_all, firstTime, lastTime) {
     const sectionTimes = [], sectionDifficulties = [];
     if (firstTime == null) firstTime = allCorners[0];
     if (lastTime == null) lastTime = allCorners[allCorners.length - 1];
+    // Perf: corners are sorted and sections are disjoint and ascending, so a
+    // single monotone pointer replaces the per-section full scan (was
+    // O(sections * corners)).
+    let ci = 0;
     let sectionStart = firstTime;
     while (sectionStart < lastTime) {
         const sectionEnd = sectionStart + SECTION_LENGTH;
+        while (ci < allCorners.length && allCorners[ci] < sectionStart) ci++;
         let maxD = 0;
-        for (let i = 0; i < allCorners.length; i++)
-            if (allCorners[i] >= sectionStart && allCorners[i] < sectionEnd && D_all[i] > maxD) maxD = D_all[i];
+        for (let j = ci; j < allCorners.length && allCorners[j] < sectionEnd; j++)
+            if (D_all[j] > maxD) maxD = D_all[j];
         sectionTimes.push(sectionStart);
         sectionDifficulties.push(maxD);
         sectionStart = sectionEnd;
