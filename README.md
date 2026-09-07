@@ -9,8 +9,8 @@ A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time di
 ### Difficulty rating
 
 - **Total difficulty** (SPM stars) for the current map, plus two sub-ratings:
-  - **RC** — regular (non-hold) difficulty
-  - **LN** — long-note (hold) difficulty
+  - **RC** — regular difficulty
+  - **LN** — long-note difficulty
 - On pure RC maps the LN rating is hidden automatically, so you only see the numbers that matter.
 
 ### Pattern classification
