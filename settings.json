@@ -1,9 +1,74 @@
 [
   {
+    "uniqueID": "hAlgorithm",
+    "type": "header",
+    "title": "Algorithm",
+    "description": "",
+    "options": [],
+    "value": ""
+  },
+  {
+    "uniqueID": "algorithm",
+    "type": "options",
+    "title": "Rating Algorithm",
+    "description": "Difficulty algorithm used for the rating (reserved for future algorithm versions)",
+    "options": ["SPM Rating v1.0.0"],
+    "value": "SPM Rating v1.0.0"
+  },
+  {
+    "uniqueID": "subDifficultyScheme",
+    "type": "options",
+    "title": "Sub Difficulty Scheme",
+    "description": "RC/LN sub-ratings source: Direct uses the new RC/LN sub-algorithms for every chart; Legacy v0.5.1 shows LN difficulty = total",
+    "options": ["Direct (RC/LN sub-model)", "Legacy v0.5.1"],
+    "value": "Direct (RC/LN sub-model)"
+  },
+  {
+    "uniqueID": "hDisplay",
+    "type": "header",
+    "title": "Display",
+    "description": "",
+    "options": [],
+    "value": ""
+  },
+  {
+    "uniqueID": "danDisplayStyle",
+    "type": "options",
+    "title": "Dan Display Style",
+    "description": "Within-dan position: three segments (low/high), signs (-/+) or decimal number",
+    "options": ["Thirds (low/high)", "Signs (-/+)", "Number"],
+    "value": "Thirds (low/high)"
+  },
+  {
+    "uniqueID": "colorScheme",
+    "type": "options",
+    "title": "Color Scheme",
+    "description": "Overlay color scheme (reserved for future themes)",
+    "options": ["Default Dark"],
+    "value": "Default Dark"
+  },
+  {
+    "uniqueID": "hVisibility",
+    "type": "header",
+    "title": "Visibility",
+    "description": "",
+    "options": [],
+    "value": ""
+  },
+  {
+    "uniqueID": "hideOnPlay",
+    "type": "checkbox",
+    "title": "Hide While Playing",
+    "description": "Hide the overlay after gameplay starts (results screen is shown again)",
+    "options": [],
+    "value": false
+  },
+  {
     "uniqueID": "showTags",
     "type": "checkbox",
     "title": "Show Pattern Tags",
     "description": "Display overall pattern tag chips below the rating",
+    "options": [],
     "value": true
   },
   {
@@ -11,6 +76,7 @@
     "type": "checkbox",
     "title": "Show Current Segment",
     "description": "Display the live segment tag and equivalent bpm at the playhead",
+    "options": [],
     "value": true
   },
   {
@@ -18,6 +84,7 @@
     "type": "checkbox",
     "title": "Show Segment Timeline",
     "description": "Display the full-map segment tag color band with playhead",
+    "options": [],
     "value": true
   },
   {
@@ -25,13 +92,7 @@
     "type": "checkbox",
     "title": "Show Break Segments",
     "description": "Display 'Break' text during rest sections (timeline always shows them faded)",
+    "options": [],
     "value": true
-  },
-  {
-    "uniqueID": "accentColor",
-    "type": "color",
-    "title": "Accent Color",
-    "description": "Main accent color for the rating number",
-    "value": "#ffffff"
   }
 ]

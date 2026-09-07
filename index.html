@@ -329,8 +329,8 @@ body {
             <span class="sub-label">RC</span>
             <span class="sub-value rc" id="rc-rating">--</span>
         </div>
-        <span class="sep">|</span>
-        <div class="sub-item">
+        <span class="sep" id="ln-sep">|</span>
+        <div class="sub-item" id="ln-sub-item">
             <span class="sub-label">LN</span>
             <span class="sub-value ln" id="ln-rating">--</span>
         </div>
@@ -340,8 +340,8 @@ body {
             <span class="dan-label">RC Dan</span>
             <span class="dan-value rc-dan" id="rc-dan">-</span>
         </div>
-        <span class="dan-sep">|</span>
-        <div class="dan-item ln-dan-row">
+        <span class="dan-sep" id="ln-dan-sep">|</span>
+        <div class="dan-item ln-dan-row" id="ln-dan-item">
             <span class="dan-label">LN Dan</span>
             <span class="dan-value ln-dan" id="ln-dan">-</span>
         </div>
@@ -355,7 +355,7 @@ body {
         <canvas id="curve-canvas"></canvas>
         <div id="curve-legend">
             <span class="legend-rc"><i></i>RC</span>
-            <span class="legend-ln"><i></i>LN</span>
+            <span class="legend-ln" id="legend-ln"><i></i>LN</span>
         </div>
     </div>
     <div class="divider" id="divider"></div>
@@ -379,6 +379,17 @@ body {
 (function() {
     const TOSU_PORT = 24050;
     const MOD_BIT_FLAGS = { EZ: 2, HR: 16, DT: 64, HT: 256, NC: 512 };
+
+    // tosu injects window.COUNTER_PATH; fall back to the folder name so the
+    // settings channel also works when the page is opened outside tosu
+    if (!window.COUNTER_PATH) {
+        try {
+            const segs = location.pathname.split('/').filter(Boolean);
+            const last = segs[segs.length - 1] || '';
+            window.COUNTER_PATH = /\.html?$/i.test(last)
+                ? (segs[segs.length - 2] || '') : last;
+        } catch { window.COUNTER_PATH = ''; }
+    }
 
     // v0.5.0 design system: two family anchors reused across badges,
     // sub-ratings, dan values, difficulty curves, tag chips and the
@@ -420,12 +431,25 @@ body {
     }
 
     let settings = {
+        algorithm: 'SPM Rating v1.0.0',
+        subDifficultyScheme: 'Direct (RC/LN sub-model)',
+        danDisplayStyle: 'Thirds (low/high)',
+        colorScheme: 'Default Dark',
+        hideOnPlay: false,
         showTags: true,
         showSegmentTag: true,
         showTimeline: true,
         showBreak: true,
-        accentColor: '#ffffff',
     };
+
+    // dan label style key from the settings option string
+    function danStyleKey() {
+        switch (settings.danDisplayStyle) {
+            case 'Signs (-/+)': return 'pm';
+            case 'Number': return 'number';
+            default: return 'third';
+        }
+    }
 
     let ws = null;
     let currentChecksum = null;
@@ -438,6 +462,7 @@ body {
     let reconnectTimer = null;
     let animFrameId = null;
     let lastSegIndex = -2;
+    let hideOnPlayActive = false;
 
     let songTimeMs = null;
     let prevSongTimeMs = null;
@@ -452,9 +477,14 @@ body {
     const elModBadge = document.getElementById('mod-badge');
     const elRcRating = document.getElementById('rc-rating');
     const elLnRating = document.getElementById('ln-rating');
+    const elLnSubItem = document.getElementById('ln-sub-item');
+    const elLnSep = document.getElementById('ln-sep');
     const elRcLnRow = document.getElementById('rc-ln-row');
     const elRcDan = document.getElementById('rc-dan');
     const elLnDan = document.getElementById('ln-dan');
+    const elLnDanItem = document.getElementById('ln-dan-item');
+    const elLnDanSep = document.getElementById('ln-dan-sep');
+    const elLegendLn = document.getElementById('legend-ln');
     const elTotalDan = document.getElementById('total-dan');
     const elDanRow = document.getElementById('dan-row');
     const elDivider = document.getElementById('divider');
@@ -637,6 +667,7 @@ body {
             if (lnSectionDiffs && lnSectionDiffs.length > 0) {
                 drawLine(lnSectionDiffs, FAMILY.ln, 0.9);    // LN-masked D — warm
             }
+            elLegendLn.classList.toggle('hidden', !lnSectionDiffs || lnSectionDiffs.length === 0);
             elCurveLegend.classList.remove('hidden');
         } else if (sectionDiffs && sectionDiffs.length > 0) {
             const maxVal = Math.max(...sectionDiffs, 0.01);
@@ -669,6 +700,7 @@ body {
             ctx.fill();
             ctx.globalAlpha = 1.0;
 
+            elLegendLn.classList.add('hidden');
             elCurveLegend.classList.add('hidden');
         }
 
@@ -858,23 +890,36 @@ body {
     }
 
     function showResult(result) {
+        // While "Hide While Playing" has hidden the overlay, only update the
+        // cached result — rendering would un-hide the overlay mid-play.
+        if (hideOnPlayActive) {
+            cachedResult = result;
+            return;
+        }
         elLoading.classList.add('hidden');
         elContainer.classList.remove('hidden');
 
         // Main rating = total SR
         elRating.textContent = result.rating.toFixed(2);
-        elRating.style.color = settings.accentColor || '#ffffff';
         elTypeBadge.textContent = result.mapType;
         elTypeBadge.className = result.mapType.toLowerCase();
 
-        // RC/LN sub-ratings
+        // RC/LN sub-ratings; pure RC maps (no LNs at all) hide the LN column
+        const hasLnDisplay = result.lnRating != null;
         elRcRating.textContent = result.rcRating != null ? result.rcRating.toFixed(2) : '--';
-        elLnRating.textContent = result.lnRating != null ? result.lnRating.toFixed(2) : '--';
+        elLnRating.textContent = hasLnDisplay ? result.lnRating.toFixed(2) : '--';
+        elLnSubItem.classList.toggle('hidden', !hasLnDisplay);
+        elLnSep.classList.toggle('hidden', !hasLnDisplay);
 
-        // Dan labels using type-specific conversion
-        elRcDan.textContent = result.rcDan != null ? danToLabelRC(result.rcDan) : '-';
-        elLnDan.textContent = result.lnDan != null ? danToLabelLN(result.lnDan) : '-';
-        elTotalDan.textContent = result.totalDan != null ? danToLabelRC(result.totalDan) : '-';
+        // 4K/6K: per-keycount dan node tables are applied inside the engine;
+        // the keys badge shows the frame for unclassified (non-7K) charts.
+        // Dan labels using per-keycount node tables + the configured style
+        const style = danStyleKey();
+        elRcDan.textContent = result.rcDan != null ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
+        elLnDan.textContent = result.lnDan != null ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-';
+        elTotalDan.textContent = result.totalDan != null ? SPMEngine.danLevelToLabel(result.totalDan, result.keyCount, 'RC', style) : '-';
+        elLnDanItem.classList.toggle('hidden', result.lnDan == null);
+        elLnDanSep.classList.toggle('hidden', result.lnDan == null);
 
         // Per-type row visibility
         elRcLnRow.classList.remove('mix-only');
@@ -908,6 +953,9 @@ body {
     }
 
     function showLoading(msg) {
+        // While hidden for gameplay, don't surface loading states either
+        // (the overlay stays fully hidden until the play session ends).
+        if (hideOnPlayActive) return;
         elContainer.classList.add('hidden');
         elLoading.classList.remove('hidden');
         elLoading.textContent = msg || 'SPM Map Analyser';
@@ -943,7 +991,14 @@ body {
                 }
             }
 
-            const result = processMap(content, 'full', speedRate, sortType);
+            const subScheme = settings.subDifficultyScheme === 'Legacy v0.5.1' ? 'v051' : 'direct';
+            const result = processMap(content, 'full', speedRate, { subDifficultyScheme: subScheme });
+            if (result) {
+                // 7K charts with a tag-engine result keep the classification UI;
+                // 4K/6K show difficulty rating, dan (per-keycount table) and curve.
+                result.classified = cachedTagResult != null;
+                if (result.classified) result.mapType = String(cachedTagResult.overall.sort || '').toUpperCase() || result.mapType;
+            }
             if (!result) {
                 showLoading('No notes found');
                 cachedResult = null;
@@ -984,30 +1039,112 @@ body {
         }
     }
 
-    /** tosu counter settings (best-effort; falls back to defaults). */
-    async function loadSettings() {
-        try {
-            const name = encodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '');
-            if (!name) return;
-            const res = await fetch(`/api/counters/settings/${name}`);
-            const arr = await res.json();
-            if (!Array.isArray(arr)) return;
-            for (const s of arr) {
-                if (!s || typeof s.uniqueID !== 'string') continue;
-                if (s.uniqueID === 'showTags') settings.showTags = !!s.value;
-                else if (s.uniqueID === 'showSegmentTag') settings.showSegmentTag = !!s.value;
-                else if (s.uniqueID === 'showTimeline') settings.showTimeline = !!s.value;
-                else if (s.uniqueID === 'showBreak') settings.showBreak = !!s.value;
-                else if (s.uniqueID === 'accentColor' && typeof s.value === 'string') settings.accentColor = s.value;
-            }
-            if (cachedResult) {
-                applyClassificationVisibility();
-                elRating.style.color = settings.accentColor || '#ffffff';
-                lastSegIndex = -2;
-            }
-        } catch {
-            /* settings unavailable — keep defaults */
+    /** Apply a settings dict ({uniqueID: value}) received from tosu. */
+    function applySettingsDict(d) {
+        if (!d || typeof d !== 'object') return false;
+        let changed = false;
+        if (typeof d.algorithm === 'string') {
+            changed = changed || settings.algorithm !== d.algorithm;
+            settings.algorithm = d.algorithm;
         }
+        if (typeof d.subDifficultyScheme === 'string') {
+            changed = changed || settings.subDifficultyScheme !== d.subDifficultyScheme;
+            settings.subDifficultyScheme = d.subDifficultyScheme;
+        }
+        if (typeof d.danDisplayStyle === 'string') {
+            changed = changed || settings.danDisplayStyle !== d.danDisplayStyle;
+            settings.danDisplayStyle = d.danDisplayStyle;
+        }
+        if (typeof d.colorScheme === 'string') {
+            changed = changed || settings.colorScheme !== d.colorScheme;
+            settings.colorScheme = d.colorScheme;
+        }
+        if ('hideOnPlay' in d) {
+            changed = changed || settings.hideOnPlay !== !!d.hideOnPlay;
+            settings.hideOnPlay = !!d.hideOnPlay;
+        }
+        if ('showTags' in d) {
+            changed = changed || settings.showTags !== !!d.showTags;
+            settings.showTags = !!d.showTags;
+        }
+        if ('showSegmentTag' in d) {
+            changed = changed || settings.showSegmentTag !== !!d.showSegmentTag;
+            settings.showSegmentTag = !!d.showSegmentTag;
+        }
+        if ('showTimeline' in d) {
+            changed = changed || settings.showTimeline !== !!d.showTimeline;
+            settings.showTimeline = !!d.showTimeline;
+        }
+        if ('showBreak' in d) {
+            changed = changed || settings.showBreak !== !!d.showBreak;
+            settings.showBreak = !!d.showBreak;
+        }
+        // turning the option off mid-play must un-hide immediately
+        if (!settings.hideOnPlay && hideOnPlayActive) {
+            hideOnPlayActive = false;
+            changed = true;
+        }
+        return changed;
+    }
+
+    function reapplySettingsToUI() {
+        applyClassificationVisibility();
+        if (cachedResult) {
+            lastSegIndex = -2;
+            showResult(cachedResult);
+        }
+    }
+
+    /** tosu counter settings via the websocket "commands" channel.
+     *  The socket URL carries the counter path (?l=...) — without it tosu
+     *  rejects the request with "Wrong overlay". tosu does not push setting
+     *  changes, so getSettings is re-sent on an interval. */
+    let settingsWs = null;
+    let settingsPollTimer = null;
+    let lastSettingsJson = null;
+
+    function handleSettingsMessage(event) {
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+        const message = data && data.message;
+        if (!message || typeof message !== 'object' || message.error) return;
+        // dict shape: {danDisplayStyle: "...", showTags: true, ...}
+        const next = JSON.stringify(message);
+        if (next === lastSettingsJson) return;
+        const firstLoad = lastSettingsJson === null;
+        lastSettingsJson = next;
+        applySettingsDict(message);
+        if (!firstLoad) reapplySettingsToUI();
+        else if (cachedResult) reapplySettingsToUI();
+    }
+
+    function sendGetSettings() {
+        if (settingsWs && settingsWs.readyState === 1) {
+            settingsWs.send(`getSettings:${window.COUNTER_PATH || ''}`);
+        }
+    }
+
+    function connectSettings() {
+        try {
+            settingsWs = new WebSocket(
+                `ws://localhost:${TOSU_PORT}/websocket/commands?l=${encodeURIComponent(window.COUNTER_PATH || '')}`);
+        } catch { return; }
+        settingsWs.onopen = sendGetSettings;
+        settingsWs.onmessage = handleSettingsMessage;
+        settingsWs.onclose = () => { settingsWs = null; };
+        settingsWs.onerror = () => { try { settingsWs && settingsWs.close(); } catch { /* noop */ } };
+    }
+
+    function startSettingsPolling() {
+        if (settingsPollTimer) return;
+        settingsPollTimer = setInterval(() => {
+            if (!settingsWs || settingsWs.readyState > 1) {
+                lastSettingsJson = null; // fresh socket → force a first apply
+                connectSettings();
+            } else if (settingsWs.readyState === 1) {
+                sendGetSettings();
+            }
+        }, 2000);
     }
 
     function connect() {
@@ -1048,6 +1185,21 @@ body {
                 return;
             }
 
+            // "Hide While Playing": state 2 = play, 7 = resultScreen.
+            const stateName = String(data?.state?.name || '').toLowerCase();
+            const isPlay = stateName === 'play';
+            const isResults = stateName === 'resultScreen';
+            if (settings.hideOnPlay && isPlay) {
+                elContainer.classList.add('hidden');
+                elLoading.classList.add('hidden');
+                hideOnPlayActive = true;
+            } else if (hideOnPlayActive && !isPlay) {
+                // play session over (result screen, menu, …) — restore
+                hideOnPlayActive = false;
+            }
+            // while hideOnPlayActive, showLoading/showResult stay no-ops;
+            // the recover branch below must not un-hide either
+
             const needsRecalc = checksum && (
                 checksum !== currentChecksum ||
                 modData.modSignature !== currentModSignature
@@ -1074,7 +1226,7 @@ body {
                 showLoading('Calculating...');
                 fetchAndRate(modData.speedRate);
                 startAnimationLoop();
-            } else if (cachedResult && elContainer.classList.contains('hidden')) {
+            } else if (cachedResult && elContainer.classList.contains('hidden') && !hideOnPlayActive) {
                 showResult(cachedResult);
                 startAnimationLoop();
             }
@@ -1093,8 +1245,19 @@ body {
         };
     }
 
+    // Optional dan node override (defaults are inlined in spm_algorithm.js)
+    async function loadDanConstants() {
+        try {
+            const res = await fetch('dan_constants.json');
+            if (!res.ok) return;
+            SPMEngine.loadDanConstants(await res.json());
+        } catch { /* keep inlined defaults */ }
+    }
+
     showLoading('Connecting to tosu...');
-    loadSettings();
+    connectSettings();
+    startSettingsPolling();
+    loadDanConstants();
     connect();
 })();
 </script>

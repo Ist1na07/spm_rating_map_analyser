@@ -1,1637 +1,2211 @@
 /**
- * SPM Map Analyser — 7K Difficulty Rating with Sigmoid Aggregation
+ * SPM Map Analyser — SPM Rating v1.0.0 + RC/LN sub-model (rc-ln-0.1.0)
  *
- * Based on SPM Rating algorithm with RC/LN sub-models.
- * LN difficulty uses Total SR (validated MAE=0.22 vs LN labels).
+ * JavaScript port of:
+ *   spm_rating_v1.0.0/core (parser, grid, model, components)
+ *   rc_ln_model/rcln       (RC = de-LN chart's spm rating,
+ *                           LN = LN-presence-weighted aggregation)
  *
- * v0.5.0: sort/tag classification moved to tag_engine.js (segment-based
- * softmax classifier). This file only computes difficulty ratings and
- * selects display branches from the externally-provided sort.
+ * Pipeline (single chart):
+ *   parse → rows → struct → curves → D (combine)
+ *     → aggregate(hold_w=true)  → postprocess → star   (spm)
+ *     → Pbar recompute (ln_body_ms = 0), Rbar/Cbar = 0
+ *       → aggregate(hold_w=false) → postprocess → rc   (RC)
+ *     → g(t) presence weights on D
+ *       → aggregate_ln → postprocess_ln         → ln   (LN)
+ *
+ * 4K charts are embedded into the 7-column frame (cols 1,2,4,5) so the
+ * geometry logic is shared; 6K spreads columns evenly (0..6 with thumb).
  */
 
+"use strict";
+
 // ============================================================
-// TUNED PARAMETERS — SPM Rating with Sigmoid Aggregation
+// PARAMETERS — rc-ln-0.1.0 (spm-rating-1.0.0 + rcln group)
 // ============================================================
-const ENHANCED_PARAMS = {
-    // Feature toggles
-    use_enhanced: 1, use_enhanced_release: 1, use_column_distance: 1,
-    use_shield: 1, use_inverse: 1, use_stamina: 0, use_comprehensiveness: 0,
-    D_gamma_e: 0.0,
-
-    // Core scaling
-    w_mean: 0.572, rescale_threshold: 9.417420338567627, rescale_divisor: 2.009376904206021,
-    jack_aggregation_power: 4.271216932836177, multi_jack_boost: 0.00042685730273835614,
-    Abar_scale: 1.0163,
-    inverse_peak_width: 2.0,
-
-    // Cross / column distance
-    cross_dist_exponent: 1.0, cross_same_hand_penalty: 0.3,
-    cross_thumb_bridge_factor: 0.5535622364790934,
-
-    // Release (Rbar)
-    release_tail_coeff: 0.14488009478034738,
-    release_tail_to_tap: 4.224154738413993,
-    release_same_col_bonus: 0.267745272040277,
-    release_coord_exponent: 0.7193118045950513,
-    release_seq_coeff: 0.10849823285734937,
-    lock_interaction_coeff: 0.11648699038253439,
-
-    // Stream / Pbar
-    stream_booster_scale: 1.75e-07,
-    short_ln_threshold: 331.62375992488296, short_ln_reduction: 0.10008962172133994,
-
-    // S-mix & alphas
-    S_w1: 0.484, S_p: 0.9994,
-    alpha_P: 0.7245387129819947, alpha_R: 32.2385,
-    alpha_C: 11.02053, alpha_S: 0.5554,
-    alpha_V: 0.37139999999999995,
-
-    // D formula
-    D_beta1: 1.1879, D_beta2: 0.3845,
-
-    // Post-processing (percentile weights — kept for skill ratings, not used for SR)
-    w_93: 0.1820607086443739, w_83: 0.2338096935124762,
-    coeff_93: 0.9642799087643721, coeff_83: 0.6025543835022324,
-    mean_power: 2.137380905141331,
-
-    note_norm_N0: 8.208876816969216, global_scale: 1.0549342571808757,
-
-    // Inverse (Vbar)
-    inv_amplitude: 3.7118766294981045, inv_tau: 31.906673905517522,
-    inv_power: 0.797883494531484,
-    guide_depth: 0.8539658929253457, guide_center: 83.00337573436185,
-    guide_width: 33.569919335556584, cross_guide_scale: 0.6632104629775328,
-    inverse_same_col_bonus: 2.6796650792734167,
-    V_alpha: 0.435,
-
-    // Shield (Sbar)
-    shield_tau_ms: 56.2429,
-    shield_anchor_mod: 0.8062210781592527,
-    shield_coord_factor: 1.0025438218559561,
-
-    // Cross RC/LN blending
-    cross_dist_exponent_rc: 0.997293421760749,
-    cross_dist_exponent_ln: 0.9323875832719253,
-    cross_same_hand_penalty_rc: 0.39298900398939857,
-    cross_same_hand_penalty_ln: 0.2954279991821967,
-
-    // === SIGMOID AGGREGATION (Total SR) ===
-    use_sigmoid_aggregation: 1,
-    agg_sigmoid_k: 2.09,
-    agg_sigmoid_C: 3.968852604627637,
-    agg_sigmoid_ref_gamma: 0.1956208588626766,
-    calib_a: 0.8933406436079341,
-    calib_b: 0.03083150068086804,
-    agg_n_segments: 30,
-
-    // === RC MODEL PARAMS ===
-    S_w1_rc: 0.5459259100383405, S_p_rc: 0.8586310947122264,
-    alpha_P_rc: 0.5392380666052108,
-    D_beta1_rc: 1.8687574554781872, D_beta2_rc: 0.39363587611423,
-    Abar_scale_rc: 0.9886284358035143,
-
-    calib_a_rc: 0.858136086223025, calib_b_rc: -0.018668370815569657,
-    agg_sigmoid_k_rc: 2.310438836954186,
-    agg_sigmoid_C_rc: 4.1140868461450575,
-    agg_sigmoid_gamma_rc: 0.20280826962182968,
-    agg_n_segments_rc: 30,
-
-    note_norm_N0_rc: 0.0,
-    rescale_threshold_rc: 9.54091768708962,
-    rescale_divisor_rc: 2.114935396824644,
-    global_scale_rc: 1.0530564601936523,
-
-    // === LN-MASKED MODEL PARAMS (v0.4.0: calib refitted on 171 maps with sr_ref_ln, CV test MAE=0.215) ===
-    calib_a_ln_masked: 0.8912,
-    calib_b_ln_masked: -0.0491,
-
-    // === CORRECTION LAYER (v0.4.0: 9 features, L2 λ=0.01, CV Test Loss=0.874) ===
-    // v0.3.0→v0.4.0: 7→9 features (added nps_std, chord2); all weights refitted.
-    correction_chord:   -0.7688325984612918,
-    correction_fj:       0.031132801295881807,
-    correction_hs:       0.07263638646456005,
-    correction_lb:       0.016218424130487907,
-    correction_speed:   -0.04650430730048627,
-    correction_burst:   -0.02859351745291927,
-    correction_pj:       0.0022701858018914223,
-    correction_nps_std: -0.013917292721772556,   // v0.4.0 new: density temporal variance
-    correction_chord2:  -0.6560718870828117,     // v0.4.0 new: 2-note chord (jumpstream) density
-    // Correction postprocess (jointly optimized with 9 features)
-    note_norm_N0_corr:        1.028619384641953,
-    rescale_threshold_corr:   9.106357175391555,
-    rescale_divisor_corr:     1.9709334450462341,
-    global_scale_corr:        1.0943832892581231,
-    // Feature computation params (fixed, not optimized)
-    corr_spd_dt: 150, corr_spd_dc: 3,
-    corr_bst_dt: 100, corr_ch_order: 4,
-    corr_hs_dt: 200, corr_lb_dt: 150, corr_fj_dt: 100,
-    corr_nps_window_ms: 500,   // nps_std: 500ms window
-    corr_chord_tol_ms: 5,      // chord2: simultaneous hit tolerance
+const SPM_V1_PARAMS = {
+  a_c:10.717498918905136,
+  a_cb:4.0,
+  a_cb_4k:11.357365798773392,
+  a_cbc:10.310670820602846,
+  a_p:0.457050886903945,
+  a_p_4k:0.9671708233722217,
+  a_r:59.95490931764664,
+  a_r_4k:0.0,
+  abar_active:0.02531712913365081,
+  abar_c0:0.729854838334696,
+  abar_c1:0.6730069593477146,
+  abar_k:5.869324658227848,
+  abar_mx:0.48830826958952744,
+  abar_mx_thr:0.10636359112398937,
+  abar_mx_w:0.45817570312814426,
+  abar_scale:1.009862473386292,
+  abar_thr_hi:0.09447563280275387,
+  abar_thr_lo:0.01682395583948343,
+  abar_weld:1.0,
+  agg_C:5.7765188650680015,
+  agg_gamma:0.3142734186203886,
+  agg_gap_w:1.0873927743990874,
+  agg_k:3.923290274033005,
+  agg_mode:3.0,
+  agg_nseg:30.0,
+  agg_wc:1.145022164188944,
+  aj:4.107175656089324,
+  an_a0:0.17043768459177114,
+  an_a1:0.34850214310770977,
+  an_cubic:6.806495193662656,
+  an_on_p:-0.3268168035336469,
+  ap:0.8414094716039964,
+  at:5.704296617075204,
+  c_chord2:0.5,
+  c_fj:1.1223698076832407,
+  c_fj_4k:1.6384853006440867,
+  c_ja:-0.001250731346377573,
+  c_jc:0.13300526379892,
+  c_jm:0.5136914244166452,
+  c_s:0.4182231311873207,
+  calib_a:1.0269058337789674,
+  calib_b:0.506803040656835,
+  cap_a:10.84672199638674,
+  cap_b:0.7669642744433789,
+  cb_holdtap:0.0,
+  cb_holdtap_pow:1.0,
+  cb_lock_pow:1.0,
+  cb_lockanchor:0.0,
+  cb_lockjack:0.0,
+  cb_par:0.0,
+  cb_shield:0.0,
+  cb_shield_lock:0.8062,
+  cb_shield_tau:56.24,
+  cbv_churn:2.7804415879691047,
+  cbv_churn_4k:0.0018149727082640878,
+  cbv_holdage:3.4070743387277163,
+  cbv_holdage_4k:0.0017655285135421454,
+  cbv_holdtap:-1.0227403453455164,
+  cbv_lock_pow:0.9662307730974806,
+  cbv_lockanchor:1.3023578337914123,
+  cbv_lockstack:0.5382064568725327,
+  cbv_ls_1h_split:0.6669564049783417,
+  cbv_ls_2h_split:0.628481439284875,
+  cbv_ls_cross:0.6384201937709314,
+  cbv_ls_sh_adj:0.9897529278156161,
+  cbv_ls_sh_split:0.694320421215397,
+  cbv_ov_1h_split:0.8912801595852077,
+  cbv_ov_2h_split:0.628660224600841,
+  cbv_ov_cap:2451.2427577736403,
+  cbv_ov_cross:0.43216200109373926,
+  cbv_ov_dt_max:1511.5378347371243,
+  cbv_ov_sh_adj:1.2272220519138874,
+  cbv_ov_sh_split:1.2153000673016874,
+  cbv_overlap:0.9863986916717904,
+  cbv_sh_dt_max:256.0406131304308,
+  cbv_sh_ln_tau:145.443782024068,
+  cbv_sh_ln_w:1.0790072249120857,
+  cbv_sh_lock:1.0870780764260457,
+  cbv_sh_tau:75.33463318028997,
+  cbv_shield:1.1200999548581216,
+  cbv_str_1h_split:0.5323308514011785,
+  cbv_str_2h_split:0.17479688357773077,
+  cbv_str_bal:1.141728630652899,
+  cbv_str_cross:0.09922357503493356,
+  cbv_str_h0:0.8793037998512705,
+  cbv_str_h1:0.9113686383081036,
+  cbv_str_h2:0.8557205717895041,
+  cbv_str_h3:0.5028456653288493,
+  cbv_str_maxd:2.048176307602251,
+  cbv_str_sh_adj:0.19036255960279166,
+  cbv_str_sh_split:0.9209759560022021,
+  cbv_straddle:0.45854924271224995,
+  cbv_w:1140.2267181326677,
+  chord2_w:998.3068456460403,
+  chord_tau_c:28.00006103515625,
+  churn_event_rate:0.0,
+  churn_sat:14.712127862753169,
+  churn_w:1022.5551356347157,
+  cj_norm:1.9757525590733565,
+  cj_size_exp:1.0152415724691892,
+  d_b1:1.4529112152056358,
+  d_b2:0.4343400978218659,
+  d_ds:0.5436886594030598,
+  d_dt:1.3838263378115971,
+  d_eye:0.0818717181241305,
+  d_eye_4k:0.014013206098578592,
+  d_read:0.0,
+  d_read_4k:0.0,
+  d_rec:0.78125,
+  d_sh:-0.18851239465270642,
+  env_ms:395.28032205483703,
+  env_w:0.0033333333333333335,
+  eye_tau:0.2,
+  eye_w_ref:4000.0,
+  eye_w_s:500.0,
+  holdage_cap:0.9712508526439506,
+  holdage_th:0.25073103183213685,
+  hw_a:-4.833333333333334,
+  hw_half:51.932695284873475,
+  j_agg_pow:4.220517945172583,
+  j_c1:0.11994305455701491,
+  j_nerf_a:-2.266651862989442e-05,
+  j_nerf_c:0.07443739821757173,
+  j_nerf_off:0.15369105717534054,
+  j_triple_gain:0.01930565188193239,
+  j_triple_gain_4k:0.5356436393950172,
+  j_triple_pow:1.005976267076746,
+  j_triple_tau:135.97491132645644,
+  ja_coord_exp:-9.268498548764114e-05,
+  ja_gap_thr:253.00356478769385,
+  ja_len_exp:1.0047596122947928,
+  ja_len_floor:4.074244535477681,
+  ja_norm:5.981391018054386,
+  ln_calib_a:1.0,
+  ln_calib_b:0.0,
+  ln_eff_tail_ms:0.0,
+  ln_g_exp:0.5,
+  ln_gain:1.0,
+  ln_mask_w:700.0,
+  ln_n0:59.287573788026904,
+  ln_note_level:0.0,
+  mean_pow:6.465267031930503,
+  mj_dilute:0.23679879956914796,
+  mj_dilute_exp:0.9615171298692908,
+  od_mult_ja:-1.0,
+  od_mult_jc:-0.37109374999999944,
+  od_mult_jm:0.7504257038347726,
+  od_mult_p:1.1264849156945338,
+  od_mult_r:1.064323992348447,
+  od_mult_x:1.1651306736110387,
+  out_a:0.699552129082087,
+  out_b:-0.7830329139461331,
+  p83_c:2.667686959362696,
+  p93_c:2.505172683584436,
+  p_boost:-1e-05,
+  p_boost_hi:401.3793072521453,
+  p_boost_lo:186.3466709871835,
+  p_burst3:0.05749725160072005,
+  p_burst4:0.041571581046874806,
+  p_bv_max:1.023169107328028,
+  p_chw2:0.6997350782823039,
+  p_chw3:1.4710731528472405,
+  p_chw4:0.82149995851254,
+  p_chw5:0.8676070127257947,
+  p_chw6:0.7474127532548505,
+  p_chw7:1.03284160083206,
+  p_lam2:0.006084380903675146,
+  p_lam3:27.838293996532915,
+  p_sat_a:10.690152688495372,
+  p_sat_b:2.0349325289971496,
+  p_scale:0.05862260059258437,
+  p_v_norm:-0.005007331887365899,
+  pp_div:1.617868498725467,
+  pp_n0:59.287573788026904,
+  pp_scale:1.0018513493936536,
+  pp_thr:7.703696089438818,
+  r_I_off:1.679847001293981,
+  r_I_steep:3.8155719025104933,
+  r_I_w:1.0611113361746765,
+  r_ain0:1.402277599248007,
+  r_ain1:0.8487725298502042,
+  r_ain2:0.9889530992577216,
+  r_ain3:1.4808396303580251,
+  r_coord_e:0.6807568539174652,
+  r_cw_cross:0.6899948287076584,
+  r_cw_hand:0.42489506847315023,
+  r_cw_same:0.9824539263359018,
+  r_cw_thumb:0.3660514384223894,
+  r_dt_max:5985.197267885601,
+  r_dtr_min:0.015,
+  r_lock:0.1775454477373913,
+  r_order_pen:0.04982726415201301,
+  r_order_tau:404.3308885287425,
+  r_same_col:0.39414011153048933,
+  r_seq:0.06596340070980779,
+  r_short_red:0.10936100877002214,
+  r_short_thr:440.09681230961536,
+  r_sim_tau:10.0,
+  r_simul:0.08534094291675064,
+  r_soft_edges:1.0,
+  r_straddle:-0.11540999412449468,
+  r_tail:0.02898542543998874,
+  r_tt:3.5417544104085192,
+  read_clip_hi:1.5,
+  read_clip_lo:0.5,
+  read_n_win:16.0,
+  read_tol:0.18,
+  rec_half:0.4886690846205094,
+  recov_w:989.9492044110127,
+  recov_wl:21003.231873446508,
+  s_p:1.2386750812693854,
+  shd_w:1071.1117107781824,
+  t_jack_mix:-0.35552500051452174,
+  t_s_off:0.4819735114526039,
+  use_cbar_v2:1.0,
+  use_cbv_holdtap:1.0,
+  use_cbv_lockanchor:1.0,
+  use_cbv_lockstack:1.0,
+  use_cbv_overlap:1.0,
+  use_cbv_shield:1.0,
+  use_cbv_straddle:1.0,
+  use_eye:1.0,
+  use_hb:1.0,
+  use_read:0.0,
+  w83:0.4815139944602175,
+  w93:0.3605157897072774,
+  w_a:60.794584215917084,
+  w_cb:1716.856156378797,
+  w_ja:0.0,
+  w_jc:-0.4781249999999999,
+  w_jm:842.9060364136417,
+  w_p:806.2241563795392,
+  w_r:1349.4219390385326,
+  w_x:939.2935347185421,
+  wmean:2.1613377064577026,
+  x_amp:0.14776064699735425,
+  x_cw0:0.1460113252705887,
+  x_cw1:0.3535388218642357,
+  x_cw2:0.3389326726836199,
+  x_cw3:0.04918990446028124,
+  x_din:-0.595854461464495,
+  x_dir_in:0.2845860534263308,
+  x_dir_out:-0.016749922744166222,
+  x_dout:0.9858637139438629,
+  x_fc_a:0.541953977488367,
+  x_fc_floor:0.04577642898224647,
+  x_fc_off:60.317605380705,
+  x_fc_w:1.6631718126735746,
+  x_jd_e:1.0765985987293114,
+  x_jd_p:0.0456784859552089,
+  x_jh_e:1.6812589290379765,
+  x_jh_p:1.0261744953668672,
+  x_jt:0.5592172136082718,
+  x_jump_w:-0.852278272911138,
 };
 
-// ============================================================
-// CONSTANTS
-// ============================================================
-const CROSS_MATRIX = {
-    1: [0.075, 0.075],
-    2: [0.125, 0.05, 0.125],
-    3: [0.125, 0.125, 0.125, 0.125],
-    4: [0.175, 0.25, 0.05, 0.25, 0.175],
-    5: [0.175, 0.25, 0.175, 0.175, 0.25, 0.175],
-    6: [0.225, 0.35, 0.25, 0.05, 0.25, 0.35, 0.225],
-    7: [0.225, 0.35, 0.25, 0.225, 0.225, 0.25, 0.35, 0.225],
-    8: [0.275, 0.45, 0.35, 0.25, 0.05, 0.25, 0.35, 0.45, 0.275],
-};
+const K = 7;
+const N_BOUND = 8;
+const EPS = 1e-9;
 
-const HAND_MAP = { 0: "L", 1: "L", 2: "L", 3: "T", 4: "R", 5: "R", 6: "R" };
-
-// === Dan Mapping: piecewise interpolation from Dan marathon SR ===
-// v0.4.0: nodes measured with correction layer (path B = player-visible SR),
-// so displayed SR maps directly to Dan calibration basis.
-const RC_MEASURED_SR = [3.5080, 3.9952, 4.7028, 5.2907, 5.5615, 5.9998, 6.5071, 6.8795, 7.2737, 7.6527, 8.2536, 8.8573, 9.4121, 10.1955];
-const RC_MEASURED_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.5, 13, 14.5];
-const LN_MEASURED_SR = [3.8246, 4.4282, 4.5044, 5.3024, 5.6546, 6.3344, 6.6780, 6.8194, 7.3037, 7.5084, 8.2510, 8.6595, 9.5029, 10.1104];
-const LN_MEASURED_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.5, 13, 14.5];
-
-// Thresholds centered on calibration points so each Dan level maps to its regular label
-// at the calibration value (e.g. Gamma=11.5 → bin [10.5, 12.5) → frac=0.5 → "Gamma")
-const DAN_THRESHOLDS = [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 12.5, 13.5, 15.5];
-const DAN_NAMES = ['0th', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th',
-                   '8th', '9th', '10th', 'Gamma', 'Azimuth', 'Zenith', 'Stellium'];
-
-const SECTION_LENGTH = 400;
-const DECAY_WEIGHT = 0.88;
-const RATING_MULTIPLIER = 0.090;
+// HAND: 0,1,2 left | 3 thumb | 4,5,6 right; AIN_GROUP: ring/mid/idx/thumb
+const HAND = [0, 0, 0, 1, 2, 2, 2];
+const AIN_GROUP = [0, 1, 2, 3, 2, 1, 0];
+const BOUND_GROUP = [0, 1, 2, 3, 3, 2, 1, 0];
+const SHIELD_LOOKBACK = 16;
 
 // ============================================================
-// UTILITY FUNCTIONS
+// small helpers (Float64Array-based numpy equivalents)
 // ============================================================
-// Piecewise linear interpolation: SR -> Dan level
-function interpDan(sr, measuredSR, measuredLevels) {
-    const n = measuredSR.length;
-    if (n === 0) return 0;
-    // Snap to exact measured points within tolerance (eliminates FP boundary issues)
-    const EPS = 0.002;
-    for (let i = 0; i < n; i++) {
-        if (Math.abs(sr - measuredSR[i]) < EPS) return measuredLevels[i];
-    }
-    // Below lowest measured point: extrapolate using first segment slope
-    if (sr <= measuredSR[0]) {
-        if (n < 2) return measuredLevels[0];
-        const slope = (measuredLevels[1] - measuredLevels[0]) / Math.max(measuredSR[1] - measuredSR[0], 0.001);
-        return Math.max(0, measuredLevels[0] + slope * (sr - measuredSR[0]));
-    }
-    // Above highest measured point: extrapolate using last segment slope
-    if (sr >= measuredSR[n - 1]) {
-        if (n < 2) return measuredLevels[n - 1];
-        const slope = (measuredLevels[n - 1] - measuredLevels[n - 2]) / Math.max(measuredSR[n - 1] - measuredSR[n - 2], 0.001);
-        return measuredLevels[n - 1] + slope * (sr - measuredSR[n - 1]);
-    }
-    // Find interval [i, i+1] where sr lies
-    let i = 0;
-    for (; i < n - 1; i++) {
-        if (sr < measuredSR[i + 1]) break;
-    }
-    const t = (sr - measuredSR[i]) / Math.max(measuredSR[i + 1] - measuredSR[i], 0.0001);
-    return measuredLevels[i] + t * (measuredLevels[i + 1] - measuredLevels[i]);
+function zeros(n) { return new Float64Array(n); }
+function full(n, v) { const a = new Float64Array(n); a.fill(v); return a; }
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+function makeParams(overrides) {
+    return Object.assign({}, SPM_V1_PARAMS, overrides || {});
 }
 
-function ratingToDanRC(sr) { return interpDan(sr, RC_MEASURED_SR, RC_MEASURED_LEVELS); }
-function ratingToDanLN(sr) { return interpDan(sr, LN_MEASURED_SR, LN_MEASURED_LEVELS); }
-
-function danToLabelRC(danLevel) {
-    return danToLabelGeneric(danLevel, DAN_THRESHOLDS);
+// od → hit leniency scalar
+function odLeniency(od) {
+    const q = (64.5 - Math.ceil(3.0 * od)) / 500.0;
+    const x = 0.3 * Math.sqrt(Math.max(q, 1e-6));
+    return Math.min(x, 0.6 * (x - 0.09) + 0.09);
 }
 
-function danToLabelLN(danLevel) {
-    return danToLabelGeneric(danLevel, DAN_THRESHOLDS);
+// standard osu!mania OD window table + rate conversion (parser.rate_od)
+const OD_WINDOWS = { 0: [22.0, 64.0, 97.0, 151.0, 188.0],
+                     5: [19.5, 49.0, 82.0, 136.0, 172.0],
+                     10: [16.0, 34.0, 67.0, 121.0, 151.0] };
+function odWindows(od) {
+    od = clamp(od, 0.0, 10.0);
+    const loI = Math.floor(od / 5) * 5;
+    const hiI = Math.min(loI + 5, 10);
+    const t = (od - loI) / 5.0;
+    const a = OD_WINDOWS[loI], b = OD_WINDOWS[hiI];
+    return [0, 1, 2, 3, 4].map(k => a[k] + (b[k] - a[k]) * t);
 }
-
-function danToLabelGeneric(danLevel, thresholds) {
-    if (danLevel < thresholds[0]) return DAN_NAMES[0];
-    let idx = 0;
-    for (let i = thresholds.length - 1; i >= 0; i--) {
-        if (danLevel >= thresholds[i]) { idx = i; break; }
-    }
-    if (idx >= DAN_NAMES.length) return DAN_NAMES[DAN_NAMES.length - 1];
-    const name = DAN_NAMES[idx];
-    const binStart = thresholds[idx];
-    const binEnd = idx < thresholds.length - 1 ? thresholds[idx + 1] : binStart + 1;
-    const binWidth = binEnd - binStart;
-    const frac = binWidth > 0 ? (danLevel - binStart) / binWidth : 0;
-    if (frac < 0.25) return name + " low";
-    else if (frac < 0.75) return name;
-    else return name + " high";
-}
-
-function bisectLeft(arr, x) {
-    let lo = 0, hi = arr.length;
-    while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        if (arr[mid] < x) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
-function bisectRight(arr, x) {
-    let lo = 0, hi = arr.length;
-    while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        if (arr[mid] <= x) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
-function cumsum(x, f) {
-    const F = new Array(x.length).fill(0);
-    for (let i = 1; i < x.length; i++) F[i] = F[i - 1] + f[i - 1] * (x[i] - x[i - 1]);
-    return F;
-}
-
-function smoothOnCorners(x, f, window, scale, mode) {
-    // Perf: queryCumsum's binary searches are replaced by monotone pointers —
-    // a and b never decrease because x is sorted ascending. The arithmetic
-    // (F[j] + f[j] * (q - x[j]), subtract b-side minus a-side) is unchanged,
-    // so results are bit-identical to the bisect version.
-    const n = x.length;
-    const F = cumsum(x, f);
-    const g = new Array(n);
-    const x0 = x[0], xL = x[n - 1], FL = F[n - 1];
-    let iA = 0, iB = 0;
-    for (let i = 0; i < n; i++) {
-        const s = x[i], a = Math.max(s - window, x0), b = Math.min(s + window, xL);
-        if (b - a <= 0) { g[i] = 0.0; continue; }
-        let intB;
-        if (b >= xL) intB = FL;
-        else {
-            while (iB + 1 < n && x[iB + 1] <= b) iB++;
-            const j = Math.min(iB, n - 2);
-            intB = F[j] + f[j] * (b - x[j]);
-        }
-        let intA;
-        if (a <= x0) intA = 0.0;
-        else if (a >= xL) intA = FL;
-        else {
-            while (iA + 1 < n && x[iA + 1] <= a) iA++;
-            const j = Math.min(iA, n - 2);
-            intA = F[j] + f[j] * (a - x[j]);
-        }
-        const integral = intB - intA;
-        g[i] = mode === 'avg' ? integral / (b - a) : scale * integral;
-    }
-    return g;
-}
-
-function interpValues(newX, oldX, oldVals) {
-    // Perf: monotone pointer instead of per-point bisect. Requires newX and
-    // oldX sorted ascending (all call sites pass corner grids, which are).
-    // Pointer invariant equals bisectRight(oldX, x) - 1, so identical output.
-    const result = new Array(newX.length);
-    const n = oldX.length;
-    let idx = 0;
-    for (let i = 0; i < newX.length; i++) {
-        const x = newX[i];
-        if (x <= oldX[0]) { result[i] = oldVals[0]; continue; }
-        if (x >= oldX[n - 1]) { result[i] = oldVals[n - 1]; continue; }
-        while (idx + 1 < n && oldX[idx + 1] <= x) idx++;
-        const t = (x - oldX[idx]) / (oldX[idx + 1] - oldX[idx]);
-        result[i] = oldVals[idx] + t * (oldVals[idx + 1] - oldVals[idx]);
-    }
-    return result;
-}
-
-function stepInterp(newX, oldX, oldVals) {
-    // Perf: same monotone-pointer rewrite; clamp semantics preserved.
-    const result = new Array(newX.length);
-    const n = oldX.length;
-    let iP = -1;
-    for (let i = 0; i < newX.length; i++) {
-        const x = newX[i];
-        while (iP + 1 < n && oldX[iP + 1] <= x) iP++;
-        result[i] = oldVals[Math.max(0, Math.min(iP, n - 1))];
-    }
-    return result;
-}
-
-function LN_sum(a, b, LN_rep) {
-    const [points, cumsumValues, values] = LN_rep;
-    const i = bisectRight(points, a) - 1, j = bisectRight(points, b) - 1;
-    if (i === j) return (b - a) * values[i];
-    let total = (points[i + 1] - a) * values[i];
-    total += cumsumValues[j] - cumsumValues[i + 1];
-    total += (b - points[j]) * values[j];
-    return total;
-}
-
-function mergeSorted(arrA, arrB, keyFn) {
-    const result = [];
-    let ia = 0, ib = 0;
-    while (ia < arrA.length && ib < arrB.length) {
-        if (keyFn(arrA[ia]) <= keyFn(arrB[ib])) result.push(arrA[ia++]);
-        else result.push(arrB[ib++]);
-    }
-    while (ia < arrA.length) result.push(arrA[ia++]);
-    while (ib < arrB.length) result.push(arrB[ib++]);
-    return result;
-}
-
-function coordWeight(k1, k2) {
-    if (k1 === k2) return 1.0;
-    const h1 = HAND_MAP[k1] || "", h2 = HAND_MAP[k2] || "";
-    if (h1 === h2 && h1 !== "T") return 0.8;
-    else if (h1 === "T" || h2 === "T") return 0.4;
-    else return 0.2;
-}
-
-// ============================================================
-// PARSER & PREPROCESSOR (unchanged from Phase 2)
-// ============================================================
-function parseOsuFile(content) {
-    let K = 7; const cols = [], starts = [], ends = [], types_arr = [];
-    let od = 8.0, inHitobjects = false;
-    const lines = content.split('\n');
-    for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line) continue;
-        if (line.startsWith('CircleSize')) {
-            const v = parseFloat(line.split(':')[1].trim());
-            K = v === 0 ? 10 : Math.floor(v);
-        } else if (line.startsWith('OverallDifficulty')) {
-            od = parseFloat(line.split(':')[1].trim());
-        } else if (line === '[HitObjects]') { inHitobjects = true; continue; }
-        if (inHitobjects) {
-            if (line.startsWith('[')) break;
-            const parts = line.split(','); if (parts.length < 4) continue;
-            const xPos = parseInt(parts[0]);
-            const colCount = Math.max(K, 1);
-            let col = Math.floor(xPos * colCount / 512);
-            col = Math.max(0, Math.min(col, colCount - 1));
-            const noteStart = parseInt(parts[2]), noteType = parseInt(parts[3]);
-            let noteEnd = 0;
-            if (noteType & 128 && parts.length >= 6) noteEnd = parseInt(parts[5].split(':')[0]) || 0;
-            cols.push(col); starts.push(noteStart); ends.push(noteEnd); types_arr.push(noteType);
-        }
-    }
-    return { K: 7, cols, starts, ends, types_arr, od };
-}
-
-function preprocess(parsedData, speedRate) {
-    const { cols, starts, ends, types_arr, od } = parsedData;
-    let K = 7;
-
-    const odVal = od > 0 ? od : 10.0;
-    let x = 0.3 * Math.pow((64.5 - Math.ceil(odVal * 3)) / 500, 0.5);
-    x = Math.max(x, 0.01);
-    x = Math.min(x, 0.6 * (x - 0.09) + 0.09);
-
-    const noteSeq = [];
-    for (let i = 0; i < cols.length; i++) {
-        let h = starts[i], t = (types_arr[i] & 128) ? ends[i] : -1;
-        if (speedRate && speedRate !== 1.0) {
-            h = Math.floor(h / speedRate); t = t >= 0 ? Math.floor(t / speedRate) : t;
-        }
-        noteSeq.push({ col: cols[i], start: h, end: t, isLN: (types_arr[i] & 128) !== 0 });
-    }
-    noteSeq.sort((a, b) => a.start - b.start || a.col - b.col);
-    if (noteSeq.length === 0) return { error: "no notes", x, K };
-
-    const noteSeqByColumn = [];
-    for (let k = 0; k < K; k++) noteSeqByColumn.push(noteSeq.filter(n => n.col === k));
-
-    const LNSeq = noteSeq.filter(n => n.isLN);
-    const tailSeq = [...LNSeq].sort((a, b) => a.end - b.end);
-
-    const maxHead = Math.max(...noteSeq.map(n => n.start));
-    const maxTail = LNSeq.length > 0 ? Math.max(...LNSeq.map(n => n.end)) : 0;
-    const T = Math.max(maxHead, maxTail) + 1;
-
-    const cornersBaseSet = new Set();
-    for (const note of noteSeq) {
-        cornersBaseSet.add(note.start);
-        if (note.end >= 0) cornersBaseSet.add(note.end);
-    }
-    for (const s of [...cornersBaseSet]) {
-        cornersBaseSet.add(s + 501); cornersBaseSet.add(s - 499); cornersBaseSet.add(s + 1);
-    }
-    cornersBaseSet.add(0); cornersBaseSet.add(T);
-    const cornersBase = [...cornersBaseSet].filter(s => s >= 0 && s <= T).sort((a, b) => a - b);
-
-    const cornersASet = new Set();
-    for (const note of noteSeq) {
-        cornersASet.add(note.start);
-        if (note.end >= 0) cornersASet.add(note.end);
-    }
-    for (const s of [...cornersASet]) {
-        cornersASet.add(s + 1000); cornersASet.add(s - 1000);
-    }
-    cornersASet.add(0); cornersASet.add(T);
-    const cornersA = [...cornersASet].filter(s => s >= 0 && s <= T).sort((a, b) => a - b);
-
-    const allCorners = [...new Set([...cornersBase, ...cornersA])].sort((a, b) => a - b);
-
-    const keyUsage = {};
-    for (let k = 0; k < K; k++) keyUsage[k] = new Array(cornersBase.length).fill(false);
-    for (const note of noteSeq) {
-        const st = Math.max(note.start - 150, 0);
-        const et = note.end < 0 ? Math.min(note.start + 150, T - 1) : Math.min(note.end + 150, T - 1);
-        const left = bisectLeft(cornersBase, st), right = bisectLeft(cornersBase, et);
-        for (let j = left; j < right; j++) keyUsage[note.col][j] = true;
-    }
-
-    const activeColumns = cornersBase.map((_, i) => {
-        const cols = [];
-        for (let k = 0; k < K; k++) if (keyUsage[k][i]) cols.push(k);
-        return cols;
-    });
-
-    const keyUsage400 = {};
-    for (let k = 0; k < K; k++) keyUsage400[k] = new Array(cornersBase.length).fill(0);
-    for (const note of noteSeq) {
-        const st = Math.max(note.start, 0), et = note.end < 0 ? note.start : Math.min(note.end, T - 1);
-        const l400 = bisectLeft(cornersBase, st - 400), li = bisectLeft(cornersBase, st);
-        const ri = bisectLeft(cornersBase, et), r400 = bisectLeft(cornersBase, et + 400);
-        const dur = Math.min(et - st, 1500);
-        for (let j = li; j < ri && j < cornersBase.length; j++) keyUsage400[note.col][j] += 3.75 + dur / 150.0;
-        for (let j = l400; j < li && j < cornersBase.length; j++)
-            keyUsage400[note.col][j] += 3.75 - 3.75 / (400 * 400) * Math.pow(cornersBase[j] - st, 2);
-        for (let j = ri; j < r400 && j < cornersBase.length; j++)
-            keyUsage400[note.col][j] += 3.75 - 3.75 / (400 * 400) * Math.pow(Math.abs(cornersBase[j] - et), 2);
-    }
-
-    const diff = {};
-    for (const note of LNSeq) {
-        const t0 = Math.min(note.start + 60, note.end), t1 = Math.min(note.start + 120, note.end);
-        diff[t0] = (diff[t0] || 0) + 1.3;
-        diff[t1] = (diff[t1] || 0) + (-1.3 + 1);
-        diff[note.end] = (diff[note.end] || 0) - 1;
-    }
-    const lnPoints = [...new Set([0, T, ...Object.keys(diff).map(Number)])].sort((a, b) => a - b);
-    const lnValues = [], lnCumsum = [0];
-    let curr = 0.0;
-    for (let i = 0; i < lnPoints.length - 1; i++) {
-        const t = lnPoints[i];
-        if (diff[t] !== undefined) curr += diff[t];
-        const v = Math.min(curr, 2.5 + 0.5 * curr);
-        lnValues.push(v);
-        lnCumsum.push(lnCumsum[lnCumsum.length - 1] + (lnPoints[i + 1] - lnPoints[i]) * v);
-    }
-
-    return {
-        x, K, T, od, noteSeq, noteSeqByColumn, LNSeq, tailSeq,
-        allCorners, baseCorners: cornersBase, A_corners: cornersA,
-        keyUsage, activeColumns, keyUsage400, LN_rep: [lnPoints, lnCumsum, lnValues],
-    };
-}
-
-// ============================================================
-// COMPONENTS (unchanged from Phase 2)
-// ============================================================
-function computeAnchor(K, keyUsage400, baseCorners) {
-    const anchor = new Array(baseCorners.length).fill(0);
-    for (let i = 0; i < baseCorners.length; i++) {
-        const counts = [];
-        for (let k = 0; k < K; k++) counts.push(keyUsage400[k][i]);
-        counts.sort((a, b) => b - a);
-        const nonzero = counts.filter(c => c > 0);
-        if (nonzero.length > 1) {
-            let walk = 0, total = 0;
-            for (let j = 0; j < nonzero.length - 1; j++) {
-                const ratio = nonzero[j + 1] / Math.max(nonzero[j], 1e-9);
-                walk += nonzero[j] * (1 - 4 * Math.pow(0.5 - ratio, 2));
-                total += nonzero[j];
-            }
-            anchor[i] = walk / Math.max(total, 1e-9);
-        }
-    }
-    for (let i = 0; i < anchor.length; i++)
-        anchor[i] = 1 + Math.min(anchor[i] - 0.18, 5 * Math.pow(anchor[i] - 0.22, 3));
-    return anchor;
-}
-
-function computeJbar(K, x, noteSeqByColumn, baseCorners, aggregationPower, multiJackBoost) {
-    aggregationPower = aggregationPower || 5; multiJackBoost = multiJackBoost || 0;
-    function jNerf(d) { return 1 - 7e-5 * Math.pow(0.15 + Math.abs(d - 0.08), -4); }
-    const J_ks = {}, delta_ks = {};
-    for (let k = 0; k < K; k++) {
-        J_ks[k] = new Array(baseCorners.length).fill(0);
-        delta_ks[k] = new Array(baseCorners.length).fill(1e9);
-    }
-    for (let k = 0; k < K; k++) {
-        const notes = noteSeqByColumn[k] || [];
-        for (let i = 0; i < notes.length - 1; i++) {
-            const li = bisectLeft(baseCorners, notes[i].start), ri = bisectLeft(baseCorners, notes[i + 1].start);
-            if (ri <= li) continue;
-            const delta = 0.001 * (notes[i + 1].start - notes[i].start);
-            const v = Math.pow(delta, -1) / (delta + 0.11 * Math.pow(x, 0.25)) * jNerf(delta);
-            for (let j = li; j < ri && j < baseCorners.length; j++) {
-                J_ks[k][j] = v; delta_ks[k][j] = delta;
-            }
-        }
-    }
-    const Jbar_ks = {};
-    for (let k = 0; k < K; k++) Jbar_ks[k] = smoothOnCorners(baseCorners, J_ks[k], 500, 0.001, 'sum');
-
-    const Jbar = new Array(baseCorners.length);
-    for (let i = 0; i < baseCorners.length; i++) {
-        let num = 0, den = 0;
-        for (let k = 0; k < K; k++) {
-            const v = Math.max(Jbar_ks[k][i], 0), w = 1.0 / Math.max(delta_ks[k][i], 1e-12);
-            num += Math.pow(v, aggregationPower) * w; den += w;
-        }
-        Jbar[i] = Math.pow(num / Math.max(den, 1e-9), 1.0 / aggregationPower);
-    }
-    if (multiJackBoost > 1e-12) {
-        for (let i = 0; i < baseCorners.length; i++) {
-            let ac = 0;
-            for (let k = 0; k < K; k++) if (Jbar_ks[k][i] > 1e-9) ac++;
-            if (ac >= 2) Jbar[i] *= (1.0 + multiJackBoost * (ac - 1));
-        }
-    }
-    return { delta_ks, Jbar, Jbar_ks };
-}
-
-function computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p) {
-    function getDistWeight(k1, k2) {
-        if (k1 < 0 || k2 < 0 || k1 >= K || k2 >= K) return 1.0;
-        const rd = Math.abs(k1 - k2); if (rd === 0) return 1.0;
-        const h1 = HAND_MAP[k1] || "", h2 = HAND_MAP[k2] || "";
-        if (h1 === h2 && h1 !== "T") return 1.0 + p.cross_same_hand_penalty * (1.0 / Math.pow(rd, p.cross_dist_exponent));
-        if (h1 === "T" || h2 === "T") return 1.0 - p.cross_thumb_bridge_factor * (1.0 / Math.max(rd, 1));
-        return 1.0 - p.cross_same_hand_penalty * Math.min(rd / K, 1.0);
-    }
-    // Perf: dw only depends on the two columns — tabulate the K×K weights
-    // once instead of recomputing pow() per note pair.
-    const dwTable = [];
-    for (let a = 0; a < K; a++) {
-        const row = new Float64Array(K);
-        for (let b = 0; b < K; b++) row[b] = getDistWeight(a, b);
-        dwTable.push(row);
-    }
-    // Perf: activeColumns as bitmasks (col c active ⇔ bit c set).
-    const activeMask = new Int32Array(activeColumns.length);
-    for (let i = 0; i < activeColumns.length; i++) {
-        const cols = activeColumns[i];
-        let m = 0;
-        for (let j = 0; j < cols.length; j++) m |= (1 << cols[j]);
-        activeMask[i] = m;
-    }
-    const cc = CROSS_MATRIX[K] || CROSS_MATRIX[7];
-    const X_ks = {}, fast_cross = {};
-    for (let k = 0; k <= K; k++) {
-        X_ks[k] = new Array(baseCorners.length).fill(0);
-        fast_cross[k] = new Array(baseCorners.length).fill(0);
-    }
-    for (let k = 0; k <= K; k++) {
-        let notesInPair;
-        if (k === 0) notesInPair = noteSeqByColumn[0] || [];
-        else if (k === K) notesInPair = noteSeqByColumn[K - 1] || [];
-        else notesInPair = mergeSorted(noteSeqByColumn[k - 1] || [], noteSeqByColumn[k] || [], n => n.start);
-        for (let i = 1; i < notesInPair.length; i++) {
-            const li = bisectLeft(baseCorners, notesInPair[i - 1].start), ri = bisectLeft(baseCorners, notesInPair[i].start);
-            if (ri <= li) continue;
-            const delta = 0.001 * (notesInPair[i].start - notesInPair[i - 1].start);
-            const dw = dwTable[notesInPair[i - 1].col][notesInPair[i].col];
-            let val = 0.16 * dw * Math.pow(Math.max(x, delta), -2);
-            const colA = k - 1, colB = k;
-            const aRi = Math.min(ri, activeMask.length - 1);
-            const mm = activeMask[li] | activeMask[aRi];
-            // colA/colB out of range (k=0 → colA=-1, k=K → colB=K) counts as
-            // "not active", matching the old includes() semantics
-            if ((colA < 0 || ((mm >> colA) & 1) === 0) || (colB >= K || ((mm >> colB) & 1) === 0))
-                val *= (1 - cc[k]);
-            // fast_cross value is constant per note pair — hoist the pow()
-            // out of the per-corner write loop
-            const fcVal = Math.max(0, 0.4 * Math.pow(Math.max(delta, 0.06, 0.75 * x), -2) - 80);
-            for (let j = li; j < ri && j < baseCorners.length; j++) {
-                X_ks[k][j] = val;
-                fast_cross[k][j] = fcVal;
-            }
-        }
-    }
-    const X_base = new Array(baseCorners.length).fill(0);
-    for (let i = 0; i < baseCorners.length; i++) {
-        let s = 0;
-        for (let k = 0; k <= K; k++) s += X_ks[k][i] * cc[k];
-        for (let k = 0; k < K; k++)
-            s += Math.sqrt(Math.max(fast_cross[k][i], 0) * cc[k] * Math.max(fast_cross[k + 1][i], 0) * cc[k + 1]);
-        X_base[i] = s;
-    }
-    return smoothOnCorners(baseCorners, X_base, 500, 0.001, 'sum');
-}
-
-function computePbar(K, x, noteSeq, LN_rep, anchor, baseCorners, boosterScale) {
-    function sBoost(d) { const b = 7.5 / d; return (b > 160 && b < 360) ? 1 + boosterScale * (b - 160) * Math.pow(b - 360, 2) : 1; }
-    const P_step = new Array(baseCorners.length).fill(0);
-    for (let i = 0; i < noteSeq.length - 1; i++) {
-        const h_l = noteSeq[i].start, h_r = noteSeq[i + 1].start, dt = h_r - h_l;
-        if (dt < 1e-9) {
-            const spike = 1000 * Math.pow(0.02 * (4 / x - 24), 0.25);
-            const li = Math.min(bisectLeft(baseCorners, h_l), baseCorners.length - 1);
-            const ri = Math.min(bisectRight(baseCorners, h_l), baseCorners.length);
-            for (let j = li; j < ri; j++) P_step[j] += spike;
-            continue;
-        }
-        const li = bisectLeft(baseCorners, h_l), ri = bisectLeft(baseCorners, h_r);
-        if (ri <= li) continue;
-        const delta = 0.001 * dt, v = 1 + 6 * 0.001 * LN_sum(h_l, h_r, LN_rep), bVal = sBoost(delta);
-        let inc;
-        if (delta < 2 * x / 3)
-            inc = Math.pow(delta, -1) * Math.pow(0.08 / x * (1 - 24 / x * Math.pow(delta - x / 2, 2)), 0.25) * Math.max(bVal, v);
-        else
-            inc = Math.pow(delta, -1) * Math.pow(0.08 / x * (1 - 24 / x * Math.pow(x / 6, 2)), 0.25) * Math.max(bVal, v);
-        for (let j = li; j < ri && j < baseCorners.length; j++)
-            P_step[j] += Math.min(inc * anchor[j], Math.max(inc, inc * 2 - 10));
-    }
-    return smoothOnCorners(baseCorners, P_step, 500, 0.001, 'sum');
-}
-
-function computeAbar(K, delta_ks, activeColumns, A_corners, baseCorners) {
-    const dks = {};
-    for (let k = 0; k < Math.max(K - 1, 1); k++) dks[k] = new Array(baseCorners.length).fill(0);
-    for (let i = 0; i < baseCorners.length; i++) {
-        const cols = activeColumns[i] || [];
-        for (let j = 0; j < cols.length - 1; j++) {
-            const k0 = cols[j], k1 = cols[j + 1];
-            dks[k0][i] = Math.abs(delta_ks[k0][i] - delta_ks[k1][i]) +
-                         0.4 * Math.max(0, Math.max(delta_ks[k0][i], delta_ks[k1][i]) - 0.11);
-        }
-    }
-    const A_step = new Array(A_corners.length).fill(1);
-    for (let i = 0; i < A_corners.length; i++) {
-        let ci = Math.min(bisectLeft(baseCorners, A_corners[i]), baseCorners.length - 1);
-        const cols = activeColumns[ci] || [];
-        for (let j = 0; j < cols.length - 1; j++) {
-            const k0 = cols[j], k1 = cols[j + 1], dVal = dks[k0][ci];
-            if (dVal < 0.02) A_step[i] *= Math.min(0.75 + 0.5 * Math.max(delta_ks[k0][ci], delta_ks[k1][ci]), 1);
-            else if (dVal < 0.07) A_step[i] *= Math.min(0.65 + 5 * dVal + 0.5 * Math.max(delta_ks[k0][ci], delta_ks[k1][ci]), 1);
-        }
-    }
-    return smoothOnCorners(A_corners, A_step, 250, 1, 'avg');
-}
-
-function precomputeReleaseData(K, x, noteSeqByColumn, tailSeq, noteSeq) {
-    const nTails = tailSeq.length;
-    if (nTails === 0) return { tails: [], I_list: [], lock_data: [], K, x };
-
-    // Perf: hoist per-column head-time arrays (were rebuilt per tail).
-    // noteSeqByColumn preserves noteSeq's start ordering, so they are sorted.
-    const colHeadTimes = noteSeqByColumn.map(col => col.map(n => n.start));
-
-    const I_list = [];
-    for (let i = 0; i < nTails; i++) {
-        const [k, h_i, t_i] = [tailSeq[i].col, tailSeq[i].start, tailSeq[i].end];
-        const times = colHeadTimes[k];
-        const idx = bisectLeft(times, h_i);
-        const nextNote = idx + 1 < noteSeqByColumn[k].length ? noteSeqByColumn[k][idx + 1] : null;
-        const h_j = nextNote ? nextNote.start : 1e9;
-        const I_h = 0.001 * Math.abs(t_i - h_i - 80) / x;
-        const I_t = 0.001 * Math.abs(h_j - t_i - 80) / x;
-        I_list.push(2.0 / (2.0 + Math.exp(-5.0 * (I_h - 0.75)) + Math.exp(-5.0 * (I_t - 0.75))));
-    }
-
-    const noteTimes = noteSeq.map(n => n.start), noteCols = noteSeq.map(n => n.col);
-    const tailTimesArr = tailSeq.map(t => t.end), tailColsArr = tailSeq.map(t => t.col);
-
-    const tails = [];
-    for (let i = 0; i < nTails; i++) {
-        const [k_i, h_i, t_i] = [tailSeq[i].col, tailSeq[i].start, tailSeq[i].end];
-        const nxtIdx = bisectRight(noteTimes, t_i);
-        const nextNoteTime = nxtIdx < noteTimes.length ? noteTimes[nxtIdx] : 1e9;
-        const nextNoteCol = nxtIdx < noteTimes.length ? noteCols[nxtIdx] : -1;
-        const nxtTIdx = bisectRight(tailTimesArr, t_i);
-        const nextTailTime = nxtTIdx < tailTimesArr.length ? tailTimesArr[nxtTIdx] : 1e9;
-        const nextTailCol = nxtTIdx < tailTimesArr.length ? tailColsArr[nxtTIdx] : -1;
-        const nis = nextTailTime < nextNoteTime;
-        tails.push({
-            col: k_i, tail_time: t_i, ln_duration: t_i - h_i, I: I_list[i],
-            next_time: nis ? nextTailTime : nextNoteTime,
-            next_col: nis ? nextTailCol : nextNoteCol,
-            next_is_tail: nis,
-        });
-    }
-
-    // Perf: lock detection was O(nTails^2 * K). Same-column LNs never
-    // overlap, so at most one LN per column can contain t_i — found by
-    // binary search on per-column start-sorted LN lists.
-    const lnByCol = noteSeqByColumn.map(col => col.filter(n => n.isLN));
-    const lnStartsByCol = lnByCol.map(col => col.map(n => n.start));
-    const lock_data = [];
-    for (let i = 0; i < nTails; i++) {
-        const k_i = tailSeq[i].col, t_i = tailSeq[i].end;
-        const locks = [];
-        for (let j = 0; j < K; j++) {
-            if (j === k_i) continue;
-            const starts = lnStartsByCol[j];
-            const idx = bisectRight(starts, t_i) - 1;  // last LN with start <= t_i
-            if (idx >= 0 && lnByCol[j][idx].end >= t_i) locks.push([j, coordWeight(k_i, j)]);
-        }
-        lock_data.push(locks);
-    }
-
-    return { tails, I_list, lock_data, K, x };
-}
-
-function computeRbarEnhanced(releaseData, baseCorners, p) {
-    const { tails, lock_data, K, x } = releaseData;
-    const nTails = tails.length;
-    const R_step = new Array(baseCorners.length).fill(0);
-
-    for (let i = 0; i < nTails; i++) {
-        const td = tails[i], nt = td.next_time;
-        if (nt >= 1e9) continue;
-        const dt = nt - td.tail_time;
-        if (dt <= 0 || dt > 5000) continue;
-        const delta = 0.001 * dt;
-        let rv = p.release_tail_coeff * Math.pow(delta, -0.5) * Math.pow(x, -1) * (1.0 + td.I);
-        if (td.col === td.next_col && !td.next_is_tail) rv *= p.release_same_col_bonus;
-        if (td.col !== td.next_col) {
-            const cw = coordWeight(td.col, td.next_col);
-            rv *= td.next_is_tail ? 1.0 + (cw - 1.0) * p.release_coord_exponent * 0.5
-                                  : 1.0 + (cw - 1.0) * p.release_coord_exponent * p.release_tail_to_tap;
-        }
-        if (td.ln_duration < p.short_ln_threshold) {
-            rv *= p.short_ln_reduction + (1.0 - p.short_ln_reduction) * (td.ln_duration / p.short_ln_threshold);
-        }
-        if (p.lock_interaction_coeff > 1e-9 && i < lock_data.length) {
-            const lc = lock_data[i].reduce((s, [, cw]) => s + cw, 0);
-            rv *= (1.0 + p.lock_interaction_coeff * lc);
-        }
-        rv = Math.max(0, Math.min(rv, 1e6));
-        const li = bisectLeft(baseCorners, td.tail_time);
-        const ri = bisectLeft(baseCorners, Math.min(nt, baseCorners[baseCorners.length - 1]));
-        for (let j = li; j < ri && j < baseCorners.length; j++) R_step[j] += rv;
-    }
-
-    for (let i = 0; i < nTails - 1; i++) {
-        const tS = tails[i].tail_time, tE = tails[i + 1].tail_time;
-        const li = bisectLeft(baseCorners, tS), ri = bisectLeft(baseCorners, tE);
-        if (ri <= li) continue;
-        const dr = 0.001 * (tE - tS);
-        const cw = coordWeight(tails[i].col, tails[i + 1].col);
-        const cf = 1.0 + (cw - 1.0) * p.release_coord_exponent;
-        let sv = p.release_seq_coeff * Math.pow(dr, -0.5) * Math.pow(x, -1) *
-                 (1.0 + 0.8 * (tails[i].I + tails[i + 1].I)) * cf;
-        sv = Math.max(0, Math.min(sv, 1e6));
-        for (let j = li; j < ri && j < baseCorners.length; j++) R_step[j] += sv;
-    }
-    return smoothOnCorners(baseCorners, R_step, 500, 0.001, 'sum');
-}
-
-function precomputeShieldData(K, noteSeqByColumn, LNSeq) {
-    const colHeadTimes = noteSeqByColumn.map(col => col.map(n => n.start));
-    // Perf: per-column start-sorted LN lists for O(log) lock queries
-    // (was LNSeq.find per column per LN → O(K * nLN^2)).
-    const lnByCol = noteSeqByColumn.map(col => col.filter(n => n.isLN));
-    const lnStartsByCol = lnByCol.map(col => col.map(n => n.start));
-    const data = [];
-    for (const ln of LNSeq) {
-        const [k, h, t] = [ln.col, ln.start, ln.end];
-        // Perf: window slice via bisect (was full-column filter per LN).
-        // Same set and same ascending-nh order as nh < h && h - nh <= 500.
-        const times = colHeadTimes[k];
-        const lo = bisectLeft(times, h - 500), hi = bisectLeft(times, h);
-        const prevDts = [];
-        for (let j = lo; j < hi; j++) prevDts.push(h - times[j]);
-        const lockCols = [];
-        for (let j = 0; j < K; j++) {
-            if (j === k) continue;
-            // same-column LNs never overlap → at most one contains h
-            const idx = bisectRight(lnStartsByCol[j], h) - 1;
-            if (idx >= 0 && lnByCol[j][idx].end >= h) lockCols.push(j);
-        }
-        if (prevDts.length > 0) data.push({ col: k, head_time: h, tail_time: t, prev_dts: prevDts, lock_cols: lockCols });
-    }
-    return data;
-}
-
-function computeSbar(shieldData, baseCorners, p) {
-    const S_step = new Array(baseCorners.length).fill(0);
-    for (const sd of shieldData) {
-        const [k, h, t] = [sd.col, sd.head_time, sd.tail_time];
-        const dts = sd.prev_dts;
-        let ss = 0;
-        for (const dt of dts) ss += Math.exp(-dt / p.shield_tau_ms);
-        if (ss < 1e-12) continue;
-        let lb = 0;
-        for (const j of sd.lock_cols) lb += coordWeight(k, j);
-        const sv = ss * (1.0 + p.shield_anchor_mod * p.shield_coord_factor * lb);
-        const st = Math.max(h - 100, h - Math.max(...dts)), et = Math.min(h + 100, t);
-        const li = bisectLeft(baseCorners, st), ri = bisectLeft(baseCorners, et);
-        for (let j = li; j < ri && j < baseCorners.length; j++) S_step[j] += sv;
-    }
-    return smoothOnCorners(baseCorners, S_step, 500, 0.001, 'sum');
-}
-
-function precomputeInverseData(K, noteSeqByColumn, LNSeq) {
-    const colHeadTimes = noteSeqByColumn.map(col => col.map(n => n.start));
-    const data = [];
-    for (const ln of LNSeq) {
-        const [k, h, t] = [ln.col, ln.start, ln.end];
-        if (t < 0) continue;
-        // Perf: window scans via bisect (were full-column filters per LN →
-        // O(nLN * totalNotes) for crossDts). Same ascending order.
-        const sameDts = [];
-        const own = colHeadTimes[k];
-        for (let j = bisectRight(own, t); j < own.length && own[j] - t <= 200; j++)
-            sameDts.push(own[j] - t);
-        const crossDts = [], crossK1 = [], crossK2 = [];
-        for (let ok = 0; ok < K; ok++) {
-            if (ok === k) continue;
-            const times = colHeadTimes[ok];
-            for (let j = bisectRight(times, t); j < times.length && times[j] - t <= 200; j++) {
-                crossDts.push(times[j] - t); crossK1.push(k); crossK2.push(ok);
-            }
-        }
-        if (sameDts.length > 0 || crossDts.length > 0)
-            data.push({ col: k, head_time: h, tail_time: t, same_col_dts: sameDts, cross_col_dts: crossDts, cross_col_k1: crossK1, cross_col_k2: crossK2 });
-    }
-    return data;
-}
-
-function computeVbar(inverseData, baseCorners, p) {
-    const V_step = new Array(baseCorners.length).fill(0);
-    for (const id of inverseData) {
-        const t = id.tail_time, li = bisectLeft(baseCorners, t);
-        for (let i = 0; i < id.same_col_dts.length; i++) {
-            const dt = id.same_col_dts[i];
-            const spikeV = p.inv_amplitude * Math.exp(-Math.pow(dt / p.inv_tau, p.inv_power));
-            const dipV = p.guide_depth * Math.exp(-Math.pow((dt - p.guide_center) / p.guide_width, 2));
-            const vVal = (spikeV - dipV) * p.inverse_same_col_bonus;
-            const ri = bisectLeft(baseCorners, t + dt);
-            for (let j = li; j < ri && j < baseCorners.length; j++) V_step[j] += vVal;
-        }
-        for (let i = 0; i < id.cross_col_dts.length; i++) {
-            const dt = id.cross_col_dts[i];
-            const cw = coordWeight(id.cross_col_k1[i], id.cross_col_k2[i]);
-            const crossV = -p.guide_depth * p.cross_guide_scale * cw *
-                Math.exp(-Math.pow((dt - p.guide_center) / p.guide_width, 2));
-            const ri = bisectLeft(baseCorners, t + dt);
-            for (let j = li; j < ri && j < baseCorners.length; j++) V_step[j] += crossV;
-        }
-    }
-    return smoothOnCorners(baseCorners, V_step, 500, 0.001, 'sum');
-}
-
-function computeCandKs(K, noteSeq, keyUsage, baseCorners) {
-    const noteHitTimes = noteSeq.map(n => n.start).sort((a, b) => a - b);
-    const C_step = new Array(baseCorners.length);
-    for (let i = 0; i < baseCorners.length; i++)
-        C_step[i] = bisectLeft(noteHitTimes, baseCorners[i] + 500) - bisectLeft(noteHitTimes, baseCorners[i] - 500);
-    const Ks_step = new Array(baseCorners.length);
-    for (let i = 0; i < baseCorners.length; i++) {
-        let c = 0;
-        for (let k = 0; k < K; k++) if (keyUsage[k][i]) c++;
-        Ks_step[i] = Math.max(c, 1);
-    }
-    return { C_step, Ks_step };
-}
-
-// ============================================================
-// D FORMULA (Total — unchanged structure)
-// ============================================================
-function computeD(allCorners, baseCorners, Abar, Jbar, Xbar, Pbar, Rbar, C_step, Ks_step, Sbar, Vbar, p) {
-    const scaledAbar = Abar.map(v => v * p.Abar_scale);
-    const C_arr = stepInterp(allCorners, baseCorners, C_step);
-    const Ks_arr = stepInterp(allCorners, baseCorners, Ks_step);
-
-    // Make a copy of Rbar for Vbar modification
-    const RbarMod = Rbar.slice();
-    if (Vbar && p.alpha_V > 1e-9) {
-        for (let i = 0; i < RbarMod.length; i++) {
-            const m = Math.max(0.15, Math.min(1.0 + p.alpha_V * Vbar[i], 3.0));
-            RbarMod[i] *= m;
-        }
-    }
-
-    const D_all = new Array(allCorners.length);
-    const S_all = new Array(allCorners.length);
-    const T_all = new Array(allCorners.length);
-
-    for (let i = 0; i < allCorners.length; i++) {
-        const ab = scaledAbar[i], jb = Jbar[i], xb = Xbar[i], pb = Pbar[i], rb = RbarMod[i];
-        const ca = C_arr[i], ks = Ks_arr[i];
-
-        let streamBranch = p.alpha_P * pb + p.alpha_R * rb / (ca + p.alpha_C);
-        if (Sbar && p.alpha_S > 0) streamBranch += p.alpha_S * (Sbar[i] || 0);
-
-        const w2 = 1.0 - p.S_w1;
-        const jackBranch = Math.pow(ab, 3 / ks) * Math.min(jb, 8 + 0.85 * jb);
-        const streamFull = Math.pow(ab, 2 / 3) * streamBranch;
-
-        const S = Math.pow(p.S_w1 * Math.pow(jackBranch, p.S_p) + w2 * Math.pow(streamFull, p.S_p), 1.0 / p.S_p);
-        const T = (Math.pow(ab, 3 / ks) * xb) / (xb + S + 1);
-        const D = p.D_beta1 * Math.pow(S, 0.5) * Math.pow(T, 1.5) + p.D_beta2 * S;
-
-        D_all[i] = D;
-        S_all[i] = S;
-        T_all[i] = T;
-    }
-
-    return { D_all, S_all, T_all, C_arr, Ks_arr };
-}
-
-// ============================================================
-// RC D FORMULA (Rbar=Sbar=Vbar=0, RC-specific params)
-// ============================================================
-function computeD_rc(allCorners, baseCorners, Abar, Jbar, Xbar, Pbar, C_step, Ks_step, p) {
-    // Use Total model params (not RC-specific) so RC sub-model is consistent with Total SR.
-    // For pure RC maps: Rbar/Sbar/Vbar are ~0, so D_rc ≈ D_total → rcRating ≈ Total SR.
-    // For HB/Mix: Rbar/Sbar/Vbar are explicitly zeroed, giving a "RC-only" D on masked sections.
-    const scaledAbar = Abar.map(v => v * p.Abar_scale);
-    const C_arr = stepInterp(allCorners, baseCorners, C_step);
-    const Ks_arr = stepInterp(allCorners, baseCorners, Ks_step);
-
-    const S_w1 = p.S_w1, S_p = p.S_p;
-    const alpha_P = p.alpha_P;
-    const D_beta1 = p.D_beta1, D_beta2 = p.D_beta2;
-
-    const D_all = new Array(allCorners.length);
-    const S_all = new Array(allCorners.length);
-    const T_all = new Array(allCorners.length);
-
-    for (let i = 0; i < allCorners.length; i++) {
-        const ab = scaledAbar[i], jb = Jbar[i], xb = Xbar[i], pb = Pbar[i];
-        const ca = C_arr[i], ks = Ks_arr[i];
-
-        // RC: only Pbar (no Rbar/Sbar/Vbar)
-        const streamBranch = alpha_P * pb;
-
-        const w2 = 1.0 - S_w1;
-        const jackBranch = Math.pow(ab, 3 / ks) * Math.min(jb, 8 + 0.85 * jb);
-        const streamFull = Math.pow(ab, 2 / 3) * streamBranch;
-
-        const S = Math.pow(S_w1 * Math.pow(jackBranch, S_p) + w2 * Math.pow(streamFull, S_p), 1.0 / S_p);
-        const T = (Math.pow(ab, 3 / ks) * xb) / (xb + S + 1);
-        const D = D_beta1 * Math.pow(S, 0.5) * Math.pow(T, 1.5) + D_beta2 * S;
-
-        D_all[i] = D;
-        S_all[i] = S;
-        T_all[i] = T;
-    }
-
-    return { D_all, S_all, T_all, C_arr, Ks_arr };
-}
-
-// ============================================================
-// SIGMOID AGGREGATION (replaces percentile-based computeSR)
-// ============================================================
-
-function segmentByDifficulty(D_all, weights, nSegments) {
-    const n = D_all.length;
-    if (n === 0) return { D_seg: [], w_seg: [] };
-
-    // Sort by difficulty
-    const indices = D_all.map((_, i) => i).sort((a, b) => D_all[a] - D_all[b]);
-    const D_sorted = indices.map(i => D_all[i]);
-    const w_sorted = indices.map(i => weights[i]);
-
-    // Cumulative weight
-    const cum_w = new Array(n);
-    cum_w[0] = w_sorted[0];
-    for (let i = 1; i < n; i++) cum_w[i] = cum_w[i - 1] + w_sorted[i];
-    const total_w = cum_w[n - 1];
-
-    if (total_w <= 0) {
-        const mean = D_all.reduce((a, b) => a + b, 0) / n;
-        return { D_seg: [mean], w_seg: [1.0] };
-    }
-
-    const nSeg = Math.min(nSegments, n);
-    const D_seg = new Array(nSeg);
-    const w_seg = new Array(nSeg);
-
-    for (let i = 0; i < nSeg; i++) {
-        const lo = total_w * i / nSeg;
-        const hi = total_w * (i + 1) / nSeg;
-        let start = bisectRight(cum_w, lo);
-        let end = bisectRight(cum_w, hi);
-        if (end <= start) end = start + 1;
-        start = Math.max(0, Math.min(start, n - 1));
-        end = Math.max(start + 1, Math.min(end, n));
-
-        let bucket_w = 0, bucket_wd = 0;
-        for (let j = start; j < end; j++) {
-            bucket_w += w_sorted[j];
-            bucket_wd += w_sorted[j] * D_sorted[j];
-        }
-        w_seg[i] = bucket_w;
-        D_seg[i] = bucket_w > 0 ? bucket_wd / bucket_w : (D_sorted[start] + D_sorted[end - 1]) / 2;
-    }
-
-    return { D_seg, w_seg };
-}
-
-function sigmoidSum(D_seg, w_seg, D_target, k, C) {
-    let total = 0;
-    for (let i = 0; i < D_seg.length; i++) {
-        const arg = Math.max(-50, Math.min(k * (D_seg[i] - D_target), 50));
-        total += w_seg[i] / (C + Math.exp(arg));
-    }
-    return total;
-}
-
-function solveDBisection(D_seg, w_seg, k, C, gamma, highWeightPower, delta, tol, maxIter) {
-    k = k || 0.5; C = C || 4.0; gamma = gamma || 0.2;
-    highWeightPower = highWeightPower || 0; delta = delta || 5.0;
-    tol = tol || 0.0001; maxIter = maxIter || 100;
-
-    // Apply high-D weighting
-    let w = w_seg;
-    if (highWeightPower > 1e-9) {
-        w = w_seg.map((wi, i) => wi * Math.pow(Math.max(D_seg[i], 0.01), highWeightPower));
-    }
-
-    const totalWeight = w.reduce((a, b) => a + b, 0);
-    if (totalWeight <= 0) {
-        if (D_seg.length === 0) return 0;
-        return D_seg.reduce((a, b) => a + b, 0) / D_seg.length;
-    }
-
-    const target = totalWeight * gamma;
-
-    let lo = Math.min(...D_seg) - delta;
-    let hi = Math.max(...D_seg) + delta;
-
-    // Check bounds
-    const f_lo = sigmoidSum(D_seg, w, lo, k, C);
-    const f_hi = sigmoidSum(D_seg, w, hi, k, C);
-
-    if (f_lo >= target) return lo;
-    if (f_hi <= target) return hi;
-
-    let nIter = 0;
-    while (hi - lo > tol && nIter < maxIter) {
+function rateOd(od, rate) {
+    if (rate <= 0) return od;
+    const w = odWindows(od)[0];
+    const target = w / rate;
+    let lo = 0.0, hi = 10.0;
+    for (let i = 0; i < 40; i++) {
         const mid = (lo + hi) / 2;
-        const f_mid = sigmoidSum(D_seg, w, mid, k, C);
-        if (f_mid < target) lo = mid;
-        else hi = mid;
-        nIter++;
+        if (odWindows(mid)[0] > target) lo = mid; else hi = mid;
     }
-
     return (lo + hi) / 2;
 }
 
 // ============================================================
-// CORRECTION LAYER — 9 chart-level features (v0.4.0: +nps_std, +chord2)
+// PARSER — minimal .osu parser (mirrors core/parser.py)
+// 4K embeds cols 0..3 → 1,2,4,5; 6K/7K+ spread evenly over 7 tracks.
 // ============================================================
-function computeCorrectionFeatures(noteSeq, Jbar_base, Pbar_base) {
-    const p = ENHANCED_PARAMS;
-    const n = noteSeq.length;
-    if (n < 2) return { speed: 0, burst: 0, chord: 0, pj: 1.5, hs: 0, lb: 0, fj: 0, nps_std: 0, chord2: 0 };
+function colFromX(x, keyCount) {
+    let c = Math.floor(x * keyCount / 512.0);
+    if (c < 0) c = 0;
+    if (c > keyCount - 1) c = keyCount - 1;
+    return c;
+}
+function colFromXFrame(x, keyCount) {
+    const c = colFromX(x, keyCount);
+    if (keyCount === 7) return c;
+    if (keyCount === 4) return [1, 2, 4, 5][c];
+    if (keyCount <= 1) return 3;
+    return Math.round(c * 6.0 / (keyCount - 1));
+}
 
-    const times = new Float64Array(n);
-    const cols = new Int32Array(n);
-    for (let i = 0; i < n; i++) {
-        times[i] = noteSeq[i].start;
-        cols[i] = noteSeq[i].col;
-    }
-    const duration_s = Math.max((times[n - 1] - times[0]) / 1000.0, 1.0);
-
-    // Consecutive diffs
-    const nm1 = n - 1;
-    const dt = new Float64Array(nm1);
-    const dc = new Int32Array(nm1);
-    for (let i = 0; i < nm1; i++) {
-        dt[i] = times[i + 1] - times[i];
-        dc[i] = Math.abs(cols[i + 1] - cols[i]);
-    }
-
-    const feat = {};
-
-    // speed: fast cross-hand notes/sec (dt < spd_dt && dc >= spd_dc)
-    const spdDt = p.corr_spd_dt, spdDc = Math.round(p.corr_spd_dc);
-    let speedCount = 0;
-    for (let i = 0; i < nm1; i++) {
-        if (dt[i] < spdDt && dc[i] >= spdDc) speedCount++;
-    }
-    feat.speed = speedCount / duration_s;
-
-    // burst: triplet density/sec (times[j] - times[j-2] < bst_dt)
-    const bstDt = p.corr_bst_dt;
-    let burstCount = 0;
-    for (let j = 2; j < n; j++) {
-        if (times[j] - times[j - 2] < bstDt) burstCount++;
-    }
-    feat.burst = burstCount / duration_s;
-
-    // chord: fraction of notes in >=ch_order simultaneous groups (2ms window)
-    const chOrder = Math.round(p.corr_ch_order);
-    let chordCount = 0;
-    for (let j = 0; j < n; j++) {
-        const t = times[j];
-        let cnt = 1, k = j - 1;
-        while (k >= 0 && Math.abs(times[k] - t) < 2) { cnt++; k--; }
-        if (cnt >= chOrder) chordCount++;
-    }
-    feat.chord = chordCount / Math.max(n, 1);
-
-    // pj: Pbar_mean / (Jbar_mean + 1)
-    if (Jbar_base && Jbar_base.length > 0 && Pbar_base && Pbar_base.length > 0) {
-        let jSum = 0, pSum = 0;
-        for (let i = 0; i < Jbar_base.length; i++) jSum += Jbar_base[i];
-        for (let i = 0; i < Pbar_base.length; i++) pSum += Pbar_base[i];
-        feat.pj = (pSum / Pbar_base.length) / (jSum / Jbar_base.length + 1);
-    } else {
-        feat.pj = 1.5;
-    }
-
-    // hs: hand-switch density (cross-hand with dt < hs_dt)
-    const hsDt = p.corr_hs_dt;
-    let hsCount = 0;
-    for (let i = 0; i < nm1; i++) {
-        const crossHand = (cols[i] < 3 && cols[i + 1] >= 4) || (cols[i] >= 4 && cols[i + 1] < 3);
-        if (crossHand && dt[i] < hsDt) hsCount++;
-    }
-    feat.hs = hsCount / duration_s;
-
-    // lb: 4-note burst density (times[j] - times[j-3] < lb_dt)
-    const lbDt = p.corr_lb_dt;
-    let lbCount = 0;
-    for (let j = 3; j < n; j++) {
-        if (times[j] - times[j - 3] < lbDt) lbCount++;
-    }
-    feat.lb = lbCount / duration_s;
-
-    // fj: same-column fast jack density (dc==0 && dt < fj_dt)
-    const fjDt = p.corr_fj_dt;
-    let fjCount = 0;
-    for (let i = 0; i < nm1; i++) {
-        if (dc[i] === 0 && dt[i] < fjDt) fjCount++;
-    }
-    feat.fj = fjCount / duration_s;
-
-    // --- v0.4.0 new features ---
-
-    // nps_std: density temporal variance (500ms window NPS std, ddof=0)
-    // High nps_std = burst+rest alternation (recovery); low = uniform sustained density.
-    const windowMs = p.corr_nps_window_ms;
-    const durationMs = Math.max(times[n - 1] - times[0], 1.0);
-    const nWindows = Math.floor(durationMs / windowMs) + 1;
-    if (nWindows > 1) {
-        let sumNps = 0, sumSqNps = 0;
-        const t0note = times[0];
-        for (let w = 0; w < nWindows; w++) {
-            const lo = t0note + w * windowMs;
-            const hi = lo + windowMs;
-            let count = 0;
-            for (let i = 0; i < n; i++) {
-                if (times[i] >= lo && times[i] < hi) count++;
-            }
-            const nps = count / (windowMs / 1000.0);
-            sumNps += nps; sumSqNps += nps * nps;
+function parseOsu(content, speedRate) {
+    const rate = speedRate && speedRate > 0 ? speedRate : 1.0;
+    const lines = content.split(/\r?\n/);
+    let keyCount = 0, od = 5.0, section = "", inObjects = false;
+    const hits = [];   // {typ, t, x, end}
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line || line.startsWith("//")) continue;
+        if (line.startsWith("[")) {
+            section = line.replace(/[\[\]]/g, "").trim();
+            inObjects = section === "HitObjects";
+            continue;
         }
-        const meanNps = sumNps / nWindows;
-        feat.nps_std = Math.sqrt(Math.max(sumSqNps / nWindows - meanNps * meanNps, 0));
+        if (line.indexOf(":") >= 0 && !inObjects) {
+            const ci = line.indexOf(":");
+            const key = line.slice(0, ci).trim();
+            const v = line.slice(ci + 1).trim();
+            if (key === "Mode" && v !== "3") return null;
+            if (key === "CircleSize") {
+                const f = parseFloat(v);
+                if (Number.isFinite(f)) keyCount = Math.round(f);
+            } else if (key === "OverallDifficulty") {
+                const f = parseFloat(v);
+                if (Number.isFinite(f)) od = f;
+            }
+            continue;
+        }
+        if (inObjects) {
+            const parts = line.split(",");
+            if (parts.length < 4) continue;
+            const x = parseFloat(parts[0]), t = parseFloat(parts[2]),
+                  typ = parseInt(parts[3], 10);
+            if (!Number.isFinite(x) || !Number.isFinite(t) ||
+                !Number.isFinite(typ)) continue;
+            let end = t;
+            if (typ & 128 && parts.length > 5) {
+                const e = parseFloat(parts[5].split(":")[0]);
+                if (Number.isFinite(e)) end = e;
+            }
+            hits.push([typ, t, x, end]);
+        }
+    }
+    if (hits.length === 0 || keyCount <= 0) return null;
+
+    const effOd = rateOd(od, rate);
+    hits.sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+    const n = hits.length;
+    const time = new Float64Array(n);
+    const col = new Int32Array(n);
+    const lnEnd = new Float64Array(n);
+    const isLn = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+        const [typ, t, x, end] = hits[i];
+        time[i] = t / rate;
+        col[i] = colFromXFrame(x, keyCount);
+        if (typ & 128 && end > t) { lnEnd[i] = end / rate; isLn[i] = 1; }
+        else lnEnd[i] = time[i];
+    }
+    // stable sort by time
+    const order = time.map((v, i) => i)
+        .sort((a, b) => time[a] - time[b] || col[a] - col[b]);
+    const timeS = new Float64Array(n), colS = new Int32Array(n),
+          lnEndS = new Float64Array(n), isLnS = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+        timeS[i] = time[order[i]]; colS[i] = col[order[i]];
+        lnEndS[i] = lnEnd[order[i]]; isLnS[i] = isLn[order[i]];
+    }
+    return { time: timeS, col: colS, lnEnd: lnEndS, isLn: isLnS,
+             keyCount, od: effOd, rate, nNotes: n };
+}
+
+// ============================================================
+// ROW GRID — distinct timestamps (mirrors core/batch.py single-chart path)
+// ============================================================
+function buildBatch(nt) {
+    const n = nt.nNotes;
+    if (n < 2) return null;
+    // row of each note
+    const rowOfNote = new Int32Array(n);
+    let R = 0;
+    rowOfNote[0] = 0;
+    for (let i = 1; i < n; i++) {
+        if (nt.time[i] !== nt.time[i - 1]) R++;
+        rowOfNote[i] = R;
+    }
+    R++;
+    const t = zeros(R);
+    const mask = new Int32Array(R);
+    const isLnRow = new Uint8Array(R);
+    const lnEndRow = full(R, -1.0);
+    for (let i = 0; i < n; i++) {
+        const r = rowOfNote[i];
+        t[r] = nt.time[i];
+        mask[r] |= (1 << nt.col[i]);
+        if (nt.isLn[i]) { isLnRow[r] = 1; if (nt.lnEnd[i] > lnEndRow[r]) lnEndRow[r] = nt.lnEnd[i]; }
+    }
+    const size = new Int32Array(R);
+    for (let r = 0; r < R; r++) size[r] = popcount7(mask[r]);
+
+    const b = {
+        t, mask, size, n: R, isLn: isLnRow, lnEnd: lnEndRow,
+        x: odLeniency(nt.od), od: nt.od, keyCount: nt.keyCount,
+        nNotes: nt.nNotes,
+        duration: R > 1 ? t[R - 1] - t[0] : 0.0,
+        is4k: nt.keyCount === 4,
+        rowOfNote,
+    };
+    // dt (sec) per row; last row of chart has dt_ms = 0 (no successor)
+    const dtMs = zeros(R);                       // ms to NEXT row (0 at end)
+    for (let r = 0; r < R - 1; r++) dtMs[r] = t[r + 1] - t[r];
+    b.dtMs = dtMs;
+    const dt = zeros(R);                         // seconds; 0 where no succ
+    for (let r = 0; r < R - 1; r++) dt[r] = dtMs[r] / 1000.0;
+    b.dt = dt;                                   // model.dt semantics: >0
+    b.dtModel = new Float64Array(R);             // np.where(dt>0, dt, 1.0)
+    for (let r = 0; r < R; r++) b.dtModel[r] = dt[r] > 0 ? dt[r] : 1.0;
+
+    // per-column chains: row indices + gaps (sec)
+    b.colPos = []; b.colG = []; b.colT = [];
+    for (let k = 0; k < K; k++) {
+        const pos = [];
+        for (let r = 0; r < R; r++) if ((mask[r] >> k) & 1) pos.push(r);
+        b.colPos.push(pos);
+        const g = new Float64Array(Math.max(pos.length - 1, 0));
+        for (let j = 0; j + 1 < pos.length; j++) g[j] = (t[pos[j + 1]] - t[pos[j]]) / 1000.0;
+        b.colG.push(g);
+        const tc = new Float64Array(pos.length);
+        for (let j = 0; j < pos.length; j++) tc[j] = t[pos[j]];
+        b.colT.push(tc);
+    }
+    // per-boundary chains (union of two neighbor columns) + effective col
+    b.bndPos = []; b.bndG = []; b.bndE = [];
+    for (let bd = 0; bd < N_BOUND; bd++) {
+        const cols = [];
+        if (bd - 1 >= 0) cols.push(bd - 1);
+        if (bd < K) cols.push(bd);
+        if (cols.length === 0) { b.bndPos.push([]); b.bndG.push(new Float64Array(0)); b.bndE.push(new Float64Array(0)); continue; }
+        // merge sorted row lists
+        let merged;
+        if (cols.length === 1) merged = b.colPos[cols[0]];
+        else {
+            const A = b.colPos[cols[0]], B = b.colPos[cols[1]];
+            merged = [];
+            let ia = 0, ib = 0;
+            while (ia < A.length && ib < B.length) {
+                if (A[ia] === B[ib]) { merged.push(A[ia++]); ib++; }
+                else if (A[ia] < B[ib]) merged.push(A[ia++]);
+                else merged.push(B[ib++]);
+            }
+            while (ia < A.length) merged.push(A[ia++]);
+            while (ib < B.length) merged.push(B[ib++]);
+        }
+        b.bndPos.push(merged);
+        const g = new Float64Array(Math.max(merged.length - 1, 0));
+        for (let j = 0; j + 1 < merged.length; j++) g[j] = (t[merged[j + 1]] - t[merged[j]]) / 1000.0;
+        b.bndG.push(g);
+        // effective column within {bd-1, bd}
+        const e = new Float64Array(merged.length);
+        for (let j = 0; j < merged.length; j++) {
+            if (bd > 0 && bd < K) {
+                const m = mask[merged[j]];
+                const hasL = (m >> (bd - 1)) & 1, hasR = (m >> bd) & 1;
+                e[j] = (hasL * (bd - 1) + hasR * bd) / Math.max(hasL + hasR, 1.0);
+            } else {
+                e[j] = clamp(bd, 0, K - 1);
+            }
+        }
+        b.bndE.push(e);
+    }
+    // LN tails sorted by tail time
+    const tailIdx = [];
+    for (let i = 0; i < n; i++) if (nt.isLn[i]) tailIdx.push(i);
+    tailIdx.sort((a, b2) => nt.lnEnd[a] - nt.lnEnd[b2] || a - b2);
+    const m = tailIdx.length;
+    const tailT = new Float64Array(m), tailH = new Float64Array(m),
+          tailCol = new Int32Array(m), tailRow = new Int32Array(m);
+    for (let j = 0; j < m; j++) {
+        const i = tailIdx[j];
+        tailT[j] = nt.lnEnd[i]; tailH[j] = nt.time[i];
+        tailCol[j] = nt.col[i]; tailRow[j] = rowOfNote[i];
+    }
+    b.tailT = tailT; b.tailH = tailH; b.tailCol = tailCol; b.tailRow = tailRow;
+    b.tailN = m;
+    // next event after each tail: next head in the SAME column (python
+    // build_batch), falling back to the next head in any column
+    const nh = full(m, Infinity), nhc = new Int32Array(m).fill(-1);
+    const ntTime = nt.time;
+    for (let j = 0; j < m; j++) {
+        const k = b.tailCol[j];
+        const posK = b.colPos[k];
+        // heads of column k after tailT[j]: first posK row with t > tailT[j]
+        let lo = 0, hi = posK.length;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (b.t[posK[mid]] <= b.tailT[j]) lo = mid + 1; else hi = mid; }
+        if (lo < posK.length) { nh[j] = b.t[posK[lo]]; nhc[j] = k; }
+    }
+    for (let j = 0; j < m; j++) {
+        if (Number.isFinite(nh[j])) continue;
+        let lo = 0, hi = nt.nNotes;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (ntTime[mid] <= b.tailT[j]) lo = mid + 1; else hi = mid; }
+        if (lo < nt.nNotes) { nh[j] = ntTime[lo]; nhc[j] = nt.col[lo]; }
+    }
+    const nxtTail = full(m, Infinity), nxtTailCol = new Int32Array(m).fill(-1);
+    for (let j = 0; j + 1 < m; j++) { nxtTail[j] = tailT[j + 1]; nxtTailCol[j] = tailCol[j + 1]; }
+    const isTail = new Uint8Array(m);
+    const nxt = zeros(m), nxtCol = new Int32Array(m);
+    for (let j = 0; j < m; j++) {
+        isTail[j] = nxtTail[j] <= nh[j] - 1e-9 ? 1 : 0;
+        nxt[j] = isTail[j] ? nxtTail[j] : nh[j];
+        nxtCol[j] = isTail[j] ? nxtTailCol[j] : nhc[j];
+        if (!Number.isFinite(nxt[j])) nxtCol[j] = tailCol[j];
+    }
+    b.tailNxt = nxt; b.tailNxtCol = nxtCol; b.tailIsTail = isTail; b.tailNh = nh;
+    b.tailNxtTail = nxtTail;   // raw next-tail time (python t["nt"]) for the sim_tau blend
+    // tail → row (clipped to chart)
+    const tailJ0 = new Int32Array(m);
+    for (let j = 0; j < m; j++) {
+        // searchsorted(t, tailT, side=left), clipped to [0, R-1]
+        let lo = 0, hi = R;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < tailT[j]) lo = mid + 1; else hi = mid; }
+        tailJ0[j] = clamp(lo, 0, R - 1);
+    }
+    b.tailJ0 = tailJ0;
+
+    // note-level arrays for jump channel / bursts
+    b.noteT = nt.time; b.noteCol = nt.col; b.noteRow = rowOfNote;
+    return b;
+}
+
+function popcount7(v) {
+    let c = 0;
+    while (v) { v &= v - 1; c++; }
+    return c;
+}
+
+// ============================================================
+// STRUCT — parameter-independent per-row arrays (core/model.build_struct)
+// ============================================================
+function buildStruct(b, p) {
+    const n = b.n;
+    const s = { b, n };
+
+    // ---- column chains: dcol (per-column gap to next hit in that column)
+    // python: dcol[k] = chain_scatter(...) which returns ZEROS outside the
+    // chain (not the 1e9 fill — the full array is replaced)
+    const dcol = [];   // [K][n]
+    for (let k = 0; k < K; k++) {
+        const arr = zeros(n);
+        const pos = b.colPos[k], g = b.colG[k];
+        // value for gap j holds on rows [pos[j], pos[j+1])
+        for (let j = 0; j + 1 < pos.length; j++) {
+            const v = Number.isFinite(g[j]) ? g[j] : 1e9;
+            for (let r = pos[j]; r < pos[j + 1]; r++) arr[r] = v;
+        }
+        dcol.push(arr);
+    }
+    s.dcol = dcol;
+
+    // ---- wmean operator cache (window → index arrays)
+    s.wmeanOps = new Map();
+
+    // ---- active columns + usage (+-300/800 ms counts)
+    const act = [];   // [K] Uint8Array(n)
+    const usage = []; // [K] Float64Array(n)
+    for (let k = 0; k < K; k++) {
+        const imp = zeros(n);
+        const pos = b.colPos[k];
+        for (let j = 0; j < pos.length; j++) imp[pos[j]] = 1.0;
+        const c3 = wcount(b, s, imp, 300.0);
+        const c8 = wcount(b, s, imp, 800.0);
+        const a = new Uint8Array(n);
+        for (let r = 0; r < n; r++) a[r] = c3[r] > 0 ? 1 : 0;
+        act.push(a); usage.push(c8);
+    }
+    s.act = act; s.usage = usage;
+
+    // ---- anchor_raw: column-imbalance walk (sorted desc usage ratios)
+    // python: ratios over sorted-desc u for the 6 adjacent pairs; walk sums
+    // u[j]*shape(ratio) for j with nz[j]; mx sums u[:-1] guarded by nz[:-1] —
+    // i.e. every nonzero entry EXCEPT the 7th (smallest) sorted one when all
+    // columns are used.
+    const anchorRaw = zeros(n);
+    {
+        for (let r = 0; r < n; r++) {
+            const nz = [];
+            for (let k = 0; k < K; k++) if (usage[k][r] > 1e-6) nz.push(usage[k][r]);
+            if (nz.length === 0) continue;
+            nz.sort((a2, b2) => b2 - a2);
+            let walk = 0, total = 0;
+            for (let j = 0; j < K - 1; j++) {
+                // j runs over the first 6 sorted entries
+                if (j >= nz.length) break;
+                total += nz[j];
+                if (j + 1 < nz.length) {
+                    const ratio = nz[j + 1] / Math.max(nz[j], EPS);
+                    walk += nz[j] * Math.max(1.0 - 4.0 * Math.pow(0.5 - ratio, 2), 0.0);
+                }
+            }
+            anchorRaw[r] = total > EPS ? walk / Math.max(total, EPS) : 0.0;
+        }
+    }
+    s.anchorRaw = anchorRaw;
+
+    // ---- LN held count + held mask (row-level legacy semantics: is_ln /
+    //      ln_end are per-ROW aggregates, so a tap sharing a row with an LN
+    //      head is held until the row's max tail, once per occupied column)
+    const held = zeros(n);
+    const heldmask = new Int32Array(n);
+    const lnEff = p.ln_eff_tail_ms || 0.0;
+    for (let k = 0; k < K; k++) {
+        const pos = b.colPos[k];
+        for (const r of pos) {
+            if (!b.isLn[r]) continue;
+            const h = b.t[r];
+            const e = Math.max(b.lnEnd[r] - lnEff, h + 1.0);
+            // rows r2 with t >= h+1 and t < e
+            let lo = 0, hi = n;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (b.t[mid] < h + 1.0) lo = mid + 1; else hi = mid; }
+            const j0 = lo;
+            lo = 0; hi = n;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (b.t[mid] < e) lo = mid + 1; else hi = mid; }
+            const j1 = lo;
+            for (let r2 = j0; r2 < j1 && r2 < n; r2++) { held[r2] += 1.0; heldmask[r2] |= (1 << k); }
+        }
+    }
+    s.held = held; s.heldmask = heldmask;
+    const lnBodyMs = zeros(n);
+    for (let r = 0; r < n; r++) lnBodyMs[r] = held[r] * b.dtMs[r];
+    s.lnBodyMs = lnBodyMs;
+
+    // ---- C (local note count +-500ms) + note impulse
+    const noteImpulse = zeros(n);
+    for (let i = 0; i < b.nNotes; i++) noteImpulse[b.rowOfNote[i]] += 1.0;
+    s.noteImpulse = noteImpulse;
+    s.C = wcount(b, s, noteImpulse, 1000.0);
+    const Ks = zeros(n);
+    for (let r = 0; r < n; r++) {
+        let c = 0;
+        for (let k = 0; k < K; k++) c += act[k][r];
+        Ks[r] = Math.max(c, 1);
+    }
+    s.Ks = Ks;
+
+    // ---- chord coupling operator (cached per tau)
+    s.chordOps = new Map();
+
+    // ---- per-column jack stats (built per compute_curves call)
+    s.jackStatsCache = null;
+
+    return s;
+}
+
+// ---- windowed count of impulse mass in +-W/2
+function wcount(b, s, w, W) {
+    // cached per (W + impulse-ref) — most callers pass s.noteImpulse
+    s.wcountOps = s.wcountOps || new Map();
+    const key = W + "|" + (w === s.noteImpulse ? "imp" : "other");
+    const hit = s.wcountOps.get(key);
+    if (hit && hit.w === w) return hit.out;
+    const n = b.n, t = b.t;
+    const cs = new Float64Array(n + 1);
+    for (let r = 0; r < n; r++) cs[r + 1] = cs[r] + w[r];
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const zlo = clamp(t[r] - 0.5 * W, t[0], t[n - 1] + 1.0);
+        const zhi = clamp(t[r] + 0.5 * W, t[0], t[n - 1] + 1.0);
+        // searchsorted left
+        let lo = 0, hi = n;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < zlo) lo = mid + 1; else hi = mid; }
+        const ilo = lo;
+        lo = 0; hi = n;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < zhi) lo = mid + 1; else hi = mid; }
+        out[r] = cs[lo] - cs[ilo];
+    }
+    if (key.endsWith("imp")) s.wcountOps.set(key, { w, out });
+    return out;
+}
+
+// ---- centred moving average of step function val over W ms
+function wmean(b, s, val, W) {
+    const n = b.n;
+    if (n < 2) return Float64Array.from(val);
+    const t = b.t;
+    // cached interpolation operator
+    let op = s.wmeanOps.get(W);
+    if (!op) {
+        // no tlo/thi subtleties for a single chart: clip to [t0, tlast]
+        const jhi = new Int32Array(n), dhi = new Float64Array(n),
+              jlo = new Int32Array(n), dlo = new Float64Array(n);
+        for (let r = 0; r < n; r++) {
+            const zhi = Math.min(t[r] + 0.5 * W, t[n - 1]);
+            const zlo = Math.max(t[r] - 0.5 * W, t[0]);
+            // searchsorted(tg, z, right) - 1, clipped [0, n-2]
+            let lo = 0, hi = n;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zhi) lo = mid + 1; else hi = mid; }
+            jhi[r] = clamp(lo - 1, 0, n - 2);
+            dhi[r] = zhi - t[jhi[r]];
+            lo = 0; hi = n;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zlo) lo = mid + 1; else hi = mid; }
+            jlo[r] = clamp(lo - 1, 0, n - 2);
+            dlo[r] = zlo - t[jlo[r]];
+        }
+        op = { jhi, dhi, jlo, dlo };
+        s.wmeanOps.set(W, op);
+    }
+    // prefix integral I[r] = int from t[0] to t[r] of val (val holds on [t[r], t[r+1]))
+    const inc = zeros(n);
+    for (let r = 0; r < n - 1; r++) inc[r] = val[r] * (t[r + 1] - t[r]);
+    const I = new Float64Array(n);
+    for (let r = 1; r < n; r++) I[r] = I[r - 1] + inc[r - 1];
+    const out = new Float64Array(n);
+    const { jhi: JH, dhi: DH, jlo: JL, dlo: DL } = op;
+    for (let r = 0; r < n; r++) {
+        const hiV = I[JH[r]] + val[JH[r]] * DH[r];
+        const loV = I[JL[r]] + val[JL[r]] * DL[r];
+        let v = (hiV - loV) / W;
+        if (!Number.isFinite(v) || v < 0) v = 0;
+        out[r] = v;
+    }
+    return out;
+}
+
+// ---- step scatter: val[j] holds on rows [idx0[j], idx1[j])
+function stepScatter(idx0, idx1, val, n) {
+    const diff = zeros(n + 1);
+    for (let j = 0; j < idx0.length; j++) {
+        const a = Math.min(idx0[j], n), bI = Math.min(idx1[j], n);
+        diff[a] += val[j];
+        if (bI < n + 1) diff[bI] -= val[j];
+    }
+    const out = zeros(n);
+    let acc = 0;
+    for (let r = 0; r < n; r++) { acc += diff[r]; out[r] = acc; }
+    return out;
+}
+
+// ---- chain scatter with same-chart validity mask
+function chainScatter(pos, val, n, valid) {
+    const idx0 = [], idx1 = [], v = [];
+    for (let j = 0; j + 1 < pos.length; j++) {
+        if (valid[j]) { idx0.push(pos[j]); idx1.push(pos[j + 1]); v.push(val[j]); }
+    }
+    return stepScatter(idx0, idx1, v, n);
+}
+
+// ---- triangular window count (graded effective chord size)
+function triWindowCount(b, s, val, tauC) {
+    const n = b.n, t = b.t;
+    const cv = new Float64Array(n + 1);
+    const cvt = new Float64Array(n + 1);
+    for (let r = 0; r < n; r++) { cv[r + 1] = cv[r] + val[r]; cvt[r + 1] = cvt[r] + val[r] * t[r]; }
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const lo = clamp(t[r] - tauC, t[0], t[n - 1] + 1.0);
+        const hi = clamp(t[r] + tauC, t[0], t[n - 1] + 1.0);
+        let lo2 = 0, hi2 = n;
+        while (lo2 < hi2) { const mid = (lo2 + hi2) >> 1; if (t[mid] < lo) lo2 = mid + 1; else hi2 = mid; }
+        const jl = lo2;
+        lo2 = 0; hi2 = n;
+        while (lo2 < hi2) { const mid = (lo2 + hi2) >> 1; if (t[mid] < hi) lo2 = mid + 1; else hi2 = mid; }
+        const jh = lo2;
+        // left part: rows [jl, r) with |dt| = t[r]-t[r']
+        const sl = cv[r] - cv[jl], slt = cvt[r] - cvt[jl];
+        const left = sl - (t[r] * sl - slt) / tauC;
+        // right part: rows [r, jh)
+        const sr = cv[jh] - cv[r], srt = cvt[jh] - cvt[r];
+        const right = sr - (srt - t[r] * sr) / tauC;
+        let v = left + right;
+        if (!Number.isFinite(v) || v < 0) v = 0;
+        out[r] = v;
+    }
+    return out;
+}
+
+// ---- chord coupling (wf, wb) adjacent-row weights
+function chordCoupling(b, s, tauC) {
+    let got = s.chordOps.get(tauC);
+    if (got) return got;
+    const n = b.n;
+    const wf = zeros(n), wb = zeros(n);
+    for (let r = 0; r + 1 < n; r++) {
+        const w = clamp(1.0 - b.dtMs[r] / tauC, 0.0, 1.0);
+        wf[r] = w;
+        wb[r + 1] = w;
+    }
+    got = [wf, wb];
+    s.chordOps.set(tauC, got);
+    return got;
+}
+
+// ---- run lengths of consecutive True
+function runLengths(keep, len) {
+    const out = new Float64Array(len);
+    let start = -1;
+    for (let i = 0; i < len; i++) {
+        if (keep[i]) { if (start < 0) start = i; }
+        else {
+            if (start >= 0) { const L = i - start; for (let j = start; j < i; j++) out[j] = L; start = -1; }
+        }
+    }
+    if (start >= 0) { const L = len - start; for (let j = start; j < len; j++) out[j] = L; }
+    return out;
+}
+
+function edgeRamp(x, cutoff) {
+    const x0 = 0.8 * cutoff;
+    const u = clamp((x - x0) / Math.max(cutoff - x0, 1e-9), 0.0, 1.0);
+    return 0.5 * (1.0 + Math.cos(Math.PI * u));
+}
+
+// ============================================================
+// CURVES (core/model.compute_curves + components)
+// ============================================================
+function jackKernel(g, xk, p, odMult) {
+    const x = Math.pow(xk, odMult);
+    const gg = Math.max(g, 1e-4);
+    let base = (1.0 / gg) * (1.0 / (gg + p.j_c1 * Math.pow(Math.max(x, 1e-6), 0.25)));
+    if (p.j_nerf_a) {
+        base *= (1.0 - p.j_nerf_a * Math.pow(p.j_nerf_off + Math.abs(gg - p.j_nerf_c), -4.0));
+    }
+    return base;
+}
+
+function buildJackStats(b, s, p) {
+    if (s.jackStatsCache) return s.jackStatsCache;
+    const n = b.n;
+    const gapThr = p.ja_gap_thr / 1000.0;
+    const h3Tau = Math.max(p.j_triple_tau, 1.0) / 1000.0;
+    const tauC = p.chord_tau_c || 0.0;
+    let attCum = null, wf = null, wb = null;
+    if (tauC > 0.0) {
+        [wf, wb] = chordCoupling(b, s, tauC);
+        attCum = new Float64Array(n + 1);
+        for (let r = 0; r < n; r++) attCum[r + 1] = attCum[r] + (wb[r] === 0.0 ? 1.0 : 0.0);
+    }
+    const g7 = p.j_triple_gain;
+    const g4k = p.j_triple_gain_4k < 0.0 ? g7 : p.j_triple_gain_4k;
+    const stats = [];
+    for (let k = 0; k < K; k++) {
+        const pos = b.colPos[k], g = b.colG[k];
+        if (pos.length < 2) { stats.push(null); continue; }
+        const M = pos.length - 1;
+        const gs = new Float64Array(M), valid = new Uint8Array(M),
+              nrows = new Float64Array(M), other = new Float64Array(M),
+              load = new Float64Array(M), runlen = new Float64Array(M),
+              trip = new Float64Array(M), tgain = new Float64Array(M),
+              fj = new Float64Array(M), xr = new Float64Array(M), kern = new Float64Array(M);
+        // full-row size cumsum: python total = cumsize[pos[j+1]] - cumsize[pos[j]]
+        // = sizes of ALL rows in [pos[j], pos[j+1]) (other columns included)
+        const rowSizeCum = new Float64Array(n + 1);
+        for (let r2 = 0; r2 < n; r2++) rowSizeCum[r2 + 1] = rowSizeCum[r2] + b.size[r2];
+        // run lengths: (g <= gap_thr) & valid
+        const keepRun = new Uint8Array(M);
+        for (let j = 0; j < M; j++) {
+            const isValid = Number.isFinite(g[j]);
+            valid[j] = isValid ? 1 : 0;
+            gs[j] = Math.max(isValid ? g[j] : 1.0, 1e-4);
+            // attCum[r] = number of attack rows (wb==0) in rows [0, r) —
+            // matches python att_cum semantics; the pair window [pos[j], pos[j+1])
+            // excludes both endpoints.
+            nrows[j] = Math.max(attCum ? attCum[pos[j + 1]] - attCum[pos[j]] : pos[j + 1] - pos[j], 1.0);
+            const total = rowSizeCum[pos[j + 1]] - rowSizeCum[pos[j]];
+            other[j] = Math.max(total - 1.0, 0.0);
+            load[j] = total / nrows[j];
+            if (isValid && g[j] <= gapThr) keepRun[j] = 1;
+            tgain[j] = b.is4k ? g4k : g7;
+            if (isValid && gs[j] < 0.150) fj[j] = (1.0 / gs[j]) * Math.max(1.0 - gs[j] / 0.150, 0.0);
+            xr[j] = Math.pow(b.x, 0); // placeholder, real x applied in kernel
+            kern[j] = jackKernel(gs[j], b.x, p, p.od_mult_jm);
+        }
+        const rl = runLengths(keepRun, M);
+        for (let j = 0; j < M; j++) runlen[j] = rl[j];
+        // same-column triple: valid[j] & valid[j+1] & (pos[j+2]-pos[j]) span
+        for (let j = 0; j + 2 < pos.length; j++) {
+            if (valid[j] && valid[j + 1]) {
+                const spanS = (b.t[pos[j + 2]] - b.t[pos[j]]) / 1000.0;
+                trip[j] = Math.max(0.0, 1.0 - spanS / (2.0 * h3Tau));
+            }
+        }
+        stats.push({ pos, gs, valid, nrows, other, load, runlen, trip, tgain, fj, kern });
+    }
+    s.jackStatsCache = { stats, attCum, wf, wb, tauC };
+    return s.jackStatsCache;
+}
+
+function computeCurves(b, s, p) {
+    const n = b.n;
+
+    // ================================================== jack family
+    const aggPow = Math.max(p.j_agg_pow, 0.25);
+    const mjDilute = p.mj_dilute, mjExp = p.mj_dilute_exp;
+    const cjExp = p.cj_size_exp, jaLenExp = p.ja_len_exp,
+          jaCoordExp = p.ja_coord_exp, jaFloor = p.ja_len_floor;
+    const cjNorm = Math.max(p.cj_norm, 1e-3), jaNorm = Math.max(p.ja_norm, 1e-3);
+    const wJm = p.w_jm;
+    const odJm = p.od_mult_jm;
+    let wJc = p.w_jc; if (wJc <= 0) wJc = wJm;
+    let wJa = p.w_ja; if (wJa <= 0) wJa = wJm;
+    let odJc = p.od_mult_jc; if (odJc < 0) odJc = odJm;
+    let odJa = p.od_mult_ja; if (odJa < 0) odJa = odJm;
+
+    const js = buildJackStats(b, s, p);
+    const stats = js.stats, attCum = js.attCum, wbG = js.wb, tauC = js.tauC;
+
+    function jackChannel(kind, wMs, odMult) {
+        const num = zeros(n), den = zeros(n);
+        for (let k = 0; k < K; k++) {
+            const st = stats[k];
+            if (!st) continue;
+            const M = st.pos.length - 1;
+            const mod = new Float64Array(M);
+            for (let j = 0; j < M; j++) {
+                if (!st.valid[j]) { mod[j] = 0; continue; }
+                if (kind === "plain") mod[j] = 1.0;
+                else if (kind === "mj") {
+                    mod[j] = (1.0 / (1.0 + mjDilute * Math.pow(st.other[j] / st.nrows[j], mjExp)))
+                        * (1.0 + st.tgain[j] * st.trip[j]);
+                } else if (kind === "cj") {
+                    mod[j] = Math.pow(Math.max(st.load[j], 1e-6) / cjNorm, cjExp);
+                } else { // ja
+                    const e = Math.max(st.runlen[j] + 2.0 - jaFloor, 0.0);
+                    const runf = Math.pow(e / (e + jaNorm), jaLenExp);
+                    mod[j] = runf * Math.pow(1.0 + st.other[j] / st.nrows[j], jaCoordExp);
+                }
+            }
+            const v = new Float64Array(M);
+            for (let j = 0; j < M; j++) v[j] = st.valid[j] ? st.kern[j] * mod[j] : 0.0;
+            // kern is stored at odJm; recompute when the channel OD differs
+            if (odMult !== odJm) {
+                for (let j = 0; j < M; j++)
+                    if (st.valid[j]) v[j] = jackKernel(st.gs[j], b.x, p, odMult) * mod[j];
+            }
+            const cur = wmean(b, s, chainScatter(st.pos, v, n, st.valid), wMs);
+            const wv = new Float64Array(M);
+            for (let j = 0; j < M; j++) wv[j] = st.valid[j] ? 1.0 / st.gs[j] : 0.0;
+            const wArr = chainScatter(st.pos, wv, n, st.valid);
+            for (let r = 0; r < n; r++) {
+                num[r] += Math.pow(Math.max(cur[r], 0.0), aggPow) * wArr[r];
+                den[r] += wArr[r];
+            }
+        }
+        const val = zeros(n);
+        for (let r = 0; r < n; r++) {
+            const q = den[r] > 1e-9 ? num[r] / den[r] : 0.0;
+            val[r] = Math.pow(Math.max(q, 0.0), 1.0 / aggPow);
+        }
+        return val;
+    }
+
+    const Jbar = jackChannel("plain", wJm, odJm);
+    let Jm = Jbar;
+    if (p.c_jm || p.t_jack_mix || p.cbv_lockstack) Jm = jackChannel("mj", wJm, odJm);
+
+    const cFj = p.c_fj || 0.0, cFj4k = p.c_fj_4k || 0.0;
+    if (cFj !== 0.0 || cFj4k !== 0.0) {
+        let FJ = zeros(n);
+        for (let k = 0; k < K; k++) {
+            const st = stats[k];
+            if (!st) continue;
+            const M = st.pos.length - 1;
+            const v = new Float64Array(M);
+            for (let j = 0; j < M; j++) v[j] = st.valid[j] ? st.fj[j] : 0.0;
+            const sc = chainScatter(st.pos, v, n, st.valid);
+            for (let r = 0; r < n; r++) FJ[r] += sc[r];
+        }
+        FJ = wmean(b, s, FJ, wJm);
+        for (let r = 0; r < n; r++) Jm[r] += (b.is4k ? cFj4k : cFj) * FJ[r];
+    }
+
+    const needCj = p.c_jc !== 0.0, needJa = (p.c_ja !== 0.0 || p.cbv_lockanchor !== 0.0);
+    const Jc = needCj ? jackChannel("cj", wJc, odJc) : Jm;
+    const Ja = needJa ? jackChannel("ja", wJa, odJa) : Jm;
+
+    // ================================================== Pbar
+    const xrowP = Math.pow(b.x, p.od_mult_p);
+    const d = b.dtModel;
+    let dFp = d;
+    if (tauC > 0.0) {
+        // d_fp = gap to next attack (rows with wb==0)
+        const attIdx = [];
+        for (let r = 0; r < n; r++) if (wbG[r] === 0.0) attIdx.push(r);
+        dFp = Float64Array.from(d);
+        for (let r = 0; r < n; r++) {
+            // first attack index > r
+            let lo = 0, hi = attIdx.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (attIdx[mid] <= r) lo = mid + 1; else hi = mid; }
+            if (lo < attIdx.length) {
+                const na = attIdx[lo];
+                const v = (b.t[na] - b.t[r]) / 1000.0;
+                if (v > 0) dFp[r] = v;
+            }
+        }
+    }
+    const fp = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const q = Math.min(dFp[r] - xrowP / 2.0, xrowP / 6.0);
+        fp[r] = Math.pow(Math.max(p.p_scale / xrowP * (1.0 - (p.p_lam3 / xrowP) * q * q), 0.0), 0.25);
+    }
+    const bst = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const rr = 7.5 / d[r];
+        bst[r] = (rr > p.p_boost_lo && rr < p.p_boost_hi)
+            ? 1.0 + p.p_boost * (rr - p.p_boost_lo) * Math.pow(rr - p.p_boost_hi, 2.0) : 1.0;
+    }
+    const vv = new Float64Array(n);
+    for (let r = 0; r < n; r++)
+        vv[r] = 1.0 + p.p_lam2 * s.lnBodyMs[r] / Math.pow(Math.max(b.dtMs[r], 1.0), p.p_v_norm);
+    const chw = [1.0, 1.0, p.p_chw2, p.p_chw3, p.p_chw4, p.p_chw5, p.p_chw6, p.p_chw7];
+    let inc;
+    if (tauC > 0.0) {
+        const u = triWindowCount(b, s, Float64Array.from(b.size), tauC);
+        const att = new Float64Array(n);
+        for (let r = 0; r < n; r++) att[r] = 1.0 - wbG[r];
+        inc = zeros(n);
+        for (let r = 0; r < n; r++) {
+            const uu = clamp(u[r], 1.0, K);
+            const i0 = Math.min(Math.floor(uu), K - 1);
+            const frac = uu - i0;
+            const chwU = chw[i0] * (1.0 - frac) + chw[i0 + 1] * frac;
+            const mix = att[r] * Math.max(bst[r], 1.0) + Math.max(vv[r] - 1.0, 0.0);
+            inc[r] = (1.0 / d[r]) * fp[r] * chwU * mix;
+        }
     } else {
-        feat.nps_std = 0;
+        inc = zeros(n);
+        for (let r = 0; r < n; r++) {
+            const chwU = chw[Math.min(b.size[r], K)];
+            const mix = p.p_bv_max > 0.5 ? Math.max(bst[r], vv[r]) : bst[r] * vv[r];
+            inc[r] = (1.0 / d[r]) * fp[r] * chwU * mix;
+        }
+    }
+    for (let r = 0; r < n; r++) {
+        const am = 1.0 + p.an_on_p * Math.min(s.anchorRaw[r] - p.an_a0,
+            p.an_cubic * Math.pow(s.anchorRaw[r] - p.an_a1, 3.0));
+        const v0 = inc[r] * am;
+        inc[r] = Math.min(v0, Math.max(inc[r], inc[r] * p.p_sat_b - p.p_sat_a));
+    }
+    if (p.p_burst3) {
+        const b3 = wcount(b, s, s.noteImpulse, 100.0);
+        for (let r = 0; r < n; r++) inc[r] += p.p_burst3 * b3[r] * 10.0;
+    }
+    if (p.p_burst4) {
+        const b4 = wcount(b, s, s.noteImpulse, 150.0);
+        for (let r = 0; r < n; r++) inc[r] += p.p_burst4 * b4[r] * 6.6667;
+    }
+    const Pbar = wmean(b, s, inc, p.w_p);
+
+    // ================================================== Abar
+    const A = new Float64Array(n).fill(1.0);
+    const abarActive = p.abar_active >= 0.5;
+    if (abarActive) {
+        let prevD = full(n, -1.0), prevA = full(n, -1.0);
+        for (let k = 0; k < K; k++) {
+            const d1 = s.dcol[k], on = s.act[k];
+            const nd = Float64Array.from(prevD), na = Float64Array.from(prevA);
+            for (let r = 0; r < n; r++) {
+                const isOn = (prevA[r] >= 0.0) && on[r];
+                if (isOn) {
+                    const mx = Math.max(prevD[r], d1[r]);
+                    const dd = Math.abs(prevD[r] - d1[r]) + p.abar_mx_w * Math.max(0.0, mx - p.abar_mx_thr);
+                    const val = abarVal(dd, mx, p);
+                    A[r] *= val;
+                }
+                nd[r] = on[r] ? d1[r] : prevD[r];
+                na[r] = on[r] ? 1.0 : prevA[r];
+            }
+            prevD = nd; prevA = na;
+        }
+    } else {
+        for (let k = 0; k + 1 < K; k++) {
+            const d0 = s.dcol[k], d1 = s.dcol[k + 1], on = s.act[k], on2 = s.act[k + 1];
+            for (let r = 0; r < n; r++) {
+                if (on[r] && on2[r]) {
+                    const mx = Math.max(d0[r], d1[r]);
+                    const dd = Math.abs(d0[r] - d1[r]) + p.abar_mx_w * Math.max(0.0, mx - p.abar_mx_thr);
+                    A[r] *= abarVal(dd, mx, p);
+                }
+            }
+        }
+    }
+    const AbarRaw = wmean(b, s, A, p.w_a);
+    const Abar = new Float64Array(n);
+    for (let r = 0; r < n; r++) Abar[r] = AbarRaw[r] * p.abar_scale;
+
+    // ================================================== Xbar
+    const xrowX = Math.pow(b.x, p.od_mult_x);
+    const cw = [p.x_cw0, p.x_cw1, p.x_cw2, p.x_cw3];
+    const xDin = p.x_din || 0.0, xDout = p.x_dout || 0.0;
+    const Xsum = zeros(n);
+    const fcRows = [];
+    for (let bd = 0; bd < N_BOUND; bd++) {
+        const pos = b.bndPos[bd];
+        if (pos.length < 2) { fcRows.push(zeros(n)); continue; }
+        let posK = pos, g = b.bndG[bd], eArr = b.bndE[bd];
+        if (tauC > 0.0) {
+            // merge boundary events closer than tauC into single attacks
+            const keepP = [], keepE = [];
+            for (let j = 0; j < pos.length; j++) {
+                if (j === 0) { keepP.push(pos[j]); keepE.push(eArr[j]); continue; }
+                const bg = (b.t[pos[j]] - b.t[pos[j - 1]]) / 1000.0;
+                if (bg >= tauC / 1000.0) { keepP.push(pos[j]); keepE.push(eArr[j]); }
+            }
+            posK = keepP; eArr = keepE;
+            const M2 = Math.max(keepP.length - 1, 0);
+            const g2 = new Float64Array(M2);
+            for (let j = 0; j + 1 < keepP.length; j++)
+                g2[j] = (b.t[keepP[j + 1]] - b.t[keepP[j]]) / 1000.0;
+            g = g2;
+        }
+        const M2 = Math.max(posK.length - 1, 0);
+        const Xb = new Float64Array(M2);
+        for (let j = 0; j < M2; j++) {
+            const gx = Math.max(g[j], xrowX);
+            let v = p.x_amp * Math.pow(gx, -2.0);
+            if (xDin !== 0.0 || xDout !== 0.0) {
+                const dd = Math.abs(eArr[j] - 3.0) - Math.abs(eArr[j + 1] - 3.0);
+                v *= (1.0 + xDin * Math.max(dd, 0.0) + xDout * Math.max(-dd, 0.0));
+            }
+            Xb[j] = v;
+        }
+        // boundary weight + chain scatter (same-chart always true)
+        const sc = stepScatter(posK.slice(0, M2), posK.slice(1), Xb, n);
+        const bgw = cw[BOUND_GROUP[bd]];
+        for (let r = 0; r < n; r++) Xsum[r] += bgw * sc[r];
+        // fast cross product term
+        const fc = new Float64Array(M2);
+        for (let j = 0; j < M2; j++) {
+            const base = Math.max(g[j], p.x_fc_floor, 0.75 * xrowX);
+            fc[j] = Math.max(p.x_fc_a * Math.pow(base, -2.0) - p.x_fc_off, 0.0);
+        }
+        fcRows.push(stepScatter(posK.slice(0, M2), posK.slice(1), fc, n));
+    }
+    for (let bd = 0; bd + 1 < N_BOUND; bd++) {
+        const w = Math.sqrt(cw[BOUND_GROUP[bd]] * cw[BOUND_GROUP[bd + 1]]);
+        const A1 = fcRows[bd], A2 = fcRows[bd + 1];
+        for (let r = 0; r < n; r++)
+            Xsum[r] += p.x_fc_w * w * Math.sqrt(Math.max(A1[r] * A2[r], 0.0));
+    }
+    if (p.x_jump_w) {
+        const jump = jumpChannel(b, s, p, xrowX);
+        for (let r = 0; r < n; r++) Xsum[r] += p.x_jump_w * jump[r];
+    }
+    const Xbar = wmean(b, s, Xsum, p.w_x);
+
+    // ================================================== Rbar
+    const Rbar = computeRbar(b, s, p, Math.pow(b.x, p.od_mult_r));
+
+    // same-hand chord density (SHd)
+    const shd = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const m = b.mask[r];
+        let left = 0, right = 0;
+        for (let k = 0; k < 3; k++) if ((m >> k) & 1) left++;
+        for (let k = 4; k < 7; k++) if ((m >> k) & 1) right++;
+        if (tauC > 0.0) {
+            // graded via triangular window handled below (approximated with
+            // exact same-shape computation for perf: rows are the grid)
+            const le = left, ri = right;
+            shd[r] = le * clamp(le - 1.0, 0.0, 1.0) + ri * clamp(ri - 1.0, 0.0, 1.0);
+        } else {
+            shd[r] = (left >= 2 ? left : 0.0) + (right >= 2 ? right : 0.0);
+        }
+    }
+    const SHd = wmean(b, s, shd, Math.max(p.shd_w, 50.0));
+
+    // ================================================== Cbar
+    let Cbar = zeros(n);
+    let anyLn = false;
+    for (let r = 0; r < n; r++) if (b.lnEnd[r] > 0) { anyLn = true; break; }
+    if (anyLn) {
+        // v1 terms are all 0 in release params → only shield/lockjack/
+        // lockanchor/par/holdtap skipped (weights 0). Kept for exactness:
+        if (p.cb_shield || p.cb_lockjack || p.cb_lockanchor || p.cb_par || p.cb_holdtap) {
+            Cbar = computeCbarV1(b, s, p, Jbar, Ja);
+        }
+        const CbarV2 = computeCbarV2(b, s, p, stats);
+        for (let r = 0; r < n; r++) Cbar[r] += CbarV2[r];
     }
 
-    // chord2: 2-note chord (jumpstream) density
-    // Greedily cluster notes into "chord events" by 5ms tolerance (different from `chord`
-    // which uses 2ms leftward scan + >=4 cols). chord2 = fraction of events with exactly 2 notes.
-    const tol = p.corr_chord_tol_ms;
-    let chord2Count = 0, nEvents = 0;
-    let i = 0;
-    while (i < n) {
-        let j = i + 1;
-        while (j < n && times[j] - times[i] < tol) j++;
-        if (j - i === 2) chord2Count++;
-        nEvents++;
-        i = j;
+    // ================================================== hybrid/LN supplements
+    let Chord2 = zeros(n), Recov = zeros(n);
+    if (p.use_hb) {
+        const churnC = p.cbv_churn || 0.0, churn4k = p.cbv_churn_4k || 0.0;
+        const holdageC = p.cbv_holdage || 0.0, holdage4k = p.cbv_holdage_4k || 0.0;
+        if (churnC || churn4k) {
+            const churn = computeChurn(b, s, p);
+            for (let r = 0; r < n; r++) {
+                const w = b.is4k ? (churn4k !== 0.0 ? churn4k : churnC) : churnC;
+                Cbar[r] += w * churn[r];
+            }
+        }
+        if (holdageC || holdage4k) {
+            const holdage = computeHoldage(b, s, p);
+            for (let r = 0; r < n; r++) {
+                const w = b.is4k ? (holdage4k !== 0.0 ? holdage4k : holdageC) : holdageC;
+                Cbar[r] += w * holdage[r];
+            }
+        }
+        if (p.c_chord2) {
+            const c2w = Math.max(p.chord2_w, 50.0);
+            const flag = new Uint8Array(n);
+            for (let r = 0; r < n; r++) flag[r] = b.size[r] === 2 ? 1 : 0;
+            Chord2 = wmean(b, s, Float64Array.from(flag), c2w);
+        }
+        if (p.d_rec) {
+            Recov = computeRecov(b, s, p);
+        }
     }
-    feat.chord2 = chord2Count / Math.max(nEvents, 1);
 
-    return feat;
+    // ================================================== eye (visual regularity)
+    let EyeR = zeros(n);
+    if (p.use_eye) EyeR = computeEyeCurve(b, s, p);
+
+    return { Jbar, Jm, Jc, Ja, Pbar, Xbar, Abar, Rbar, Cbar,
+             EyeR, Chord2, Recov, SHd };
 }
 
-function computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction) {
-    const n = allCorners.length;
-
-    // Effective weights: C_arr * gap width
-    const gaps = new Array(n);
-    gaps[0] = (allCorners[1] - allCorners[0]) / 2.0;
-    gaps[n - 1] = (allCorners[n - 1] - allCorners[n - 2]) / 2.0;
-    for (let i = 1; i < n - 1; i++) gaps[i] = (allCorners[i + 1] - allCorners[i - 1]) / 2.0;
-
-    const eff_w = new Array(n);
-    for (let i = 0; i < n; i++) eff_w[i] = C_arr[i] * gaps[i];
-
-    // D calibration
-    const calib_a = p.calib_a || 1.0, calib_b = p.calib_b || 0.0;
-    let D_calib = D_all;
-    if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
-        D_calib = D_all.map(d => calib_a * d + calib_b);
-    }
-
-    // Apply correction layer (scalar shift to D_calib)
-    const corr = correction || 0;
-    if (Math.abs(corr) > 1e-12) {
-        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
-    }
-
-    // Segment by difficulty
-    const nSeg = p.agg_n_segments || 30;
-    const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
-
-    if (D_seg.length === 0) return 0;
-
-    // Solve for D via bisection
-    const D_solved = solveDBisection(
-        D_seg, w_seg,
-        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
-        0.0, 5.0, 0.0001, 100
-    );
-
-    let SR = D_solved;
-
-    // Post-processing: use correction-layer params when correction is active
-    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
-    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
-    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
-    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
-    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
-
-    // Note count normalization
-    SR *= totalNotes / (totalNotes + N0);
-
-    // Rescale high SR
-    if (SR > thresh) {
-        SR = thresh + (SR - thresh) / div;
-    }
-
-    // Global scale
-    SR *= scale;
-
-    return SR;
+function abarVal(dd, mx, p) {
+    const lo = Math.min(p.abar_c0 + p.abar_mx * mx, 1.0);
+    let mid;
+    if (p.abar_weld) mid = Math.min(p.abar_c0 + p.abar_k * (dd - p.abar_thr_lo) + p.abar_mx * mx, 1.0);
+    else mid = Math.min(p.abar_c1 + p.abar_k * dd + p.abar_mx * mx, 1.0);
+    if (dd < p.abar_thr_lo) return lo;
+    if (dd < p.abar_thr_hi) return mid;
+    return 1.0;
 }
 
-/**
- * Compute RC-only SR using RC-specific D formula + RC sigmoid params.
- * Uses precomputed Jbar/Pbar/Xbar/Abar (all from cache), Rbar=Sbar=Vbar=0.
- */
-function computeRC_SR(allCorners, baseCorners, JbarAll, XbarAll, PbarAll, AbarAll,
-                      C_step, Ks_step, totalNotes, p, correction) {
-    // Compute RC D (uses Total model params, Rbar=Sbar=Vbar=0)
-    const { D_all, C_arr } = computeD_rc(
-        allCorners, baseCorners, AbarAll, JbarAll, XbarAll, PbarAll,
-        C_step, Ks_step, p
-    );
-
-    // Use Total model calibration (not RC-specific)
-    const calib_a = p.calib_a || 1.0, calib_b = p.calib_b || 0.0;
-    let D_calib = D_all;
-    if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
-        D_calib = D_all.map(d => calib_a * d + calib_b);
+// geometric jump channel (rate-weighted transition costs)
+function jumpChannel(b, s, p, xX) {
+    const n = b.n;
+    // 7x7 weight matrix
+    const Wm = [];
+    for (let a = 0; a < K; a++) {
+        const row = new Float64Array(K);
+        for (let c = 0; c < K; c++) {
+            const dd = Math.abs(a - c);
+            let w = 1.0;
+            const sameHand = HAND[a] === HAND[c] && HAND[a] !== 1;
+            const thumb = HAND[a] === 1 || HAND[c] === 1;
+            const cross = HAND[a] !== HAND[c] && !thumb;
+            w += p.x_jd_p * Math.pow(Math.max(dd, 1e-9), p.x_jd_e);
+            if (sameHand && dd > 0)
+                w = 1.0 + p.x_jh_p * Math.pow(Math.max(dd, 1e-9), -p.x_jh_e);
+            if (thumb) w = 1.0 - p.x_jt / Math.max(dd, 1.0);
+            if (cross) w = 1.0 - p.x_jh_p * Math.min(dd / K, 1.0);
+            const din = Math.abs(c - 3) < Math.abs(a - 3) ? 1.0 : 0.0;
+            w *= (1.0 + p.x_dir_in * din + p.x_dir_out * (1.0 - din));
+            row[c] = w;
+        }
+        Wm.push(row);
     }
-
-    // Apply correction layer (same scalar shift as Total, since features are chart-level)
-    const corr = correction || 0;
-    if (Math.abs(corr) > 1e-12) {
-        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
+    const step = zeros(n), counts = zeros(n);
+    const notes = b.nNotes;
+    for (let i = 1; i < notes; i++) {
+        const a = b.noteCol[i - 1], c = b.noteCol[i];
+        const w = Wm[a][c] - 1.0;
+        const row = b.noteRow[i];
+        step[row] += w;
+        counts[row] += 1.0;
     }
-
-    // Effective weights
-    const n = allCorners.length;
-    const gaps = new Array(n);
-    gaps[0] = (allCorners[1] - allCorners[0]) / 2.0;
-    gaps[n - 1] = (allCorners[n - 1] - allCorners[n - 2]) / 2.0;
-    for (let i = 1; i < n - 1; i++) gaps[i] = (allCorners[i + 1] - allCorners[i - 1]) / 2.0;
-    const eff_w = new Array(n);
-    for (let i = 0; i < n; i++) eff_w[i] = C_arr[i] * gaps[i];
-
-    // Segment
-    const nSeg = p.agg_n_segments || 30;
-    const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
-
-    if (D_seg.length === 0) return 0;
-
-    // Use Total model sigmoid (not RC-specific)
-    const D_solved = solveDBisection(
-        D_seg, w_seg,
-        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
-        0.0, 5.0, 0.0001, 100
-    );
-
-    let SR = D_solved;
-
-    // Use Total model post-processing (correction-jointly-optimized params when correction active)
-    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
-    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
-    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
-    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
-    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
-
-    SR *= totalNotes / (totalNotes + N0);
-    if (SR > thresh) SR = thresh + (SR - thresh) / div;
-    SR *= scale;
-
-    return SR;
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const meanW = step[r] / Math.max(counts[r], 1.0);
+        out[r] = meanW / b.dtModel[r];
+    }
+    return out;
 }
 
-/**
- * Compute LN-masked SR — sigmoid aggregation over LN sections only.
- * D_all is masked so only LN-dense regions (lnMask=true) contribute weight.
- * This prevents hard RC sections from inflating the LN difficulty rating.
- */
-function computeLNMaskedSR(allCorners, D_all, C_arr, lnMask, totalNotes, p) {
-    const n = allCorners.length;
+// Rbar — LN release channel (core/model._rbar, single chart)
+function computeRbar(b, s, p, xR) {
+    const n = b.n;
+    const R = zeros(n);
+    const m = b.tailN;
+    if (m === 0) return R;
+    const t = b.t;
 
-    // Only LN sections contribute weight (C_arr → 0 in RC sections)
-    const C_ln = new Array(n);
-    for (let i = 0; i < n; i++) C_ln[i] = lnMask[i] ? C_arr[i] : 0;
-
-    const gaps = new Array(n);
-    gaps[0] = (allCorners[1] - allCorners[0]) / 2.0;
-    gaps[n - 1] = (allCorners[n - 1] - allCorners[n - 2]) / 2.0;
-    for (let i = 1; i < n - 1; i++) gaps[i] = (allCorners[i + 1] - allCorners[i - 1]) / 2.0;
-
-    const eff_w = new Array(n);
-    for (let i = 0; i < n; i++) eff_w[i] = C_ln[i] * gaps[i];
-
-    // LN-masked D calibration (separate params, default identity)
-    const calib_a = p.calib_a_ln_masked || 1.0;
-    const calib_b = p.calib_b_ln_masked || 0.0;
-    let D_calib = D_all;
-    if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
-        D_calib = new Array(n);
-        for (let i = 0; i < n; i++) D_calib[i] = calib_a * D_all[i] + calib_b;
+    // I (difficulty of hold shape) per tail
+    const Iv = new Float64Array(m);
+    const xsAt = new Float64Array(m);
+    for (let j = 0; j < m; j++) {
+        const xs = Math.pow(xR, 1.0); // xr[j0] — x is chart-level
+        xsAt[j] = xs;
+        const dur = b.tailT[j] - b.tailH[j];
+        const Ih = 0.001 * Math.abs(dur - 80.0) / xs;
+        const nh = b.tailNh[j];
+        const It = Number.isFinite(nh) ? 0.001 * Math.abs(nh - b.tailT[j] - 80.0) / xs : 10.0;
+        Iv[j] = 2.0 / (2.0 + Math.exp(-p.r_I_steep * (Ih - p.r_I_off))
+                        + Math.exp(-p.r_I_steep * (It - p.r_I_off)));
     }
 
-    const nSeg = p.agg_n_segments || 30;
-    const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
+    const dtrMin = p.r_dtr_min != null ? p.r_dtr_min : 1e-4;
+    const soft = p.r_soft_edges || 0.0;
+    const wfloor = soft ? dtrMin * 1000.0 : 0.0;
+    const simTau = p.r_sim_tau || 0.0;
 
-    const totalWeight = w_seg.reduce((a, b) => a + b, 0);
-    if (D_seg.length === 0 || totalWeight <= 0) return 0;
-
-    const D_solved = solveDBisection(
-        D_seg, w_seg,
-        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
-        0.0, 5.0, 0.0001, 100
-    );
-
-    let SR = D_solved;
-    SR *= totalNotes / (totalNotes + p.note_norm_N0);
-
-    if (SR > p.rescale_threshold) {
-        SR = p.rescale_threshold + (SR - p.rescale_threshold) / p.rescale_divisor;
+    function coordW(c1, c2) {
+        // python _coord_weight order: cross default → same-column → same-hand
+        // (overrides same-column!) → thumb (overrides all)
+        let cw = p.r_cw_cross;
+        if (c1 === c2) cw = p.r_cw_same;
+        if (HAND[c1] === HAND[c2] && HAND[c1] !== 1) cw = p.r_cw_hand;
+        if (HAND[c1] === 1 || HAND[c2] === 1) cw = p.r_cw_thumb;
+        return cw;
+    }
+    function rowOfTime(z) {
+        let lo = 0, hi = n;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < z) lo = mid + 1; else hi = mid; }
+        return clamp(lo, 0, n - 1);
     }
 
-    SR *= p.global_scale;
+    // A. per-tail release
+    for (let j = 0; j < m; j++) {
+        const nxt = b.tailNxt[j];
+        if (!Number.isFinite(nxt) || nxt - b.tailT[j] > p.r_dt_max) continue;
+        const dtr = (nxt - b.tailT[j]) / 1000.0;
+        let rv = p.r_tail * Math.pow(Math.max(dtr, dtrMin), -0.5) / xsAt[j] * (1.0 + p.r_I_w * Iv[j]);
+        const sameCol = b.tailNxtCol[j] === b.tailCol[j] && !b.tailIsTail[j];
+        if (sameCol) rv *= p.r_same_col;
+        const cwv = coordW(b.tailCol[j], b.tailNxtCol[j]);
+        let ex;
+        if (simTau > 0.0) {
+            const dEv = b.tailNxtTail[j] - b.tailNh[j]; // python: nt - nh (inf - inf → nan)
+            let beta;
+            if (Number.isFinite(dEv)) beta = clamp(0.5 - dEv / (2.0 * simTau), 0.0, 1.0);
+            else beta = b.tailIsTail[j] ? 1.0 : 0.0;
+            ex = p.r_coord_e * (beta + (1.0 - beta) * p.r_tt);
+        } else {
+            ex = p.r_coord_e * (b.tailIsTail[j] ? 1.0 : p.r_tt);
+        }
+        rv *= Math.pow(Math.max(cwv, 1e-3), ex);
+        const dur = b.tailT[j] - b.tailH[j];
+        const thr = Math.max(p.r_short_thr, 1.0);
+        const red = p.r_short_red + (1.0 - p.r_short_red) * Math.min(dur, thr) / thr;
+        if (dur > 0) rv *= red;
+        // lock terms
+        if (p.r_lock) {
+            const hm = s.heldmask[b.tailJ0[j]];
+            let lock = 0.0;
+            for (let k = 0; k < K; k++) {
+                if (((hm >> k) & 1) && k !== b.tailCol[j])
+                    lock += coordW(b.tailCol[j], k);
+            }
+            rv *= (1.0 + p.r_lock * lock);
+        }
+        if (p.r_straddle) {
+            const hm = s.heldmask[b.tailJ0[j]];
+            const col = b.tailCol[j];
+            const ain = [p.r_ain0, p.r_ain1, p.r_ain2, p.r_ain3];
+            let S0 = 0.0;
+            for (let k = 0; k < K; k++) {
+                if ((hm >> k) & 1) S0 += ain[AIN_GROUP[k]];
+            }
+            if ((hm >> col) & 1) S0 -= ain[AIN_GROUP[col]];
+            rv *= (1.0 + p.r_straddle * S0);
+        }
+        if (soft) rv *= edgeRamp(nxt - b.tailT[j], p.r_dt_max);
+        const endT = Math.max(nxt, b.tailT[j] + wfloor);
+        let j1 = rowOfTime(endT);
+        j1 = Math.max(j1, b.tailJ0[j]);
+        if (soft) {
+            const spanI = Math.max(endT - b.tailT[j], 0.0);
+            const gridSpan = t[Math.min(j1, n - 1)] - t[b.tailJ0[j]];
+            const den = Math.max(gridSpan, Math.max(spanI, 1e-9));
+            if (spanI > 0.0) rv *= spanI / den;
+        }
+        const val = rv;
+        for (let r = b.tailJ0[j]; r < j1 && r < n; r++) R[r] += val;
+    }
 
-    return SR;
+    // B. tail-to-tail sequence
+    for (let j = 0; j + 1 < m; j++) {
+        const dtr = (b.tailT[j + 1] - b.tailT[j]) / 1000.0;
+        const dd = Math.max(dtr, dtrMin);
+        const cwv = coordW(b.tailCol[j], b.tailCol[j + 1]);
+        let sv = p.r_seq * Math.pow(dd, -0.5) / xsAt[j]
+            * (1.0 + p.r_I_w * (Iv[j] + Iv[j + 1]))
+            * Math.pow(Math.max(cwv, 1e-3), p.r_coord_e);
+        const j0 = b.tailJ0[j];
+        const endB = Math.max(b.tailT[j + 1], b.tailT[j] + wfloor);
+        let j1 = rowOfTime(endB);
+        j1 = Math.max(j1, j0);
+        if (soft) {
+            const spanI = Math.max(endB - b.tailT[j], 0.0);
+            const gridSpan = t[Math.min(j1, n - 1)] - t[j0];
+            sv *= spanI / Math.max(gridSpan, spanI);
+        }
+        for (let r = j0; r < j1 && r < n; r++) R[r] += sv;
+    }
+
+    // C. release-order triples
+    if (p.r_order_pen) {
+        for (let j = 0; j + 2 < m; j++) {
+            const c1 = b.tailCol[j], c2 = b.tailCol[j + 1], c3 = b.tailCol[j + 2];
+            const hh = HAND[c1];
+            if (!(hh === HAND[c2] && hh === HAND[c3] && hh !== 1)) continue;
+            if (c1 === c2 || c2 === c3 || c1 === c3) continue;
+            const span = b.tailT[j + 2] - b.tailT[j];
+            let ok = span <= p.r_order_tau;
+            if (!ok && !soft) continue;
+            const jump = Math.abs(c1 - c2) + Math.abs(c2 - c3);
+            const lo = Math.min(Math.min(c1, c2), c3), hiC = Math.max(Math.max(c1, c2), c3);
+            const excess = Math.max(jump - (hiC - lo), 0.0);
+            let val = p.r_order_pen * excess / xsAt[j];
+            if (soft) {
+                ok = true; // ramp replaces hard cutoff
+                val *= edgeRamp(span, p.r_order_tau);
+            }
+            if (!ok || val === 0.0) continue;
+            const j0 = b.tailJ0[j];
+            const endC = Math.max(b.tailT[j + 2], b.tailT[j] + wfloor);
+            let j1 = rowOfTime(endC);
+            j1 = Math.max(j1, j0);
+            if (soft) {
+                const spanI = Math.max(endC - b.tailT[j], 0.0);
+                const gridSpan = t[Math.min(j1, n - 1)] - t[j0];
+                val *= spanI / Math.max(gridSpan, spanI);
+            }
+            for (let r = j0; r < j1 && r < n; r++) R[r] += val;
+        }
+    }
+
+    const out = wmean(b, s, R, p.w_r);
+    for (let r = 0; r < n; r++) out[r] = Math.max(out[r], 0.0);
+    return out;
 }
 
-/**
- * Compute RC-section-masked SR — sigmoid aggregation over RC sections only.
- * Uses RC model D (treats LN heads as taps), but LN-section weights are zeroed.
- * This prevents LN-head-as-tap areas from being seen as "recovery" by the sigmoid,
- * which would otherwise underestimate RC difficulty on HB maps.
- */
-function computeRCSectionSR(allCorners, rcD_all, C_arr_rc, rcMask, totalNotes, p, correction) {
-    const n = allCorners.length;
+function ainWeights(p) {
+    return [p.r_ain0, p.r_ain1, p.r_ain2, p.r_ain3];
+}
+// per-column ain weight lookup helper (index by AIN_GROUP[col])
+Object.defineProperty(globalThis, "__noop", { value: 0 });
 
-    // Only RC sections contribute weight (C_arr → 0 in LN sections)
-    const C_rc = new Array(n);
-    for (let i = 0; i < n; i++) C_rc[i] = rcMask[i] ? C_arr_rc[i] : 0;
+// Cbar v1 — release params have all v1 weights at 0; kept for completeness
+function computeCbarV1(b, s, p, Jbar, Ja) {
+    const n = b.n;
+    const out = zeros(n);
+    const held = s.held;
+    const hp = new Float64Array(n);
+    const lockPow = p.cb_lock_pow || 1.0;
+    for (let r = 0; r < n; r++) hp[r] = Math.pow(Math.max(held[r], 0.0), lockPow);
+    if (p.cb_shield) {
+        const tau = Math.max(p.cb_shield_tau, 1.0);
+        for (let k = 0; k < K; k++) {
+            const pos = b.colPos[k];
+            if (pos.length < 3) continue;
+            for (let jj = 1; jj < pos.length; jj++) {
+                if (!b.isLn[pos[jj]]) continue;
+                let contrib = 0.0;
+                for (let back = 1; back <= SHIELD_LOOKBACK; back++) {
+                    if (jj - back < 0) break;
+                    const dtp = b.t[pos[jj]] - b.t[pos[jj - back]];
+                    if (dtp <= 0 || dtp >= 500.0) continue;
+                    contrib += Math.exp(-dtp / tau);
+                }
+                if (contrib <= 0) continue;
+                const hm = s.heldmask[pos[jj]];
+                let lock = 0.0;
+                if (p.cb_shield_lock) {
+                    const ain = [p.r_ain0, p.r_ain1, p.r_ain2, p.r_ain3];
+                    for (let j2 = 0; j2 < K; j2++) {
+                        if (((hm >> j2) & 1) && j2 !== k) lock += ain[AIN_GROUP[j2]];
+                    }
+                    lock *= p.cb_shield_lock;
+                }
+                const val = contrib * (1.0 + lock);
+                if (pos[jj] < n) out[pos[jj]] += val;
+            }
+        }
+        const sm = wmean(b, s, out, p.w_cb);
+        for (let r = 0; r < n; r++) out[r] = p.cb_shield * sm[r];
+    }
+    if (p.cb_lockjack) for (let r = 0; r < n; r++) out[r] += p.cb_lockjack * Jbar[r] * hp[r];
+    if (p.cb_lockanchor) for (let r = 0; r < n; r++) out[r] += p.cb_lockanchor * Ja[r] * hp[r];
+    if (p.cb_par) for (let r = 0; r < n; r++) out[r] += p.cb_par * hp[r];
+    if (p.cb_holdtap) for (let r = 0; r < n; r++) out[r] += p.cb_holdtap * (b.size[r] / b.dtModel[r]) * hp[r];
+    for (let r = 0; r < n; r++) out[r] = Math.max(out[r], 0.0);
+    return out;
+}
 
-    const gaps = new Array(n);
-    gaps[0] = (allCorners[1] - allCorners[0]) / 2.0;
-    gaps[n - 1] = (allCorners[n - 1] - allCorners[n - 2]) / 2.0;
-    for (let i = 1; i < n - 1; i++) gaps[i] = (allCorners[i + 1] - allCorners[i - 1]) / 2.0;
+// dist matrix for Cbar v2 sub-terms
+function distMatrix(p, prefix) {
+    const DEF = { sh_adj: 0.6, sh_split: 1.0, "1h_split": 0.8, "2h_split": 0.5, cross: 0.3 };
+    const g = (suf) => p[prefix + suf] != null ? p[prefix + suf] : DEF[suf];
+    const M = [];
+    for (let a = 0; a < K; a++) {
+        const row = new Float64Array(K);
+        for (let c = 0; c < K; c++) {
+            const d = Math.abs(a - c);
+            let v;
+            const sameHand = HAND[a] === HAND[c] && HAND[a] !== 1;
+            const thumb = HAND[a] === 1 || HAND[c] === 1;
+            const cross = HAND[a] !== HAND[c] && !thumb;
+            v = g("cross");
+            if (cross && d <= 2 && d > 0) v = g("2h_split");
+            if (thumb && d <= 2 && d > 0) v = g("1h_split");
+            if (sameHand && d === 1) v = g("sh_adj");
+            if (sameHand && d === 2) v = g("sh_split");
+            if (d === 0) v = 0.0;
+            row[c] = v;
+        }
+        M.push(row);
+    }
+    return M;
+}
 
-    const eff_w = new Array(n);
-    for (let i = 0; i < n; i++) eff_w[i] = C_rc[i] * gaps[i];
+// Cbar v2 — LN coordination (core/components/lncoord_v2.py)
+function computeCbarV2(b, s, p, stats) {
+    const n = b.n;
+    if (!p.use_cbar_v2) return zeros(n);
+    const w = p.cbv_w;
+    const acc = zeros(n);
 
-    // Use Total model calibration (not RC-specific)
-    const calib_a = p.calib_a || 1.0, calib_b = p.calib_b || 0.0;
-    let D_calib = rcD_all;
-    if (Math.abs(calib_a - 1.0) > 1e-12 || Math.abs(calib_b) > 1e-12) {
-        D_calib = rcD_all.map(d => calib_a * d + calib_b);
+    function gate(name) { return (p["use_cbv_" + name] || 0.0) !== 0.0; }
+    function addTerm(name, fn) {
+        const tw = p["cbv_" + name];
+        if (!gate(name) || !tw) return;
+        const raw = fn();
+        for (let r = 0; r < n; r++) acc[r] += tw * Math.max(raw[r], 0.0);
     }
 
-    // Apply correction layer (same scalar shift as Total)
-    const corr = correction || 0;
-    if (Math.abs(corr) > 1e-12) {
-        D_calib = D_calib.map(d => Math.max(d + corr, 0.01));
+    function lockMassAt(rows, col, M) {
+        // sum_j M[col, j] * heldmask bit j
+        const out = new Float64Array(rows.length);
+        for (let i = 0; i < rows.length; i++) {
+            const hm = s.heldmask[rows[i]];
+            let sum = 0.0;
+            for (let j = 0; j < K; j++) if ((hm >> j) & 1) sum += M[col][j];
+            out[i] = sum;
+        }
+        return out;
     }
 
-    const nSeg = p.agg_n_segments || 30;
-    const { D_seg, w_seg } = segmentByDifficulty(D_calib, eff_w, nSeg);
+    // 1. shield
+    addTerm("shield", () => {
+        const tau = Math.max(p.cbv_sh_tau, 1.0);
+        const dtmax = Math.max(p.cbv_sh_dt_max, 1.0);
+        const lnW = p.cbv_sh_ln_w, lnTau = Math.max(p.cbv_sh_ln_tau, 1.0);
+        const amp = p.cbv_sh_lock;
+        const M = distMatrix(p, "cbv_ls_");
+        const out = zeros(n);
+        for (let k = 0; k < K; k++) {
+            const pos = b.colPos[k];
+            if (pos.length < 2) continue;
+            for (let jj = 1; jj < pos.length; jj++) {
+                if (!b.isLn[pos[jj]]) continue;
+                const pv = jj - 1;
+                const dtp = b.t[pos[jj]] - b.t[pos[pv]];
+                if (dtp <= 0.0 || dtp >= dtmax) continue;
+                const prow = pos[pv];
+                const isLnPrev = b.isLn[prow];
+                const dur = clamp(b.lnEnd[prow] - b.t[prow], 0.0, dtp);
+                const wpred = isLnPrev ? lnW * Math.exp(-Math.max(dur, 0.0) / lnTau) : 1.0;
+                let val = wpred * Math.exp(-Math.max(dtp, 0.0) / tau);
+                const lm = lockMassAt([pos[jj]], k, M)[0];
+                val *= (1.0 + amp * lm);
+                out[pos[jj]] += val;
+            }
+        }
+        return wmean(b, s, out, w);
+    });
 
-    const totalWeight = w_seg.reduce((a, b) => a + b, 0);
-    if (D_seg.length === 0 || totalWeight <= 0) return 0;
+    // 2. straddle
+    addTerm("straddle", () => {
+        const M = distMatrix(p, "cbv_str_");
+        const hw = [p.cbv_str_h0, p.cbv_str_h1, p.cbv_str_h2, p.cbv_str_h3];
+        const balP = p.cbv_str_bal;
+        const maxd = Math.min(Math.max(Math.floor(p.cbv_str_maxd), 2), K - 1);
+        const hmb = [];
+        for (let r = 0; r < n; r++) hmb.push(s.heldmask[r]);
+        const out = zeros(n);
+        for (let d = 2; d <= maxd; d++) {
+            for (let a = 0; a + d < K; a++) {
+                const bcol = a + d;
+                // interior columns
+                const interior = [];
+                for (let m = a + 1; m < bcol; m++) interior.push(m);
+                // gate: interior ever active
+                let ever = false;
+                for (const ic of interior) {
+                    const a2 = s.act[ic];
+                    for (let r = 0; r < n; r++) if (a2[r]) { ever = true; break; }
+                    if (ever) break;
+                }
+                if (!ever) continue;
+                const ra = s.usage[a], rb = s.usage[bcol];
+                for (let r = 0; r < n; r++) {
+                    const co = Math.sqrt(Math.max(ra[r] * rb[r], 0.0));
+                    const bal = 2.0 * Math.min(ra[r], rb[r]) / Math.max(ra[r] + rb[r], 1e-9);
+                    const act = co * Math.pow(bal, balP);
+                    let pin = 0.0;
+                    const hm = hmb[r];
+                    for (const ic of interior) if ((hm >> ic) & 1) pin += hw[AIN_GROUP[ic]];
+                    out[r] += M[a][bcol] * act * pin;
+                }
+            }
+        }
+        return wmean(b, s, out, w);
+    });
 
-    // Use Total model sigmoid (not RC-specific)
-    const D_solved = solveDBisection(
-        D_seg, w_seg,
-        p.agg_sigmoid_k, p.agg_sigmoid_C, p.agg_sigmoid_ref_gamma,
-        0.0, 5.0, 0.0001, 100
-    );
+    // 3/4. locked jack / anchor
+    const aggPow = Math.max(p.j_agg_pow, 0.25);
+    const lockPow = p.cbv_lock_pow;
+    function colLocked(kind) {
+        const jaFloor = p.ja_len_floor, jaNorm2 = Math.max(p.ja_norm, 1e-3);
+        const jaLenExp2 = p.ja_len_exp, jaCoordExp2 = p.ja_coord_exp;
+        const num = zeros(n), den = zeros(n);
+        for (let k = 0; k < K; k++) {
+            const st = stats[k];
+            if (!st) continue;
+            const M = st.pos.length - 1;
+            const v = new Float64Array(M);
+            for (let j = 0; j < M; j++) {
+                if (!st.valid[j]) { v[j] = 0; continue; }
+                if (kind === "anchor") {
+                    const e = Math.max(st.runlen[j] + 2.0 - jaFloor, 0.0);
+                    const runf = Math.pow(e / (e + jaNorm2), jaLenExp2);
+                    const mod = runf * Math.pow(1.0 + st.other[j] / st.nrows[j], jaCoordExp2);
+                    v[j] = st.kern[j] * mod;
+                } else v[j] = st.kern[j];
+            }
+            const cur = wmean(b, s, chainScatter(st.pos, v, n, st.valid), w);
+            // lock mass step over gaps
+            const lmVal = new Float64Array(M);
+            const Ml = distMatrix(p, "cbv_ls_");
+            for (let j = 0; j < M; j++) {
+                const hm = s.heldmask[st.pos[j]];
+                let sum = 0.0;
+                for (let j2 = 0; j2 < K; j2++) if ((hm >> j2) & 1) sum += Ml[k][j2];
+                lmVal[j] = lockPow !== 1.0 ? Math.pow(Math.max(sum, 0.0), lockPow) : sum;
+            }
+            const lm = chainScatter(st.pos, lmVal, n, st.valid);
+            const wv = new Float64Array(M);
+            for (let j = 0; j < M; j++) wv[j] = st.valid[j] ? 1.0 / st.gs[j] : 0.0;
+            const wArr = chainScatter(st.pos, wv, n, st.valid);
+            for (let r = 0; r < n; r++) {
+                num[r] += Math.pow(Math.max(cur[r] * lm[r], 0.0), aggPow) * wArr[r];
+                den[r] += wArr[r];
+            }
+        }
+        const out = zeros(n);
+        for (let r = 0; r < n; r++) {
+            const q = den[r] > 1e-9 ? num[r] / den[r] : 0.0;
+            out[r] = Math.pow(Math.max(q, 0.0), 1.0 / aggPow);
+        }
+        return out;
+    }
+    addTerm("lockstack", () => colLocked("plain"));
+    addTerm("lockanchor", () => colLocked("anchor"));
 
-    let SR = D_solved;
+    // 5. overlap — genuinely partial LN overlap
+    addTerm("overlap", () => {
+        const M = distMatrix(p, "cbv_ov_");
+        const dtmax0 = Math.max(p.cbv_ov_dt_max, 1.0);
+        const cap = Math.max(p.cbv_ov_cap, 1.0);
+        const rows = [], cols = [];
+        for (let k = 0; k < K; k++) {
+            const pos = b.colPos[k];
+            for (const r of pos) if (b.isLn[r]) { rows.push(r); cols.push(k); }
+        }
+        if (rows.length < 2) return zeros(n);
+        const order = rows.map((_, i) => i).sort((a, c) => b.t[rows[a]] - b.t[rows[c]]);
+        const rSorted = order.map(i => rows[i]);
+        const cSorted = order.map(i => cols[i]);
+        const N = rows.length;
+        let dtmax = dtmax0;
+        // diff-array accumulation: val added on [j0, j1), prefix-summed once
+        const diff = zeros(n + 1);
+        const tLoc = b.t, lnEndLoc = b.lnEnd;
+        for (let i = 0; i < N; i++) {
+            const ri = rSorted[i], ti = tLoc[ri], ei = lnEndLoc[ri], ci = cSorted[i];
+            const Mi = M[ci];
+            for (let j2 = i + 1; j2 < N; j2++) {
+                const rj = rSorted[j2], tj = tLoc[rj];
+                if (tj - ti >= dtmax) break;
+                if (ei <= tj) continue;
+                const ej = lnEndLoc[rj];
+                if (ej <= ei) continue;
+                const ov = Math.min(ei - tj, cap);
+                const val = (ov / 1000.0) * Mi[cSorted[j2]];
+                if (val === 0) continue;
+                diff[rj] += val;
+                // end row: first row with t >= tj + ov (exclusive end)
+                const z = tj + ov;
+                let lo = 0, hi = n;
+                while (lo < hi) { const mid = (lo + hi) >> 1; if (tLoc[mid] < z) lo = mid + 1; else hi = mid; }
+                if (lo > rj && lo <= n) diff[lo] -= val;
+            }
+        }
+        const out = zeros(n);
+        let acc = 0;
+        for (let r = 0; r < n; r++) { acc += diff[r]; out[r] = acc; }
+        return wmean(b, s, out, w);
+    });
 
-    // Use Total model post-processing
-    const useCorrPost = Math.abs(corr) > 1e-12 && p.note_norm_N0_corr !== undefined;
-    const N0 = useCorrPost ? p.note_norm_N0_corr : p.note_norm_N0;
-    const thresh = useCorrPost ? p.rescale_threshold_corr : p.rescale_threshold;
-    const div = useCorrPost ? p.rescale_divisor_corr : p.rescale_divisor;
-    const scale = useCorrPost ? p.global_scale_corr : p.global_scale;
+    // 6. holdtap
+    addTerm("holdtap", () => {
+        const Ml = distMatrix(p, "cbv_ls_");
+        const tot = zeros(n);
+        for (let k = 0; k < K; k++) {
+            const pos = b.colPos[k];
+            for (const r of pos) {
+                const hm = s.heldmask[r];
+                let sum = 0.0;
+                for (let j = 0; j < K; j++) if ((hm >> j) & 1) sum += Ml[k][j];
+                tot[r] += sum;
+            }
+        }
+        const raw = new Float64Array(n);
+        for (let r = 0; r < n; r++)
+            raw[r] = Math.max((b.size[r] / b.dtModel[r]) * (tot[r] / Math.max(b.size[r], 1)), 0.0);
+        return wmean(b, s, raw, w);
+    });
 
-    SR *= totalNotes / (totalNotes + N0);
-    if (SR > thresh) SR = thresh + (SR - thresh) / div;
-    SR *= scale;
+    for (let r = 0; r < n; r++) acc[r] = Math.max(Number.isFinite(acc[r]) ? acc[r] : 0.0, 0.0);
+    return acc;
+}
 
-    return SR;
+// hybrid supplements
+function computeChurn(b, s, p) {
+    const n = b.n;
+    if (b.tailN === 0) return zeros(n);
+    const imp = zeros(n);
+    for (let j = 0; j < b.tailN; j++) imp[b.tailJ0[j]] += 1.0;
+    const r = wmean(b, s, imp, Math.max(p.churn_w, 50.0));
+    const sat = Math.max(p.churn_sat, 1.0);
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) out[i] = r[i] / (1.0 + r[i] / sat);
+    return out;
+}
+
+function computeHoldage(b, s, p) {
+    // python: per column, H = step-scatter of the active LN's head over
+    // [head_row, tail_row), M = 1-scatter over the same span. Rows are summed
+    // additively, so overlapping row-level LN spans in one column sum their
+    // head times (age goes ≤ 0 → clamped to 0). Replicated exactly.
+    const n = b.n;
+    const th = p.holdage_th, cap = p.holdage_cap;
+    const out = zeros(n);
+    const H = zeros(n), M = zeros(n);
+    for (let k = 0; k < K; k++) {
+        H.fill(0); M.fill(0);
+        const pos = b.colPos[k];
+        for (const r of pos) {
+            if (!b.isLn[r]) continue;
+            const h = b.t[r];
+            const e = Math.min(b.lnEnd[r], h + cap * 1000.0);
+            let lo = 0, hi = n;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (b.t[mid] < e) lo = mid + 1; else hi = mid; }
+            const j1 = clamp(lo, 0, n);
+            if (j1 <= r) continue;
+            for (let r2 = r; r2 < j1; r2++) { H[r2] += h; M[r2] += 1.0; }
+        }
+        for (let r2 = 0; r2 < n; r2++) {
+            if (M[r2] <= 0) continue;
+            const age = Math.min(b.t[r2] - H[r2], cap * 1000.0) / 1000.0 - th;
+            if (age > 0) out[r2] += age;
+        }
+    }
+    return out;
+}
+
+function computeRecov(b, s, p) {
+    const n = b.n;
+    const w = Math.max(p.recov_w, 50.0), wl = Math.max(p.recov_wl, 1000.0);
+    const Cs = wmean(b, s, s.C, w);
+    const Cl = wmean(b, s, s.C, wl);
+    const burst = new Float64Array(n);
+    for (let r = 0; r < n; r++) burst[r] = Math.max(Cs[r] / Math.max(Cl[r], 1e-6) - 1.0, 0.0);
+    return wmean(b, s, burst, w);
+}
+
+function computeEyeCurve(b, s, p) {
+    const n = b.n;
+    const wRef = Math.max(p.eye_w_ref, 100.0), wS = Math.max(p.eye_w_s, 50.0);
+    const tau = Math.max(p.eye_tau, 1e-3);
+    const logdt = new Float64Array(n);
+    const valid = new Uint8Array(n);
+    for (let r = 0; r < n; r++) {
+        if (b.dtMs[r] > 0.0) { valid[r] = 1; logdt[r] = Math.log(Math.max(b.dtMs[r], 1e-6)); }
+        else logdt[r] = 0.0;
+    }
+    const lv = new Float64Array(n);
+    const vv2 = new Float64Array(n);
+    for (let r = 0; r < n; r++) { lv[r] = valid[r] ? logdt[r] : 0.0; vv2[r] = valid[r]; }
+    const muRaw = wmean(b, s, lv, wRef);
+    const cnt = wmean(b, s, vv2, wRef);
+    const dist = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        if (valid[r] && cnt[r] > 1e-6) {
+            const mu = muRaw[r] / Math.max(cnt[r], 1e-9);
+            const rem = ((logdt[r] - mu) % Math.log(2.0) + Math.log(2.0)) % Math.log(2.0);
+            dist[r] = Math.min(rem, Math.log(2.0) - rem);
+        }
+    }
+    const sm = wmean(b, s, dist, wS);
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) out[r] = Math.exp(-sm[r] / tau);
+    return out;
 }
 
 // ============================================================
-// MAIN CALCULATION
+// COMBINE (core/model.combine)
 // ============================================================
-function calculate(osuContent, speedRate) {
-    const p = ENHANCED_PARAMS;
-    const parsedData = parseOsuFile(osuContent);
-    const data = preprocess(parsedData, speedRate);
-    if (data.error) return { error: data.error };
+function combine(b, s, cur, p) {
+    const n = b.n;
+    const A = new Float64Array(n);
+    for (let r = 0; r < n; r++) A[r] = Math.max(cur.Abar[r], 1e-6);
+    const Ks = s.Ks, C = s.C;
 
-    const { x, K, noteSeq, noteSeqByColumn, LNSeq, tailSeq,
-            allCorners, baseCorners, A_corners, keyUsage, activeColumns, keyUsage400, LN_rep } = data;
+    const is4kRow = b.is4k; // single chart: one frame
+    const aP = is4kRow && p.a_p_4k !== 0.0 ? p.a_p_4k : p.a_p;
+    const aR = is4kRow && p.a_r_4k !== 0.0 ? p.a_r_4k : p.a_r;
+    const aCb = is4kRow && p.a_cb_4k !== 0.0 ? p.a_cb_4k : p.a_cb;
 
-    // Compute all components (same as before)
-    const anchorArr = computeAnchor(K, keyUsage400, baseCorners);
-    const { delta_ks, Jbar: JbarBase } = computeJbar(K, x, noteSeqByColumn, baseCorners,
-        p.jack_aggregation_power, p.multi_jack_boost);
-    const PbarBase = computePbar(K, x, noteSeq, LN_rep, anchorArr, baseCorners, p.stream_booster_scale);
-    const Abar_A = computeAbar(K, delta_ks, activeColumns, A_corners, baseCorners);
-    const AbarAll = interpValues(allCorners, A_corners, Abar_A);
-    const { C_step, Ks_step } = computeCandKs(K, noteSeq, keyUsage, baseCorners);
-
-    // Cross: Total model uses LN-ratio blended params (matching Python combine())
-    // ln_ratio=0 → pure RC params, ln_ratio=1 → pure LN params
-    const lnRatio = LNSeq.length / Math.max(noteSeq.length, 1);
-    const distExpRC = p.cross_dist_exponent_rc !== undefined ? p.cross_dist_exponent_rc : (p.cross_dist_exponent || 1.0);
-    const distExpLN = p.cross_dist_exponent_ln !== undefined ? p.cross_dist_exponent_ln : (p.cross_dist_exponent || 1.0);
-    const penaltyRC = p.cross_same_hand_penalty_rc !== undefined ? p.cross_same_hand_penalty_rc : (p.cross_same_hand_penalty || 0.3);
-    const penaltyLN = p.cross_same_hand_penalty_ln !== undefined ? p.cross_same_hand_penalty_ln : (p.cross_same_hand_penalty || 0.3);
-    const blendedDistExp = distExpRC + (distExpLN - distExpRC) * lnRatio;
-    const blendedPenalty = penaltyRC + (penaltyLN - penaltyRC) * lnRatio;
-    const p_total = Object.assign({}, p, {
-        cross_dist_exponent: blendedDistExp,
-        cross_same_hand_penalty: blendedPenalty,
-    });
-    const XbarTotalBase = computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p_total);
-
-    // For RC model, use pure RC cross params
-    const p_rc = Object.assign({}, p, {
-        cross_dist_exponent: distExpRC,
-        cross_same_hand_penalty: penaltyRC,
-    });
-    const XbarRCBase = (Math.abs(distExpRC - blendedDistExp) < 1e-6 &&
-                         Math.abs(penaltyRC - blendedPenalty) < 1e-6)
-        ? XbarTotalBase  // Reuse if params are same
-        : computeXbarEnhanced(K, x, noteSeqByColumn, activeColumns, baseCorners, p_rc);
-
-    const releaseData = precomputeReleaseData(K, x, noteSeqByColumn, tailSeq, noteSeq);
-    const RbarBase = computeRbarEnhanced(releaseData, baseCorners, p);
-
-    const shieldData = precomputeShieldData(K, noteSeqByColumn, LNSeq);
-    const SbarBase = computeSbar(shieldData, baseCorners, p);
-
-    const inverseData = precomputeInverseData(K, noteSeqByColumn, LNSeq);
-    const VbarBase = computeVbar(inverseData, baseCorners, p);
-
-    // Interpolate to allCorners
-    const JbarAll = interpValues(allCorners, baseCorners, JbarBase);
-    const XbarTotalAll = interpValues(allCorners, baseCorners, XbarTotalBase);
-    const XbarRCAll = (XbarRCBase === XbarTotalBase) ? XbarTotalAll
-        : interpValues(allCorners, baseCorners, XbarRCBase);
-    const PbarAll = interpValues(allCorners, baseCorners, PbarBase);
-    const RbarAll = interpValues(allCorners, baseCorners, RbarBase);
-    const SbarAll = interpValues(allCorners, baseCorners, SbarBase);
-    const VbarAll = interpValues(allCorners, baseCorners, VbarBase);
-
-    // RC-Equivalent: Pbar without LN contribution (treat all LNs as taps)
-    const LN_rep_zero = [LN_rep[0].slice(), LN_rep[1].slice().fill(0), LN_rep[2].slice().fill(0)];
-    const PbarEquivBase = computePbar(K, x, noteSeq, LN_rep_zero, anchorArr, baseCorners, p.stream_booster_scale);
-    const PbarEquivAll = interpValues(allCorners, baseCorners, PbarEquivBase);
-
-    // Total D
-    const { D_all, C_arr } = computeD(allCorners, baseCorners, AbarAll, JbarAll, XbarTotalAll,
-        PbarAll, RbarAll, C_step, Ks_step, SbarAll, VbarAll, p);
-
-    // RC-Equivalent D: total formula with Rbar=Sbar=Vbar=0, Pbar without LN
-    const zerosAll = new Array(allCorners.length).fill(0);
-    const { D_all: rcEquivD_all } = computeD(allCorners, baseCorners, AbarAll, JbarAll, XbarTotalAll,
-        PbarEquivAll, zerosAll, C_step, Ks_step, zerosAll, zerosAll, p);
-
-    // Total notes with LN bonus
-    let totalNotes = noteSeq.length;
-    let totalNotes_raw = noteSeq.length;  // without LN bonus
-    for (const ln of LNSeq) {
-        const d = Math.min(ln.end - ln.start, 1000);
-        totalNotes += 0.5 * d / 200;
+    function branchVal(v, mult, r) {
+        const cap = p.cap_a + p.cap_b * Math.max(v, 0.0);
+        return Math.pow(A[r], mult / Ks[r]) * Math.min(Math.max(v, 0.0), cap);
     }
+    const JmB = new Float64Array(n), JcB = new Float64Array(n), JaB = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        JmB[r] = branchVal(cur.Jm[r], p.aj, r);
+        JcB[r] = branchVal(cur.Jc[r], p.aj, r);
+        JaB[r] = branchVal(cur.Ja[r], p.aj, r);
+    }
+    const stream = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        stream[r] = Math.pow(A[r], p.ap) * (
+            aP * Math.max(cur.Pbar[r], 0.0)
+            + aR * Math.max(cur.Rbar[r], 0.0) / (C[r] + p.a_c)
+            + aCb * Math.max(cur.Cbar[r], 0.0) / (C[r] + p.a_cbc)
+            + (p.d_sh || 0.0) * (cur.SHd ? cur.SHd[r] : 0.0)
+            + (p.use_eye && (p.d_eye !== 0.0 || p.d_eye_4k !== 0.0)
+                ? (is4kRow && p.d_eye_4k !== 0.0 ? p.d_eye_4k : p.d_eye)
+                  * Math.max(cur.Pbar[r], 0.0) * cur.EyeR[r]
+                : 0.0));
+    }
+    if (p.use_hb) {
+        const cChord2 = p.c_chord2 || 0.0;
+        if (cChord2 !== 0.0) for (let r = 0; r < n; r++) stream[r] += cChord2 * cur.Chord2[r];
+        const dRec = p.d_rec || 0.0;
+        if (dRec !== 0.0) {
+            const half = Math.max(p.rec_half, 1e-3);
+            for (let r = 0; r < n; r++) {
+                const rec = Math.max(cur.Recov[r], 0.0);
+                stream[r] = Math.max(stream[r] - dRec * rec / (rec + half), 0.0);
+            }
+        }
+    }
+    const sp = p.s_p;
+    const S = new Float64Array(n);
+    if (Math.abs(sp - 1.0) < 1e-6) {
+        for (let r = 0; r < n; r++)
+            S[r] = p.c_jm * JmB[r] + p.c_jc * JcB[r] + p.c_ja * JaB[r] + p.c_s * stream[r];
+    } else {
+        for (let r = 0; r < n; r++) {
+            const inner = p.c_jm * Math.pow(JmB[r], sp) + p.c_jc * Math.pow(JcB[r], sp)
+                + p.c_ja * Math.pow(JaB[r], sp) + p.c_s * Math.pow(Math.max(stream[r], 0.0), sp);
+            S[r] = Math.pow(Math.max(inner, 0.0), 1.0 / sp);
+        }
+    }
+    const T = new Float64Array(n), D = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const Xt = Math.max(cur.Xbar[r], 0.0) + p.t_jack_mix * JmB[r];
+        T[r] = Math.pow(A[r], p.at / Ks[r]) * Xt / (Xt + S[r] + p.t_s_off);
+        D[r] = p.d_b1 * Math.pow(S[r], p.d_ds) * Math.pow(Math.max(T[r], 1e-9), p.d_dt)
+            + p.d_b2 * S[r];
+        if (!Number.isFinite(D[r]) || D[r] < 0) D[r] = 0;
+    }
+    return D;
+}
 
-    // ===== Correction Layer =====
-    const corrFeat = computeCorrectionFeatures(noteSeq, JbarBase, PbarBase);
-    const correction =
-        (p.correction_chord  || 0) * (corrFeat.chord  || 0) +
-        (p.correction_fj     || 0) * (corrFeat.fj     || 0) +
-        (p.correction_hs     || 0) * (corrFeat.hs     || 0) +
-        (p.correction_lb     || 0) * (corrFeat.lb     || 0) +
-        (p.correction_speed  || 0) * (corrFeat.speed  || 0) +
-        (p.correction_burst  || 0) * (corrFeat.burst  || 0) +
-        (p.correction_pj     || 0) * (corrFeat.pj     || 0) +
-        (p.correction_nps_std || 0) * (corrFeat.nps_std || 0) +
-        (p.correction_chord2  || 0) * (corrFeat.chord2  || 0);
+// ============================================================
+// AGGREGATE (core/model.aggregate, mode 3 = weighted power mean)
+// ============================================================
+function aggregateWeights(b, s, p, holdW) {
+    const n = b.n;
+    const w = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const dnext = r + 1 < n ? b.dtMs[r] : 0.0;
+        const dprev = r > 0 ? b.dtMs[r - 1] : 0.0;
+        const gp = Math.max(0.5 * (dnext + dprev), 0.0);
+        w[r] = Math.pow(gp, p.agg_gap_w) * Math.pow(Math.max(s.C[r], 0.0), p.agg_wc);
+    }
+    if (holdW && p.hw_a) {
+        const h = s.held;
+        for (let r = 0; r < n; r++)
+            w[r] *= (1.0 + p.hw_a * h[r] / (h[r] + Math.max(p.hw_half, 1e-6)));
+    }
+    for (let r = 0; r < n; r++) if (!Number.isFinite(w[r]) || w[r] < 0) w[r] = 0;
+    return w;
+}
 
-    // ===== Total SR (sigmoid + correction layer) =====
-    const rating = computeSR_sigmoid(allCorners, C_arr, D_all, totalNotes, p, correction);
+function peakEnvelope(b, s, D, ms) {
+    // per-chart rolling max over +-ms/2 (mode 'nearest')
+    const n = b.n;
+    const out = new Float64Array(n);
+    const dur = Math.max(b.duration, 1.0);
+    const medDt = Math.max(dur / Math.max(n, 1), 1.0);
+    const half = Math.max(1, Math.round(0.5 * ms / medDt));
+    const size = 2 * half + 1;
+    // sliding window max via monotonic deque
+    const dq = [];
+    for (let i = 0; i < n; i++) {
+        while (dq.length && dq[0] <= i - size) dq.shift();
+        while (dq.length && D[dq[dq.length - 1]] <= D[i]) dq.pop();
+        dq.push(i);
+        out[i] = D[dq[0]];
+    }
+    return out;
+}
 
-    // ===== RC SR (RC model, uses Total pipeline + correction) =====
-    const rcRating = computeRC_SR(allCorners, baseCorners, JbarAll, XbarRCAll, PbarAll, AbarAll,
-        C_step, Ks_step, totalNotes, p, correction);
+function aggregatePow(b, s, D, w, p) {
+    const pw = Math.max(p.agg_k, 0.05);
+    let acc = 0, sw = 0;
+    const n = b.n;
+    for (let r = 0; r < n; r++) {
+        const Dv = Math.max(Number.isFinite(D[r]) ? D[r] : 0.0, 0.0);
+        acc += w[r] * Math.pow(Dv, pw);
+        sw += w[r];
+    }
+    return [Math.pow(acc / Math.max(sw, EPS), 1.0 / pw), sw];
+}
 
-    // ===== RC-Equivalent SR (total algo, no LNs) =====
-    const rcEquivRating = computeSR_sigmoid(allCorners, C_arr, rcEquivD_all, totalNotes_raw, p);
+function postprocess(b, s, sr, p) {
+    const nEff = b.nNotes;
+    let v = sr * nEff / (nEff + Math.max(p.pp_n0, 1e-6));
+    const thr = p.pp_thr, div = Math.max(p.pp_div, 1e-3);
+    if (v > thr) v = thr + (v - thr) / div;
+    return Math.max(v * p.pp_scale * p.calib_a + p.calib_b, 0.0);
+}
 
-    // ===== LN SR = Total SR (validated: MAE=0.22 vs LN labels) =====
-    const lnRating = rating;
+// ============================================================
+// RC / LN (rc_ln_model/rcln/engine.py)
+// ============================================================
 
-    // ===== Section masks (for HB RC/LN section ratings) =====
-    const { lnMask, rcMask } = computeHBSectionMasks(allCorners, LN_rep);
+// RC curves: ln_body_ms = 0, then full recompute; Rbar/Cbar zeroed
+// Light RC path: only Pbar depends on ln_body_ms (proven bit-identical to the
+// full recompute by rc_ln_model tests/test_identity.py T6). All other curves
+// are unchanged by zeroing ln_body; Rbar/Cbar are zeroed explicitly.
+function computePbarRC(b, s, p) {
+    const n = b.n;
+    const xp = Math.pow(b.x, p.od_mult_p);
+    const d = b.dtModel;
+    const tauC = p.chord_tau_c || 0.0;
+    let dFp = d;
+    if (tauC > 0.0) {
+        const [wf, wb] = chordCoupling(b, s, tauC);
+        const attIdx = [];
+        for (let r = 0; r < n; r++) if (wb[r] === 0.0) attIdx.push(r);
+        dFp = Float64Array.from(d);
+        for (let r = 0; r < n; r++) {
+            let lo = 0, hi = attIdx.length;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if (attIdx[mid] <= r) lo = mid + 1; else hi = mid; }
+            if (lo < attIdx.length) {
+                const na = attIdx[lo];
+                const v = (b.t[na] - b.t[r]) / 1000.0;
+                if (v > 0) dFp[r] = v;
+            }
+        }
+    }
+    const fp = new Float64Array(n), bst = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const q = Math.min(dFp[r] - xp / 2.0, xp / 6.0);
+        fp[r] = Math.pow(Math.max(p.p_scale / xp * (1.0 - (p.p_lam3 / xp) * q * q), 0.0), 0.25);
+        const rr = 7.5 / d[r];
+        bst[r] = (rr > p.p_boost_lo && rr < p.p_boost_hi)
+            ? 1.0 + p.p_boost * (rr - p.p_boost_lo) * Math.pow(rr - p.p_boost_hi, 2.0) : 1.0;
+    }
+    const chw = [1.0, 1.0, p.p_chw2, p.p_chw3, p.p_chw4, p.p_chw5, p.p_chw6, p.p_chw7];
+    const inc = zeros(n);
+    if (tauC > 0.0) {
+        const u = triWindowCount(b, s, Float64Array.from(b.size), tauC);
+        for (let r = 0; r < n; r++) {
+            const uu = clamp(u[r], 1.0, K);
+            const i0 = Math.min(Math.floor(uu), K - 1);
+            const frac = uu - i0;
+            const chwU = chw[i0] * (1.0 - frac) + chw[i0 + 1] * frac;
+            // vv = 1 → body term zero; attack discount from coupling
+            const mix = Math.max(bst[r], 1.0);
+            inc[r] = (1.0 / d[r]) * fp[r] * chwU * mix;
+        }
+        // attack discount on the rate part
+        const [wf, wb] = chordCoupling(b, s, tauC);
+        for (let r = 0; r < n; r++) inc[r] *= (1.0 - wb[r]);
+    } else {
+        for (let r = 0; r < n; r++) {
+            const chwU = chw[Math.min(b.size[r], K)];
+            inc[r] = (1.0 / d[r]) * fp[r] * chwU * Math.max(bst[r], 1.0);
+        }
+    }
+    for (let r = 0; r < n; r++) {
+        const am = 1.0 + p.an_on_p * Math.min(s.anchorRaw[r] - p.an_a0,
+            p.an_cubic * Math.pow(s.anchorRaw[r] - p.an_a1, 3.0));
+        const v0 = inc[r] * am;
+        inc[r] = Math.min(v0, Math.max(inc[r], inc[r] * p.p_sat_b - p.p_sat_a));
+    }
+    if (p.p_burst3) {
+        const b3 = wcount(b, s, s.noteImpulse, 100.0);
+        for (let r = 0; r < n; r++) inc[r] += p.p_burst3 * b3[r] * 10.0;
+    }
+    if (p.p_burst4) {
+        const b4 = wcount(b, s, s.noteImpulse, 150.0);
+        for (let r = 0; r < n; r++) inc[r] += p.p_burst4 * b4[r] * 6.6667;
+    }
+    return wmean(b, s, inc, p.w_p);
+}
 
-    // ===== LN-Masked SR (LN sections only, for HB display) =====
-    const lnMaskedRating = computeLNMaskedSR(allCorners, D_all, C_arr, lnMask, totalNotes, p);
+function computeCurvesRC(b, s, p, curMain) {
+    const n = b.n;
+    const curRc = {
+        Jbar: curMain.Jbar, Jm: curMain.Jm, Jc: curMain.Jc, Ja: curMain.Ja,
+        Pbar: curMain.Pbar, Xbar: curMain.Xbar, Abar: curMain.Abar,
+        Rbar: zeros(n), Cbar: zeros(n),
+        EyeR: curMain.EyeR, Chord2: curMain.Chord2, Recov: curMain.Recov,
+        SHd: curMain.SHd,
+    };
+    if (b.tailN === 0) {
+        // no LNs: RC chart — identical curves (Rbar/Cbar already 0 in main)
+        curRc.Rbar = curMain.Rbar;
+        curRc.Cbar = curMain.Cbar;
+        return curRc;
+    }
+    const saved = Float64Array.from(s.lnBodyMs);
+    s.lnBodyMs.fill(0.0);
+    curRc.Pbar = computePbarRC(b, s, p);
+    s.lnBodyMs.set(saved);
+    return curRc;
+}
 
-    // ===== RC-Section-Masked SR (RC sections only, prevents LN recovery underestimation) =====
-    const rcDresult = computeD_rc(allCorners, baseCorners, AbarAll, JbarAll, XbarRCAll, PbarAll,
-        C_step, Ks_step, p);
-    const rcSectionRating = computeRCSectionSR(allCorners, rcDresult.D_all, rcDresult.C_arr,
-        rcMask, totalNotes, p, correction);
+// LN presence weights g(t)
+function lnPresence(b, s, p) {
+    const n = b.n;
+    const ind = new Uint8Array(n);
+    for (let r = 0; r < n; r++) ind[r] = s.held[r] > 0 ? 1 : 0;
+    for (let r = 0; r < n; r++) if (b.isLn[r]) ind[r] = 1;
+    for (let j = 0; j < b.tailN; j++) ind[b.tailJ0[j]] = 1;
+    const indF = new Float64Array(n);
+    for (let r = 0; r < n; r++) indF[r] = ind[r];
+    const wMs = Math.max(p.ln_mask_w, 50.0);
+    const g = wmean(b, s, indF, wMs);
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) out[r] = Math.pow(clamp(g[r] * (p.ln_gain || 1.0), 0.0, 1.0), p.ln_g_exp);
+    return out;
+}
+
+// LN aggregation: row weights * g(t), power mean (mode 3 shape)
+function aggregateLN(b, s, D, g, p) {
+    const n = b.n;
+    let Dv = D;
+    if (p.env_w) {
+        const E = peakEnvelope(b, s, D, Math.max(p.env_ms, 50.0));
+        Dv = new Float64Array(n);
+        for (let r = 0; r < n; r++) Dv[r] = (1.0 - p.env_w) * D[r] + p.env_w * E[r];
+    }
+    // python aggregate_ln always applies the hold downweight (unlike
+    // aggregate(hold_w=False) on the RC path)
+    const w = aggregateWeights(b, s, p, true);
+    const pw = Math.max(p.agg_k, 0.05);
+    let acc = 0, swl = 0, sw = 0;
+    for (let r = 0; r < n; r++) {
+        const wl = w[r] * g[r];
+        const DD = Math.max(Number.isFinite(Dv[r]) ? Dv[r] : 0.0, 0.0);
+        acc += wl * Math.pow(DD, pw);
+        swl += wl;
+        sw += w[r];
+    }
+    const cov = swl / Math.max(sw, EPS);
+    let sr = swl > 1e-9 ? Math.pow(acc / Math.max(swl, EPS), 1.0 / pw) : 0.0;
+    return [sr, cov];
+}
+
+function postprocessLN(b, s, sr, cov, p) {
+    const nEff = b.nNotes * clamp(cov, 0.0, 1.0);
+    const n0 = Math.max(p.ln_n0, 1e-6);
+    let v = sr * nEff / (nEff + n0);
+    const thr = p.pp_thr, div = Math.max(p.pp_div, 1e-3);
+    if (v > thr) v = thr + (v - thr) / div;
+    v = v * p.pp_scale * p.calib_a + p.calib_b;
+    v = v * (p.ln_calib_a || 1.0) + (p.ln_calib_b || 0.0);
+    return Math.max(v, 0.0);
+}
+
+// ============================================================
+// MAIN ENTRY — evaluate one chart
+// ============================================================
+function evaluateChart(osuContent, speedRate, p) {
+    p = p || SPM_V1_PARAMS;
+    const nt = parseOsu(osuContent, speedRate);
+    if (!nt || nt.nNotes < 2) return { error: "not a valid mania chart" };
+    const b = buildBatch(nt);
+    if (!b) return { error: "too few notes" };
+    const s = buildStruct(b, p);
+
+    // ---- spm difficulty
+    const cur = computeCurves(b, s, p);
+    const D = combine(b, s, cur, p);
+    const wHold = aggregateWeights(b, s, p, true);
+    const [srRaw] = aggregatePow(b, s, D, wHold, p);
+    const star = postprocess(b, s, srRaw, p);
+
+    // ---- RC difficulty (de-LN chart)
+    const curRc = computeCurvesRC(b, s, p, cur);
+    const DRc = combine(b, s, curRc, p);
+    const wNo = aggregateWeights(b, s, p, false);
+    const [srRcRaw] = aggregatePow(b, s, DRc, wNo, p);
+    const starRc = postprocess(b, s, srRcRaw, p);
+
+    // ---- LN difficulty (presence-weighted aggregation on D)
+    const g = lnPresence(b, s, p);
+    const [srLnRaw, cov] = aggregateLN(b, s, D, g, p);
+    const starLn = postprocessLN(b, s, srLnRaw, cov, p);
 
     return {
-        rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
-        correction, corrFeat,
-        params: { total_notes: totalNotes, n_raw: noteSeq.length, n_LN: LNSeq.length, K, od: data.od },
-        noteSeq, LNSeq, allCorners, D_all, Jbar: JbarAll, Xbar: XbarTotalAll, Pbar: PbarAll, Rbar: RbarAll,
-        rcD_all: rcDresult.D_all, rcEquivD_all,
-        LN_rep, lnMask, rcMask,  // HB section masks (reused in processMap)
-        features: { lnRatio },
+        star, starRc, starLn, lnCov: cov,
+        nNotes: nt.nNotes, keyCount: nt.keyCount, od: nt.od,
+        nRows: b.n, duration: b.duration / 1000.0,
+        D, Drc: DRc, g,
+        // curve for display (calibrated like postprocess shape over rows)
+        b, s,
     };
 }
 
-// ============================================================
-// POST-PROCESSING: Section Data, Skills, Tags
-// ============================================================
-// ============================================================
-// HB SECTION DETECTION
-// ============================================================
-function computeHBSectionMasks(allCorners, LN_rep) {
-    // Interpolate LN_rep density to allCorners grid
-    const lnDensity = stepInterp(allCorners, LN_rep[0], LN_rep[2]);
-
-    // Find LN-dense regions (LN_rep > 0 means active LN)
-    const lnMask = new Array(allCorners.length).fill(false);
-    const rcMask = new Array(allCorners.length).fill(false);
-
-    for (let i = 0; i < allCorners.length; i++) {
-        lnMask[i] = lnDensity[i] > 0.01;
-        rcMask[i] = !lnMask[i];
-    }
-
-    // Dilate: expand LN regions by 500ms to avoid boundary artifacts
-    const dilated = lnMask.slice();
-    const step = 50;  // ~50ms dilution steps
-    const steps = Math.floor(500 / step);
-    const idxStep = Math.max(1, Math.floor(allCorners.length * step / (allCorners[allCorners.length - 1] - allCorners[0] || 1)));
-    for (let s = 0; s < steps; s++) {
-        const prev = dilated.slice();
-        for (let i = 1; i < allCorners.length - 1; i++) {
-            if (prev[i - 1] || prev[i + 1]) dilated[i] = true;
-        }
-    }
-
-    return { lnMask: dilated, rcMask: dilated.map(v => !v) };
+// display curve: per-row D with pp_n0-style note-count scaling omitted —
+// the v0.5 overlay displayed the calibrated D array; we expose the raw D
+// rescaled to the star's range via affine pp mapping (no per-chart scalar).
+function displayCurves(res) {
+    const n = res.nRows;
+    const star = res.star;
+    // match aggregate level: weighted power-mean of D ≈ sr_raw; derive affine
+    // by rescaling D so its weighted mean equals the pre-postprocess value.
+    const p = SPM_V1_PARAMS;
+    const Dv = res.D;
+    const w = aggregateWeights(res.b, res.s, p, true);
+    const pw = Math.max(p.agg_k, 0.05);
+    let acc = 0, sw = 0;
+    for (let r = 0; r < n; r++) { acc += w[r] * Math.pow(Math.max(Dv[r], 0), pw); sw += w[r]; }
+    const mean = Math.pow(acc / Math.max(sw, EPS), 1.0 / pw);
+    const scale = mean > 1e-9 ? (star - p.calib_b) / (p.pp_scale * p.calib_a) / mean : 0;
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) out[r] = Math.max(Dv[r] * scale, 0);
+    return out;
 }
 
-function computeSectionData(allCorners, D_all, firstTime, lastTime) {
-    if (!allCorners || allCorners.length === 0) return { sectionDifficulties: [], sectionTimes: [] };
+// ---- section data for the difficulty curve display (400ms buckets)
+const SECTION_LENGTH_MS = 400;
+function computeSectionData(allRows, times, Darr, firstTime, lastTime) {
     const sectionTimes = [], sectionDifficulties = [];
-    if (firstTime == null) firstTime = allCorners[0];
-    if (lastTime == null) lastTime = allCorners[allCorners.length - 1];
-    // Perf: corners are sorted and sections are disjoint and ascending, so a
-    // single monotone pointer replaces the per-section full scan (was
-    // O(sections * corners)).
+    if (!times || times.length === 0) return { sectionDifficulties, sectionTimes };
+    if (firstTime == null) firstTime = times[0];
+    if (lastTime == null) lastTime = times[times.length - 1];
     let ci = 0;
     let sectionStart = firstTime;
     while (sectionStart < lastTime) {
-        const sectionEnd = sectionStart + SECTION_LENGTH;
-        while (ci < allCorners.length && allCorners[ci] < sectionStart) ci++;
+        const sectionEnd = sectionStart + SECTION_LENGTH_MS;
+        while (ci < times.length && times[ci] < sectionStart) ci++;
         let maxD = 0;
-        for (let j = ci; j < allCorners.length && allCorners[j] < sectionEnd; j++)
-            if (D_all[j] > maxD) maxD = D_all[j];
+        for (let j = ci; j < times.length && times[j] < sectionEnd; j++)
+            if (Darr[j] > maxD) maxD = Darr[j];
         sectionTimes.push(sectionStart);
         sectionDifficulties.push(maxD);
         sectionStart = sectionEnd;
@@ -1639,138 +2213,207 @@ function computeSectionData(allCorners, D_all, firstTime, lastTime) {
     return { sectionDifficulties, sectionTimes };
 }
 
-function computeSkillRatings(Jbar, Xbar, Pbar, Rbar) {
-    function aggregate(arr) {
-        if (!arr || arr.length === 0) return 0;
-        let sum = 0; const n = arr.length;
-        for (let i = 0; i < n; i++) if (arr[i] > 0) sum += arr[i];
-        const avg = sum / Math.max(n, 1);
-        const peaks = [...arr].filter(v => v > 0).sort((a, b) => b - a);
-        let weighted = 0, weight = 1;
-        for (let i = 0; i < Math.min(peaks.length, 20); i++) { weighted += peaks[i] * weight; weight *= DECAY_WEIGHT; }
-        return weighted * RATING_MULTIPLIER * 0.5 + avg * 0.1;
+// ============================================================
+// DAN MAPPING — piecewise-linear interpolation on measured nodes
+// (tools/measure_dan_nodes.py → dan_constants.json)
+// ============================================================
+// Name ladders per key mode:
+//   4K RC : 1st..10th, then the REFORM extra dans Alpha..Epsilon (11..15)
+//   4K LN : numeric 1st..15th
+//   6K    : numeric (RC 0th..9th, LN 0th..14th)
+//   7K    : 0th..10th, Gamma/Azimuth/Zenith/Stellium (11..14)
+// Number style ignores the ladders and shows the decimal level.
+const DAN_EXTRA_4K_RC = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"];
+const DAN_EXTRA_7K = ["Gamma", "Azimuth", "Zenith", "Stellium"];
+
+function danOrdinal(i) {
+    const n = Math.round(i);
+    if (n % 100 >= 11 && n % 100 <= 13) return n + "th";
+    switch (n % 10) {
+        case 1: return n + "st";
+        case 2: return n + "nd";
+        case 3: return n + "rd";
+        default: return n + "th";
     }
-    return {
-        stream: Math.max(0, aggregate(Pbar)), jack: Math.max(0, aggregate(Jbar)),
-        tech: Math.max(0, aggregate(Xbar)),
-        chordjack: Math.max(0, aggregate(Jbar.map((v, i) => v * (1 - Math.exp(-Pbar[i] / 5))))),
-        release: Math.max(0, aggregate(Rbar)),
-    };
+}
+
+function danNameForLevel(dan, keyCount, kind) {
+    const i = Math.round(dan);
+    if (keyCount === 7 && i >= 11 && i <= 14) return DAN_EXTRA_7K[i - 11];
+    if (keyCount === 4 && String(kind).toUpperCase() === "RC" &&
+        i >= 11 && i <= 15) return DAN_EXTRA_4K_RC[i - 11];
+    return danOrdinal(i);
 }
 
 // ============================================================
-// MAIN ENTRY POINT
+// DAN NODES — measured star -> dan level anchors (see dan_constants.json)
+// Generated by tools/generate_dan_constants.py from spm v1.0.0 + rc-ln
+// ratings of the dan course packs / dataset dan subset.
 // ============================================================
-// v0.5.0: sort classification (RC/LN/HB) is produced by tag_engine.js
-// (segment-based classifier) and passed in as `sortType`.
-// sortType: 'RC' | 'LN' | 'HB' | 'Mix', or null when classification is
-// unavailable (non-7K maps) — a neutral display branch is used then.
-function processMap(osuContent, mode, speedRate, sortType) {
-    if (!mode) mode = 'full';
+const DAN_NODES_DEFAULT = {"_note":"SPM Rating v1.0.0 + rc-ln-0.1.0 dan nodes. RC/LN star nodes measured on dan course packs (4K/6K) and the 7K dan dataset subset; interpolation maps star -> continuous dan level.","dan_names":["0th","1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th","Gamma","Azimuth","Zenith","Stellium"],"modes":{"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.0208},{"dan":2.0,"sr":4.6648},{"dan":3.0,"sr":4.6648},{"dan":4.0,"sr":5.8555},{"dan":5.0,"sr":6.5143},{"dan":6.0,"sr":7.1491},{"dan":7.0,"sr":7.6171},{"dan":8.0,"sr":8.5556},{"dan":9.0,"sr":8.7292},{"dan":10.0,"sr":9.4459},{"dan":11.0,"sr":9.6211},{"dan":12.0,"sr":9.9713},{"dan":13.0,"sr":10.7001},{"dan":14.0,"sr":11.6387},{"dan":15.0,"sr":13.5081}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":4.8726},{"dan":2.0,"sr":5.6284},{"dan":3.0,"sr":6.2091},{"dan":4.0,"sr":6.2091},{"dan":5.0,"sr":6.4},{"dan":6.0,"sr":6.9771},{"dan":7.0,"sr":7.6831},{"dan":8.0,"sr":8.0826},{"dan":9.0,"sr":8.6711},{"dan":10.0,"sr":9.2017},{"dan":11.0,"sr":9.8331},{"dan":12.0,"sr":10.2015},{"dan":13.0,"sr":11.1757},{"dan":14.0,"sr":11.8675},{"dan":15.0,"sr":12.6583}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":3.6317},{"dan":1.0,"sr":4.1375},{"dan":2.0,"sr":4.8006},{"dan":3.0,"sr":5.5732},{"dan":4.0,"sr":6.0613},{"dan":5.0,"sr":6.6976},{"dan":6.0,"sr":7.1534},{"dan":7.0,"sr":7.5146},{"dan":8.0,"sr":7.9989},{"dan":9.0,"sr":8.6019}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":4.0363},{"dan":1.0,"sr":4.9384},{"dan":2.0,"sr":5.1079},{"dan":3.0,"sr":5.6718},{"dan":4.0,"sr":6.4445},{"dan":5.0,"sr":6.4512},{"dan":6.0,"sr":7.0152},{"dan":7.0,"sr":7.3947},{"dan":8.0,"sr":7.949},{"dan":9.0,"sr":7.9944},{"dan":10.0,"sr":8.5633},{"dan":11.0,"sr":8.8391},{"dan":12.0,"sr":9.4934},{"dan":13.0,"sr":9.8917},{"dan":14.0,"sr":10.8678}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":3.7546},{"dan":1.0,"sr":4.1656},{"dan":2.0,"sr":4.7922},{"dan":3.0,"sr":5.2249},{"dan":4.0,"sr":5.4118},{"dan":5.0,"sr":5.7669},{"dan":6.0,"sr":6.3758},{"dan":7.0,"sr":6.8118},{"dan":8.0,"sr":7.1672},{"dan":9.0,"sr":7.7366},{"dan":10.0,"sr":8.242},{"dan":11.0,"sr":8.8514},{"dan":12.0,"sr":9.3732},{"dan":13.0,"sr":10.1529},{"dan":14.0,"sr":10.6116}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"},"LN":{"nodes":[{"dan":0.0,"sr":4.4554},{"dan":1.0,"sr":4.644},{"dan":2.0,"sr":4.6577},{"dan":3.0,"sr":5.2726},{"dan":4.0,"sr":5.8952},{"dan":5.0,"sr":6.0215},{"dan":6.0,"sr":6.5725},{"dan":7.0,"sr":6.7175},{"dan":8.0,"sr":7.405},{"dan":9.0,"sr":7.5857},{"dan":10.0,"sr":8.3702},{"dan":11.0,"sr":8.8079},{"dan":12.0,"sr":9.3984},{"dan":13.0,"sr":10.2228},{"dan":14.0,"sr":11.3869}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"}}},"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.0208},{"dan":2.0,"sr":4.6648},{"dan":3.0,"sr":4.6648},{"dan":4.0,"sr":5.8555},{"dan":5.0,"sr":6.5143},{"dan":6.0,"sr":7.1491},{"dan":7.0,"sr":7.6171},{"dan":8.0,"sr":8.5556},{"dan":9.0,"sr":8.7292},{"dan":10.0,"sr":9.4459},{"dan":11.0,"sr":9.6211},{"dan":12.0,"sr":9.9713},{"dan":13.0,"sr":10.7001},{"dan":14.0,"sr":11.6387},{"dan":15.0,"sr":13.5081}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":4.8726},{"dan":2.0,"sr":5.6284},{"dan":3.0,"sr":6.2091},{"dan":4.0,"sr":6.2091},{"dan":5.0,"sr":6.4},{"dan":6.0,"sr":6.9771},{"dan":7.0,"sr":7.6831},{"dan":8.0,"sr":8.0826},{"dan":9.0,"sr":8.6711},{"dan":10.0,"sr":9.2017},{"dan":11.0,"sr":9.8331},{"dan":12.0,"sr":10.2015},{"dan":13.0,"sr":11.1757},{"dan":14.0,"sr":11.8675},{"dan":15.0,"sr":12.6583}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":3.6317},{"dan":1.0,"sr":4.1375},{"dan":2.0,"sr":4.8006},{"dan":3.0,"sr":5.5732},{"dan":4.0,"sr":6.0613},{"dan":5.0,"sr":6.6976},{"dan":6.0,"sr":7.1534},{"dan":7.0,"sr":7.5146},{"dan":8.0,"sr":7.9989},{"dan":9.0,"sr":8.6019}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":4.0363},{"dan":1.0,"sr":4.9384},{"dan":2.0,"sr":5.1079},{"dan":3.0,"sr":5.6718},{"dan":4.0,"sr":6.4445},{"dan":5.0,"sr":6.4512},{"dan":6.0,"sr":7.0152},{"dan":7.0,"sr":7.3947},{"dan":8.0,"sr":7.949},{"dan":9.0,"sr":7.9944},{"dan":10.0,"sr":8.5633},{"dan":11.0,"sr":8.8391},{"dan":12.0,"sr":9.4934},{"dan":13.0,"sr":9.8917},{"dan":14.0,"sr":10.8678}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":3.7546},{"dan":1.0,"sr":4.1656},{"dan":2.0,"sr":4.7922},{"dan":3.0,"sr":5.2249},{"dan":4.0,"sr":5.4118},{"dan":5.0,"sr":5.7669},{"dan":6.0,"sr":6.3758},{"dan":7.0,"sr":6.8118},{"dan":8.0,"sr":7.1672},{"dan":9.0,"sr":7.7366},{"dan":10.0,"sr":8.242},{"dan":11.0,"sr":8.8514},{"dan":12.0,"sr":9.3732},{"dan":13.0,"sr":10.1529},{"dan":14.0,"sr":10.6116}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"},"LN":{"nodes":[{"dan":0.0,"sr":4.4554},{"dan":1.0,"sr":4.644},{"dan":2.0,"sr":4.6577},{"dan":3.0,"sr":5.2726},{"dan":4.0,"sr":5.8952},{"dan":5.0,"sr":6.0215},{"dan":6.0,"sr":6.5725},{"dan":7.0,"sr":6.7175},{"dan":8.0,"sr":7.405},{"dan":9.0,"sr":7.5857},{"dan":10.0,"sr":8.3702},{"dan":11.0,"sr":8.8079},{"dan":12.0,"sr":9.3984},{"dan":13.0,"sr":10.2228},{"dan":14.0,"sr":11.3869}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"}}};
+
+let DAN_CONSTANTS = DAN_NODES_DEFAULT;
+
+function loadDanConstants(obj) {
+    DAN_CONSTANTS = obj;
+}
+
+// SR -> continuous dan level via piecewise-linear interpolation over nodes
+function interpDan(sr, nodes) {
+    // nodes: [{dan, sr}] sorted by dan
+    const n = nodes.length;
+    if (n === 0) return 0;
+    const EPS2 = 0.002;
+    for (let i = 0; i < n; i++) {
+        if (Math.abs(sr - nodes[i].sr) < EPS2) return nodes[i].dan;
+    }
+    if (sr <= nodes[0].sr) {
+        if (n < 2) return nodes[0].dan;
+        const slope = (nodes[1].dan - nodes[0].dan) / Math.max(nodes[1].sr - nodes[0].sr, 1e-4);
+        return Math.min(0, nodes[0].dan + slope * (sr - nodes[0].sr));
+    }
+    if (sr >= nodes[n - 1].sr) {
+        if (n < 2) return nodes[n - 1].dan;
+        const slope = (nodes[n - 1].dan - nodes[n - 2].dan) / Math.max(nodes[n - 1].sr - nodes[n - 2].sr, 1e-4);
+        return nodes[n - 1].dan + slope * (sr - nodes[n - 1].sr);
+    }
+    let i = 0;
+    for (; i < n - 1; i++) if (sr < nodes[i + 1].sr) break;
+    const t = (sr - nodes[i].sr) / Math.max(nodes[i + 1].sr - nodes[i].sr, 1e-4);
+    return nodes[i].dan + t * (nodes[i + 1].dan - nodes[i].dan);
+}
+
+function danTableFor(keyCount, kind) {
+    if (!DAN_CONSTANTS) return null;
+    const mode = keyCount === 4 ? "4K" : keyCount === 6 ? "6K" : "7K";
+    const tbl = DAN_CONSTANTS[mode] && DAN_CONSTANTS[mode][kind];
+    return tbl || null;
+}
+
+function srToDanLevel(sr, keyCount, kind) {
+    const tbl = danTableFor(keyCount, kind);
+    if (!tbl || !tbl.nodes || tbl.nodes.length === 0) return null;
+    return interpDan(sr, tbl.nodes);
+}
+
+/** Dan level → display label.
+ *  style "third"  → "Gamma low" / "Gamma" / "Gamma high"  (v0.5.1 style)
+ *  style "pm"     → "Gamma-"   / "Gamma" / "Gamma+"
+ *  style "number" → "11.37"                                     */
+function danLevelToLabel(level, keyCount, kind, style) {
+    style = style || "third";
+    // ladder length comes from this keycount/kind's node table, so modes
+    // without a top-range node (e.g. 7K has no Stellium course) top out at
+    // their highest measured dan; names come from danNameForLevel
+    const tbl = danTableFor(keyCount, kind);
+    const topDan = tbl && tbl.nodes && tbl.nodes.length
+        ? tbl.nodes[tbl.nodes.length - 1].dan : 14;
+    const top = Math.round(topDan);
+    if (style === "number") {
+        if (!Number.isFinite(level)) return "-";
+        return Math.max(level, 0).toFixed(2);
+    }
+    if (!Number.isFinite(level)) return "-";
+    // below the lowest dan (level < 0) or above the highest measured dan:
+    // clamped names with out-of-range marker (leoblack style)
+    if (level < 0) return "< " + danNameForLevel(0, keyCount, kind);
+    if (level > top + 0.5) {
+        return "> " + danNameForLevel(top, keyCount, kind);
+    }
+    // find the bin: dan d spans [d-0.5, d+0.5)
+    const idx = Math.max(0, Math.min(top, Math.round(level)));
+    const name = danNameForLevel(idx, keyCount, kind);
+    const frac = level - idx; // -0.5 .. +0.5 within the dan's span
+    if (style === "pm") {
+        if (frac < -0.25) return name + "-";
+        if (frac < 0.25) return name;
+        return name + "+";
+    }
+    // "third" (default): low / plain / high thirds
+    if (frac < -0.25) return name + " low";
+    if (frac < 0.25) return name;
+    return name + " high";
+}
+
+// ============================================================
+// processMap — compatibility entry for the overlay UI
+// ============================================================
+function processMap(osuContent, mode, speedRate, options) {
+    options = options || {};
     if (!speedRate || speedRate <= 0) speedRate = 1.0;
+    const res = evaluateChart(osuContent, speedRate, SPM_V1_PARAMS);
+    if (res.error) return null;
 
-    const result = calculate(osuContent, speedRate);
-    if (result.error) return null;
+    const { star, starRc, starLn, lnCov, keyCount } = res;
+    const b = res.b;
 
-    const { rating, rcRating, rcEquivRating, lnRating, lnMaskedRating, rcSectionRating,
-            noteSeq, LNSeq, allCorners,
-            D_all, rcD_all, rcEquivD_all, LN_rep, lnMask, features } = result;
-    const firstNoteTime = noteSeq.length > 0 ? noteSeq[0].start : 0;
-    const lastNoteTime = noteSeq.length > 0 ? noteSeq[noteSeq.length - 1].start : 0;
+    // map type from ln coverage (replaces the tag classifier branch):
+    // cov >= 0.68 → LN, cov <= 0.18 → RC (when LNs exist), else HB
+    const hasLn = b.tailN > 0;
+    let mapType;
+    if (!hasLn) mapType = "RC";
+    else if (lnCov > 0.68) mapType = "LN";
+    else if (lnCov < 0.18) mapType = "RC";
+    else mapType = "HB";
 
-    // Pre-compute calibrated D arrays for curve display (v0.4.0: curve-quantity consistency)
-    const calA_total = ENHANCED_PARAMS.calib_a || 1.0, calB_total = ENHANCED_PARAMS.calib_b || 0.0;
-    const calA_ln = ENHANCED_PARAMS.calib_a_ln_masked || 1.0, calB_ln = ENHANCED_PARAMS.calib_b_ln_masked || 0.0;
-    const D_calib_ln = (Math.abs(calA_ln - 1.0) > 1e-12 || Math.abs(calB_ln) > 1e-12)
-        ? D_all.map(d => calA_ln * d + calB_ln) : D_all;
-    const D_calib_total = (Math.abs(calA_total - 1.0) > 1e-12 || Math.abs(calB_total) > 1e-12)
-        ? D_all.map(d => calA_total * d + calB_total) : D_all;
-
-    // Display branch: driven by the segment classifier's sort when available;
-    // for non-7K maps (no classification) pick a neutral branch from LN share.
-    let mapType = sortType;
-    if (mapType !== 'RC' && mapType !== 'LN' && mapType !== 'HB' && mapType !== 'Mix') {
-        mapType = features.lnRatio > 0.15 ? 'HB' : 'RC';
-    }
-    const classified = sortType === 'RC' || sortType === 'LN' || sortType === 'HB' || sortType === 'Mix';
-
-    const skillRatings = computeSkillRatings(result.Jbar, result.Xbar, result.Pbar, result.Rbar);
-    const isMix = (mapType === 'Mix');
-
-    // Per-sort difficulty values
-    let displayRcDan, displayLnDan, displayRcRating, displayLnRating;
-    let rcSectionDiffs, lnSectionDiffs;
-
-    if (mapType === 'RC') {
-        displayRcRating = rating;
-        displayLnRating = LNSeq.length > 0 ? lnMaskedRating : null;
-        displayRcDan = ratingToDanRC(rating);
-        displayLnDan = LNSeq.length > 0 ? ratingToDanLN(lnMaskedRating) : null;
-        rcSectionDiffs = computeSectionData(allCorners, rcD_all, firstNoteTime, lastNoteTime).sectionDifficulties;
-        if (LNSeq.length > 0) {
-            const lnSectionD_RC = D_calib_ln.map((d, i) => lnMask[i] ? d : 0);
-            lnSectionDiffs = computeSectionData(allCorners, lnSectionD_RC, firstNoteTime, lastNoteTime).sectionDifficulties;
-        } else {
-            lnSectionDiffs = null;
-        }
-    } else if (mapType === 'LN') {
-        displayRcRating = rcEquivRating;
-        displayLnRating = rating;
-        displayRcDan = ratingToDanRC(rcEquivRating);
-        displayLnDan = ratingToDanLN(rating);
-        const rcEquivSection = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
-        rcSectionDiffs = rcEquivSection.sectionDifficulties;
-        const lnSectionD_LN = D_calib_total.map((d, i) => lnMask[i] ? d : 0);
-        lnSectionDiffs = computeSectionData(allCorners, lnSectionD_LN, firstNoteTime, lastNoteTime).sectionDifficulties;
-    } else if (mapType === 'HB') {
-        // HB maps: LN difficulty uses LN-masked model (LN sections only, v0.4.0 calib refitted)
-        // RC difficulty uses RC-section-masked model (RC sections only)
-        displayRcRating = rcSectionRating;
-        displayLnRating = lnMaskedRating;
-        displayRcDan = ratingToDanRC(rcSectionRating);
-        displayLnDan = ratingToDanLN(lnMaskedRating);
-        const rcEquivSection = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
-        rcSectionDiffs = rcEquivSection.sectionDifficulties;
-        const lnSectionD_HB = D_calib_ln.map((d, i) => lnMask[i] ? d : 0);
-        lnSectionDiffs = computeSectionData(allCorners, lnSectionD_HB, firstNoteTime, lastNoteTime).sectionDifficulties;
-    } else {
-        // Mix maps: same treatment as HB
-        displayRcRating = rcSectionRating;
-        displayLnRating = lnMaskedRating;
-        displayRcDan = ratingToDanRC(rcSectionRating);
-        displayLnDan = ratingToDanLN(lnMaskedRating);
-        const rcEquivSectionMix = computeSectionData(allCorners, rcEquivD_all, firstNoteTime, lastNoteTime);
-        rcSectionDiffs = rcEquivSectionMix.sectionDifficulties;
-        const lnSectionD_Mix = D_calib_ln.map((d, i) => lnMask[i] ? d : 0);
-        lnSectionDiffs = computeSectionData(allCorners, lnSectionD_Mix, firstNoteTime, lastNoteTime).sectionDifficulties;
+    // sub-difficulty scheme:
+    //   "v051" — LN maps display ln difficulty = total (v0.5.1 logic);
+    //   "direct" (default) — rc/ln always from the new sub-algorithms.
+    const subScheme = options.subDifficultyScheme || "direct";
+    let displayRc = starRc, displayLn = starLn;
+    if (subScheme === "v051") {
+        displayLn = star;   // legacy: LN difficulty equals total SR
     }
 
-    const { sectionDifficulties, sectionTimes } = computeSectionData(allCorners, D_all, firstNoteTime, lastNoteTime);
+    // calibrated display curve (400ms buckets)
+    const Ddisp = displayCurves(res);
+    const times = Array.from(b.t);
+    const { sectionDifficulties, sectionTimes } = computeSectionData(
+        null, times, Ddisp, times[0], times[times.length - 1]);
+    const { sectionDifficulties: rcSectionDifficulties } = computeSectionData(
+        null, times, res.Drc, times[0], times[times.length - 1]);
+    // LN curve: D masked by g>0 (omitted for pure RC maps — nothing to show)
+    let lnSectionDifficulties = null;
+    if (hasLn) {
+        const DLn = new Float64Array(res.nRows);
+        for (let r = 0; r < res.nRows; r++) DLn[r] = res.g[r] > 0.01 ? Ddisp[r] : 0.0;
+        lnSectionDifficulties = computeSectionData(
+            null, times, DLn, times[0], times[times.length - 1]).sectionDifficulties;
+    }
 
-    // Dan fields: total SR for RC maps, rcEquiv for LN, rcSection for HB/Mix
-    // LN Dan: HB/Mix/RC-with-LNs use lnMasked (LN-section difficulty); LN maps use Total SR
-    const rcDan = (mapType === 'RC') ? ratingToDanRC(rating)
-                : (mapType === 'LN') ? ratingToDanRC(rcEquivRating)
-                : ratingToDanRC(rcSectionRating);  // HB / Mix
-    const lnDan = (mapType === 'LN') ? ratingToDanLN(rating) : ratingToDanLN(lnMaskedRating);
-    const totalDan = ratingToDanRC(rating);
+    const rcDanLevel = srToDanLevel(displayRc, keyCount, "RC");
+    const lnDanLevel = hasLn ? srToDanLevel(displayLn, keyCount, "LN") : null;
+    const totalDanLevel = srToDanLevel(star, keyCount, "RC");
 
-    const output = {
-        rating, rcRating: displayRcRating, lnRating: displayLnRating,
-        rcDan, lnDan, totalDan, displayRcDan: displayRcDan, displayLnDan: displayLnDan,
-        rcEquivRating,
-        skillRatings, mapType, isMix, classified,
-        noteCount: noteSeq.length, lnCount: LNSeq.length, lnRatio: features.lnRatio,
-        od: result.params.od,
-        sectionDifficulties, rcSectionDifficulties: rcSectionDiffs,
-        lnSectionDifficulties: lnSectionDiffs, sectionTimes,
-        firstNoteTime, lastNoteTime,
-        features,
+    return {
+        rating: star,
+        rcRating: displayRc,
+        lnRating: hasLn ? displayLn : null,
+        rcDanLevel, lnDanLevel, totalDanLevel,
+        rcDan: rcDanLevel, lnDan: lnDanLevel, totalDan: totalDanLevel,
+        mapType, isMix: false,
+        classified: false,          // tag engine only runs on 7K; set by caller
+        noteCount: res.nNotes,
+        lnCount: b.tailN,
+        lnRatio: b.n ? b.tailN / res.nNotes : 0,
+        lnCov,
+        keyCount,
+        od: res.od,
+        sectionDifficulties, rcSectionDifficulties, lnSectionDifficulties,
+        sectionTimes,
+        firstNoteTime: times[0], lastNoteTime: times[times.length - 1],
     };
-
-    return output;
 }
 
-
-
-
+// ============================================================
+// Exports (browser global)
+// ============================================================
+var SPMEngine = {
+    SPM_V1_PARAMS, makeParams,
+    parseOsu, buildBatch, buildStruct, computeCurves, combine,
+    aggregatePow, postprocess, evaluateChart, displayCurves,
+    computeSectionData, processMap,
+    loadDanConstants, srToDanLevel, danLevelToLabel, interpDan,
+    danNameForLevel,
+};
+if (typeof window !== "undefined") window.SPMEngine = SPMEngine;

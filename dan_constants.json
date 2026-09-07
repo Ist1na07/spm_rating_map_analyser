@@ -1,151 +1,774 @@
 {
-  "_note": "v0.4.0: nodes measured with correction layer (path B = player-visible SR)",
-  "rc": {
-    "a": 3.7191,
-    "b": 0.447,
-    "r2": 0.9966,
-    "n_samples": 14,
-    "formula": "SR_rc = 3.7191 + 0.4470 * Dan"
+ "_note": "SPM Rating v1.0.0 + rc-ln-0.1.0 dan nodes. RC/LN star nodes measured on dan course packs (4K/6K) and the 7K dan dataset subset; interpolation maps star -> continuous dan level.",
+ "dan_names": [
+  "0th",
+  "1st",
+  "2nd",
+  "3rd",
+  "4th",
+  "5th",
+  "6th",
+  "7th",
+  "8th",
+  "9th",
+  "10th",
+  "Gamma",
+  "Azimuth",
+  "Zenith",
+  "Stellium"
+ ],
+ "modes": {
+  "4K": {
+   "RC": {
+    "nodes": [
+     {
+      "dan": 1.0,
+      "sr": 4.0208
+     },
+     {
+      "dan": 2.0,
+      "sr": 4.6648
+     },
+     {
+      "dan": 3.0,
+      "sr": 4.6648
+     },
+     {
+      "dan": 4.0,
+      "sr": 5.8555
+     },
+     {
+      "dan": 5.0,
+      "sr": 6.5143
+     },
+     {
+      "dan": 6.0,
+      "sr": 7.1491
+     },
+     {
+      "dan": 7.0,
+      "sr": 7.6171
+     },
+     {
+      "dan": 8.0,
+      "sr": 8.5556
+     },
+     {
+      "dan": 9.0,
+      "sr": 8.7292
+     },
+     {
+      "dan": 10.0,
+      "sr": 9.4459
+     },
+     {
+      "dan": 11.0,
+      "sr": 9.6211
+     },
+     {
+      "dan": 12.0,
+      "sr": 9.9713
+     },
+     {
+      "dan": 13.0,
+      "sr": 10.7001
+     },
+     {
+      "dan": 14.0,
+      "sr": 11.6387
+     },
+     {
+      "dan": 15.0,
+      "sr": 13.5081
+     }
+    ],
+    "source": "maps/ dan packs"
+   },
+   "LN": {
+    "nodes": [
+     {
+      "dan": 1.0,
+      "sr": 4.8726
+     },
+     {
+      "dan": 2.0,
+      "sr": 5.6284
+     },
+     {
+      "dan": 3.0,
+      "sr": 6.2091
+     },
+     {
+      "dan": 4.0,
+      "sr": 6.2091
+     },
+     {
+      "dan": 5.0,
+      "sr": 6.4
+     },
+     {
+      "dan": 6.0,
+      "sr": 6.9771
+     },
+     {
+      "dan": 7.0,
+      "sr": 7.6831
+     },
+     {
+      "dan": 8.0,
+      "sr": 8.0826
+     },
+     {
+      "dan": 9.0,
+      "sr": 8.6711
+     },
+     {
+      "dan": 10.0,
+      "sr": 9.2017
+     },
+     {
+      "dan": 11.0,
+      "sr": 9.8331
+     },
+     {
+      "dan": 12.0,
+      "sr": 10.2015
+     },
+     {
+      "dan": 13.0,
+      "sr": 11.1757
+     },
+     {
+      "dan": 14.0,
+      "sr": 11.8675
+     },
+     {
+      "dan": 15.0,
+      "sr": 12.6583
+     }
+    ],
+    "source": "maps/ dan packs"
+   }
   },
-  "ln": {
-    "a": 3.9279,
-    "b": 0.4244,
-    "r2": 0.9933,
-    "n_samples": 14,
-    "formula": "SR_ln = 3.9279 + 0.4244 * Dan"
+  "6K": {
+   "RC": {
+    "nodes": [
+     {
+      "dan": 0.0,
+      "sr": 3.6317
+     },
+     {
+      "dan": 1.0,
+      "sr": 4.1375
+     },
+     {
+      "dan": 2.0,
+      "sr": 4.8006
+     },
+     {
+      "dan": 3.0,
+      "sr": 5.5732
+     },
+     {
+      "dan": 4.0,
+      "sr": 6.0613
+     },
+     {
+      "dan": 5.0,
+      "sr": 6.6976
+     },
+     {
+      "dan": 6.0,
+      "sr": 7.1534
+     },
+     {
+      "dan": 7.0,
+      "sr": 7.5146
+     },
+     {
+      "dan": 8.0,
+      "sr": 7.9989
+     },
+     {
+      "dan": 9.0,
+      "sr": 8.6019
+     }
+    ],
+    "source": "maps/ dan packs"
+   },
+   "LN": {
+    "nodes": [
+     {
+      "dan": 0.0,
+      "sr": 4.0363
+     },
+     {
+      "dan": 1.0,
+      "sr": 4.9384
+     },
+     {
+      "dan": 2.0,
+      "sr": 5.1079
+     },
+     {
+      "dan": 3.0,
+      "sr": 5.6718
+     },
+     {
+      "dan": 4.0,
+      "sr": 6.4445
+     },
+     {
+      "dan": 5.0,
+      "sr": 6.4512
+     },
+     {
+      "dan": 6.0,
+      "sr": 7.0152
+     },
+     {
+      "dan": 7.0,
+      "sr": 7.3947
+     },
+     {
+      "dan": 8.0,
+      "sr": 7.949
+     },
+     {
+      "dan": 9.0,
+      "sr": 7.9944
+     },
+     {
+      "dan": 10.0,
+      "sr": 8.5633
+     },
+     {
+      "dan": 11.0,
+      "sr": 8.8391
+     },
+     {
+      "dan": 12.0,
+      "sr": 9.4934
+     },
+     {
+      "dan": 13.0,
+      "sr": 9.8917
+     },
+     {
+      "dan": 14.0,
+      "sr": 10.8678
+     }
+    ],
+    "source": "maps/ dan packs"
+   }
   },
-  "old_formula": "SR = 3.8 + 0.435 * Dan",
-  "dan_levels": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11.5,
-    13,
-    14.5,
-    16
-  ],
-  "dan_names": [
-    "0th",
-    "1st",
-    "2nd",
-    "3rd",
-    "4th",
-    "5th",
-    "6th",
-    "7th",
-    "8th",
-    "9th",
-    "10th",
-    "Gamma",
-    "Azimuth",
-    "Zenith",
-    "Stellium"
-  ],
-  "rc_measured_sr": [
-    3.508,
-    3.9952,
-    4.7028,
-    5.2907,
-    5.5615,
-    5.9998,
-    6.5071,
-    6.8795,
-    7.2737,
-    7.6527,
-    8.2536,
-    8.8573,
-    9.4121,
-    10.1955
-  ],
-  "rc_measured_levels": [
-    0.0,
-    1.0,
-    2.0,
-    3.0,
-    4.0,
-    5.0,
-    6.0,
-    7.0,
-    8.0,
-    9.0,
-    10.0,
-    11.5,
-    13.0,
-    14.5
-  ],
-  "ln_measured_sr": [
-    3.8246,
-    4.4282,
-    4.5044,
-    5.3024,
-    5.6546,
-    6.3344,
-    6.678,
-    6.8194,
-    7.3037,
-    7.5084,
-    8.251,
-    8.6595,
-    9.5029,
-    10.1104
-  ],
-  "ln_measured_levels": [
-    0.0,
-    1.0,
-    2.0,
-    3.0,
-    4.0,
-    5.0,
-    6.0,
-    7.0,
-    8.0,
-    9.0,
-    10.0,
-    11.5,
-    13.0,
-    14.5
-  ],
-  "thresholds_rc": [
-    3.7191,
-    4.1661,
-    4.6131,
-    5.0601,
-    5.5071,
-    5.9541,
-    6.4011,
-    6.8481,
-    7.2951,
-    7.7421,
-    8.1891,
-    8.8596,
-    9.5301,
-    10.2006,
-    10.8711
-  ],
-  "thresholds_ln": [
-    3.9279,
-    4.3523,
-    4.7767,
-    5.2011,
-    5.6255,
-    6.0499,
-    6.4743,
-    6.8987,
-    7.3231,
-    7.7475,
-    8.1719,
-    8.8085,
-    9.4451,
-    10.0817,
-    10.7183
-  ],
-  "javascript": "/** Auto-generated Dan mapping constants. */\n\n// Measured SR at each Dan level (piecewise interpolation)\nconst RC_MEASURED_SR = [3.508, 3.9952, 4.7028, 5.2907, 5.5615, 5.9998, 6.5071, 6.8795, 7.2737, 7.6527, 8.2536, 8.8573, 9.4121, 10.1955];\nconst RC_MEASURED_LEVELS = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.5, 13.0, 14.5];\nconst LN_MEASURED_SR = [3.8246, 4.4282, 4.5044, 5.3024, 5.6546, 6.3344, 6.678, 6.8194, 7.3037, 7.5084, 8.251, 8.6595, 9.5029, 10.1104];\nconst LN_MEASURED_LEVELS = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.5, 13.0, 14.5];\n\n// Dan label bins\nconst DAN_THRESHOLDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.5, 13, 14.5, 16];\nconst DAN_NAMES = [\"0th\", \"1st\", \"2nd\", \"3rd\", \"4th\", \"5th\", \"6th\", \"7th\", \"8th\", \"9th\", \"10th\", \"Gamma\", \"Azimuth\", \"Zenith\", \"Stellium\"];\n\n// Piecewise linear interpolation: SR -> Dan level\nfunction interpDan(sr, measuredSR, measuredLevels) {\n    const n = measuredSR.length;\n    if (n === 0) return 0;\n    // Below lowest measured point: extrapolate using first segment slope\n    if (sr <= measuredSR[0]) {\n        if (n < 2) return measuredLevels[0];\n        const slope = (measuredLevels[1] - measuredLevels[0]) / Math.max(measuredSR[1] - measuredSR[0], 0.001);\n        return Math.max(0, measuredLevels[0] + slope * (sr - measuredSR[0]));\n    }\n    // Above highest measured point: extrapolate using last segment slope\n    if (sr >= measuredSR[n - 1]) {\n        if (n < 2) return measuredLevels[n - 1];\n        const slope = (measuredLevels[n - 1] - measuredLevels[n - 2]) / Math.max(measuredSR[n - 1] - measuredSR[n - 2], 0.001);\n        return measuredLevels[n - 1] + slope * (sr - measuredSR[n - 1]);\n    }\n    // Find interval [i, i+1] where sr lies\n    let i = 0;\n    for (; i < n - 1; i++) {\n        if (sr < measuredSR[i + 1]) break;\n    }\n    const t = (sr - measuredSR[i]) / Math.max(measuredSR[i + 1] - measuredSR[i], 0.0001);\n    return measuredLevels[i] + t * (measuredLevels[i + 1] - measuredLevels[i]);\n}\n\nfunction ratingToDanRC(sr) { return interpDan(sr, RC_MEASURED_SR, RC_MEASURED_LEVELS); }\nfunction ratingToDanLN(sr) { return interpDan(sr, LN_MEASURED_SR, LN_MEASURED_LEVELS); }\n\nfunction danToLabelRC(danLevel) {\n  return danToLabelGeneric(danLevel, DAN_THRESHOLDS);\n}\n\nfunction danToLabelLN(danLevel) {\n  return danToLabelGeneric(danLevel, DAN_THRESHOLDS);\n}\n\nfunction danToLabelGeneric(danLevel, thresholds) {\n  if (danLevel < 0) return '<0th';\n  let idx = 0;\n  for (let i = thresholds.length - 1; i >= 0; i--) {\n    if (danLevel >= thresholds[i]) { idx = i; break; }\n  }\n  if (idx >= DAN_NAMES.length) return '>' + DAN_NAMES[DAN_NAMES.length - 1];\n  const name = DAN_NAMES[idx];\n  const binStart = thresholds[idx];\n  const binEnd = idx < thresholds.length - 1 ? thresholds[idx + 1] : binStart + 1;\n  const binWidth = binEnd - binStart;\n  const frac = binWidth > 0 ? (danLevel - binStart) / binWidth : 0;\n  if (frac < 0.25) return name + ' low';\n  else if (frac < 0.75) return name;\n  else return name + ' high';\n}\n\n// Deprecated: use ratingToDanRC/ratingToDanLN\nfunction ratingToDan(r) { return ratingToDanRC(r); }\nfunction danToLabel(d) { return danToLabelRC(d); }\n"
+  "7K": {
+   "RC": {
+    "nodes": [
+     {
+      "dan": 0.0,
+      "sr": 3.7546
+     },
+     {
+      "dan": 1.0,
+      "sr": 4.1656
+     },
+     {
+      "dan": 2.0,
+      "sr": 4.7922
+     },
+     {
+      "dan": 3.0,
+      "sr": 5.2249
+     },
+     {
+      "dan": 4.0,
+      "sr": 5.4118
+     },
+     {
+      "dan": 5.0,
+      "sr": 5.7669
+     },
+     {
+      "dan": 6.0,
+      "sr": 6.3758
+     },
+     {
+      "dan": 7.0,
+      "sr": 6.8118
+     },
+     {
+      "dan": 8.0,
+      "sr": 7.1672
+     },
+     {
+      "dan": 9.0,
+      "sr": 7.7366
+     },
+     {
+      "dan": 10.0,
+      "sr": 8.242
+     },
+     {
+      "dan": 11.0,
+      "sr": 8.8514
+     },
+     {
+      "dan": 12.0,
+      "sr": 9.3732
+     },
+     {
+      "dan": 13.0,
+      "sr": 10.1529
+     },
+     {
+      "dan": 14.0,
+      "sr": 10.6116
+     }
+    ],
+    "source": "spm_dataset-0.4.0 RegularDan/LNDan dan courses"
+   },
+   "LN": {
+    "nodes": [
+     {
+      "dan": 0.0,
+      "sr": 4.4554
+     },
+     {
+      "dan": 1.0,
+      "sr": 4.644
+     },
+     {
+      "dan": 2.0,
+      "sr": 4.6577
+     },
+     {
+      "dan": 3.0,
+      "sr": 5.2726
+     },
+     {
+      "dan": 4.0,
+      "sr": 5.8952
+     },
+     {
+      "dan": 5.0,
+      "sr": 6.0215
+     },
+     {
+      "dan": 6.0,
+      "sr": 6.5725
+     },
+     {
+      "dan": 7.0,
+      "sr": 6.7175
+     },
+     {
+      "dan": 8.0,
+      "sr": 7.405
+     },
+     {
+      "dan": 9.0,
+      "sr": 7.5857
+     },
+     {
+      "dan": 10.0,
+      "sr": 8.3702
+     },
+     {
+      "dan": 11.0,
+      "sr": 8.8079
+     },
+     {
+      "dan": 12.0,
+      "sr": 9.3984
+     },
+     {
+      "dan": 13.0,
+      "sr": 10.2228
+     },
+     {
+      "dan": 14.0,
+      "sr": 11.3869
+     }
+    ],
+    "source": "spm_dataset-0.4.0 RegularDan/LNDan dan courses"
+   }
+  }
+ },
+ "4K": {
+  "RC": {
+   "nodes": [
+    {
+     "dan": 1.0,
+     "sr": 4.0208
+    },
+    {
+     "dan": 2.0,
+     "sr": 4.6648
+    },
+    {
+     "dan": 3.0,
+     "sr": 4.6648
+    },
+    {
+     "dan": 4.0,
+     "sr": 5.8555
+    },
+    {
+     "dan": 5.0,
+     "sr": 6.5143
+    },
+    {
+     "dan": 6.0,
+     "sr": 7.1491
+    },
+    {
+     "dan": 7.0,
+     "sr": 7.6171
+    },
+    {
+     "dan": 8.0,
+     "sr": 8.5556
+    },
+    {
+     "dan": 9.0,
+     "sr": 8.7292
+    },
+    {
+     "dan": 10.0,
+     "sr": 9.4459
+    },
+    {
+     "dan": 11.0,
+     "sr": 9.6211
+    },
+    {
+     "dan": 12.0,
+     "sr": 9.9713
+    },
+    {
+     "dan": 13.0,
+     "sr": 10.7001
+    },
+    {
+     "dan": 14.0,
+     "sr": 11.6387
+    },
+    {
+     "dan": 15.0,
+     "sr": 13.5081
+    }
+   ],
+   "source": "maps/ dan packs"
+  },
+  "LN": {
+   "nodes": [
+    {
+     "dan": 1.0,
+     "sr": 4.8726
+    },
+    {
+     "dan": 2.0,
+     "sr": 5.6284
+    },
+    {
+     "dan": 3.0,
+     "sr": 6.2091
+    },
+    {
+     "dan": 4.0,
+     "sr": 6.2091
+    },
+    {
+     "dan": 5.0,
+     "sr": 6.4
+    },
+    {
+     "dan": 6.0,
+     "sr": 6.9771
+    },
+    {
+     "dan": 7.0,
+     "sr": 7.6831
+    },
+    {
+     "dan": 8.0,
+     "sr": 8.0826
+    },
+    {
+     "dan": 9.0,
+     "sr": 8.6711
+    },
+    {
+     "dan": 10.0,
+     "sr": 9.2017
+    },
+    {
+     "dan": 11.0,
+     "sr": 9.8331
+    },
+    {
+     "dan": 12.0,
+     "sr": 10.2015
+    },
+    {
+     "dan": 13.0,
+     "sr": 11.1757
+    },
+    {
+     "dan": 14.0,
+     "sr": 11.8675
+    },
+    {
+     "dan": 15.0,
+     "sr": 12.6583
+    }
+   ],
+   "source": "maps/ dan packs"
+  }
+ },
+ "6K": {
+  "RC": {
+   "nodes": [
+    {
+     "dan": 0.0,
+     "sr": 3.6317
+    },
+    {
+     "dan": 1.0,
+     "sr": 4.1375
+    },
+    {
+     "dan": 2.0,
+     "sr": 4.8006
+    },
+    {
+     "dan": 3.0,
+     "sr": 5.5732
+    },
+    {
+     "dan": 4.0,
+     "sr": 6.0613
+    },
+    {
+     "dan": 5.0,
+     "sr": 6.6976
+    },
+    {
+     "dan": 6.0,
+     "sr": 7.1534
+    },
+    {
+     "dan": 7.0,
+     "sr": 7.5146
+    },
+    {
+     "dan": 8.0,
+     "sr": 7.9989
+    },
+    {
+     "dan": 9.0,
+     "sr": 8.6019
+    }
+   ],
+   "source": "maps/ dan packs"
+  },
+  "LN": {
+   "nodes": [
+    {
+     "dan": 0.0,
+     "sr": 4.0363
+    },
+    {
+     "dan": 1.0,
+     "sr": 4.9384
+    },
+    {
+     "dan": 2.0,
+     "sr": 5.1079
+    },
+    {
+     "dan": 3.0,
+     "sr": 5.6718
+    },
+    {
+     "dan": 4.0,
+     "sr": 6.4445
+    },
+    {
+     "dan": 5.0,
+     "sr": 6.4512
+    },
+    {
+     "dan": 6.0,
+     "sr": 7.0152
+    },
+    {
+     "dan": 7.0,
+     "sr": 7.3947
+    },
+    {
+     "dan": 8.0,
+     "sr": 7.949
+    },
+    {
+     "dan": 9.0,
+     "sr": 7.9944
+    },
+    {
+     "dan": 10.0,
+     "sr": 8.5633
+    },
+    {
+     "dan": 11.0,
+     "sr": 8.8391
+    },
+    {
+     "dan": 12.0,
+     "sr": 9.4934
+    },
+    {
+     "dan": 13.0,
+     "sr": 9.8917
+    },
+    {
+     "dan": 14.0,
+     "sr": 10.8678
+    }
+   ],
+   "source": "maps/ dan packs"
+  }
+ },
+ "7K": {
+  "RC": {
+   "nodes": [
+    {
+     "dan": 0.0,
+     "sr": 3.7546
+    },
+    {
+     "dan": 1.0,
+     "sr": 4.1656
+    },
+    {
+     "dan": 2.0,
+     "sr": 4.7922
+    },
+    {
+     "dan": 3.0,
+     "sr": 5.2249
+    },
+    {
+     "dan": 4.0,
+     "sr": 5.4118
+    },
+    {
+     "dan": 5.0,
+     "sr": 5.7669
+    },
+    {
+     "dan": 6.0,
+     "sr": 6.3758
+    },
+    {
+     "dan": 7.0,
+     "sr": 6.8118
+    },
+    {
+     "dan": 8.0,
+     "sr": 7.1672
+    },
+    {
+     "dan": 9.0,
+     "sr": 7.7366
+    },
+    {
+     "dan": 10.0,
+     "sr": 8.242
+    },
+    {
+     "dan": 11.0,
+     "sr": 8.8514
+    },
+    {
+     "dan": 12.0,
+     "sr": 9.3732
+    },
+    {
+     "dan": 13.0,
+     "sr": 10.1529
+    },
+    {
+     "dan": 14.0,
+     "sr": 10.6116
+    }
+   ],
+   "source": "spm_dataset-0.4.0 RegularDan/LNDan dan courses"
+  },
+  "LN": {
+   "nodes": [
+    {
+     "dan": 0.0,
+     "sr": 4.4554
+    },
+    {
+     "dan": 1.0,
+     "sr": 4.644
+    },
+    {
+     "dan": 2.0,
+     "sr": 4.6577
+    },
+    {
+     "dan": 3.0,
+     "sr": 5.2726
+    },
+    {
+     "dan": 4.0,
+     "sr": 5.8952
+    },
+    {
+     "dan": 5.0,
+     "sr": 6.0215
+    },
+    {
+     "dan": 6.0,
+     "sr": 6.5725
+    },
+    {
+     "dan": 7.0,
+     "sr": 6.7175
+    },
+    {
+     "dan": 8.0,
+     "sr": 7.405
+    },
+    {
+     "dan": 9.0,
+     "sr": 7.5857
+    },
+    {
+     "dan": 10.0,
+     "sr": 8.3702
+    },
+    {
+     "dan": 11.0,
+     "sr": 8.8079
+    },
+    {
+     "dan": 12.0,
+     "sr": 9.3984
+    },
+    {
+     "dan": 13.0,
+     "sr": 10.2228
+    },
+    {
+     "dan": 14.0,
+     "sr": 11.3869
+    }
+   ],
+   "source": "spm_dataset-0.4.0 RegularDan/LNDan dan courses"
+  }
+ }
 }
