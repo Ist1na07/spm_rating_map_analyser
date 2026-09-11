@@ -75,6 +75,7 @@
 
 ![Aurora 配色，Rating first](screenshots/aurora-7k.png)
 ![High Contrast 配色，Dan first](screenshots/high-contrast-dan-first.png)
+![Minimal 风格](screenshots/minimal-7k.png)
 
 ### 其他
 
@@ -181,6 +182,7 @@
 | `corpus.js` | 在一个 `.osu` 语料目录上批量校验引擎，输出平滑/分段不变量与耗时 |
 | `serve.js` | 模拟 tosu 服务器（`:24050`），提供 v2 websocket、设置与谱面文件接口，用于本地预览 |
 | `shot.js` | 对着模拟服务器用 Chrome 无头渲染 overlay 并输出 PNG |
+| `probe_map.js` | 打印单张谱面的评级、段位与分段列表（`node _dev/probe_map.js map.osu`） |
 
 ## 参考
 

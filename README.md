@@ -75,6 +75,7 @@ Two layouts under **UI Style**:
 
 ![Aurora, rating first](screenshots/aurora-7k.png)
 ![High Contrast, dan first](screenshots/high-contrast-dan-first.png)
+![Minimal](screenshots/minimal-7k.png)
 
 ### Other
 
@@ -182,6 +183,7 @@ Measured against [ManiaMapAnalyser](https://github.com/LeoBlackMT/osumania_map_a
 | `corpus.js` | Batch-validates the engines over a directory of `.osu` files and reports smoothing/segment invariants and timings |
 | `serve.js` | Mock tosu server (`:24050`) that serves the overlay and emulates the v2 websocket, settings and beatmap-file endpoints for local preview |
 | `shot.js` | Renders the overlay headlessly in Chrome against the mock server and writes a PNG |
+| `probe_map.js` | Prints one map's rating, dans and segment list (`node _dev/probe_map.js map.osu`) |
 
 ## References
 
