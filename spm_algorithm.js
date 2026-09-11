@@ -1,6 +1,12 @@
 /**
  * SPM Map Analyser — SPM Rating v1.0.0 + RC/LN sub-model (rc-ln-0.1.0)
  *
+ * Overlay v1.0.1 additions (display-only; ratings unchanged):
+ *   smoothCurve / curveSigmaBuckets / fillShortZeroRuns — curve smoothing
+ *   computeSegmentStats — per-segment difficulty read off the display curve
+ *   parseOsuMeta        — .osu header reader for the map summary line
+ *   displayCurvesRC     — RC display curve on the calibrated star scale
+ *
  * JavaScript port of:
  *   spm_rating_v1.0.0/core (parser, grid, model, components)
  *   rc_ln_model/rcln       (RC = de-LN chart's spm rating,
@@ -2191,6 +2197,27 @@ function displayCurves(res) {
     return out;
 }
 
+/** RC display curve on the same calibrated star scale as displayCurves():
+ *  rescale raw Drc with the RC rating's own affine mapping, so the RC line
+ *  and the (total-calibrated) LN line share one scale when drawn together.
+ *  v1.0.0 drew the raw Drc here — fine while each line was renormalised on
+ *  its own, wrong once absolute segment values are read from the curves. */
+function displayCurvesRC(res) {
+    const n = res.nRows;
+    const star = res.starRc;
+    const p = SPM_V1_PARAMS;
+    const Dv = res.Drc;
+    const w = aggregateWeights(res.b, res.s, p, false);
+    const pw = Math.max(p.agg_k, 0.05);
+    let acc = 0, sw = 0;
+    for (let r = 0; r < n; r++) { acc += w[r] * Math.pow(Math.max(Dv[r], 0), pw); sw += w[r]; }
+    const mean = Math.pow(acc / Math.max(sw, EPS), 1.0 / pw);
+    const scale = mean > 1e-9 ? (star - p.calib_b) / (p.pp_scale * p.calib_a) / mean : 0;
+    const out = new Float64Array(n);
+    for (let r = 0; r < n; r++) out[r] = Math.max(Dv[r] * scale, 0);
+    return out;
+}
+
 // ---- section data for the difficulty curve display (400ms buckets)
 const SECTION_LENGTH_MS = 400;
 function computeSectionData(allRows, times, Darr, firstTime, lastTime) {
@@ -2211,6 +2238,286 @@ function computeSectionData(allRows, times, Darr, firstTime, lastTime) {
         sectionStart = sectionEnd;
     }
     return { sectionDifficulties, sectionTimes };
+}
+
+// ============================================================
+// v1.0.1 — playable curve (curve smoothing)
+// ============================================================
+// The raw curves above are per-400ms MAX envelopes: a bucket that happens to
+// contain no note row reads 0, and a dense burst next to a rest makes the
+// polyline jump. That raw shape is what a viewer perceives as "sharp/harsh".
+//
+// Kernel: repeated 3-tap binomial ([1,2,1]/4, edges replicate-clamped). One
+// pass is the law {-1,0,+1} with p={1/4,1/2,1/4}, so `r` passes have variance
+// r/2 and sd sqrt(r/2) buckets. To hit a target sd exactly, run floor(rExact)
+// passes and blend one more by the fractional part — a convex combination of
+// two symmetric zero-mean kernels, so the sd is exactly sqrt(rExact/2).
+//
+// Strength is expressed in PIXELS of the drawn curve, not in seconds: with a
+// fixed bucket count the same sigma in seconds is 0.4px on a long marathon and
+// 4.4px on a short chart, so the setting would mean something different on
+// every map. Converting through the curve's pixel width makes one setting mean
+// the same visual amount of smoothing everywhere.
+const CURVE_SIGMA_PX = { off: 0, light: 0.75, medium: 2.0, strong: 4.0, extreme: 8.0 };
+// Typical drawn inner width of the curve canvas in CSS pixels (the overlay is
+// 380px wide with 16px padding and a 3px plot pad). Only used to pre-compute
+// the smoothed series at map-analysis time; a resize re-runs it.
+const CURVE_INNER_W = 342;
+// An isolated 0 in the TOTAL/RC envelope means "this 400ms window happened to
+// contain no note row", not "the map is resting here": measured over the test
+// corpus 76% of zero runs are <= 2 buckets (<= 800ms), while genuine rests run
+// to 50+ buckets. Filling only the short ones removes the artifact dips without
+// inventing difficulty inside real breaks.
+const CURVE_FILL_RUN_MAX = 2;
+// How the kernel treats values separated by zeros.
+//   'runs'    — every maximal run of values is blurred on its own, with the
+//               run's edges clamped; values outside a run stay exactly 0.
+//   'uniform' — the whole series is one run (zeros included).
+// 'runs' is the default because it is the honest one for the LN line: there a
+// 0 means "no hold is being held here", and a uniform blur would bleed
+// neighbouring LN difficulty into those buckets, drawing hold difficulty where
+// the map has none (measured: up to x1.86 on the drawn LN area).
+const CURVE_SMOOTH_MODE = { runs: 'runs', uniform: 'uniform' };
+
+/** sd in buckets for a pixel-space sigma over `n` bucket samples.
+ *  Also keeps the kernel inside the series: on a chart shorter than ~6 sigma
+ *  the blur would flatten the whole curve, so the sd is capped at (n-1)/6 —
+ *  the ±3σ kernel then still fits, and every setting keeps some shape. */
+function curveSigmaBuckets(sigmaPx, n, innerWidthPx) {
+    if (!(sigmaPx > 0) || n < 2) return 0;
+    const w = innerWidthPx > 8 ? innerWidthPx : CURVE_INNER_W;
+    return Math.min(sigmaPx * (n - 1) / w, (n - 1) / 6);
+}
+
+/** Upper bound on the number of 3-tap passes. The kernel sd after r passes
+ *  is sqrt(r/2) buckets, so hitting an 8px sigma on a 10-minute marathon
+ *  (~1500 buckets over 342px) needs ~2000 passes. The cap keeps the cost
+ *  bounded on absurd inputs; the run is per settings-change, never per frame. */
+const CURVE_MAX_PASSES = 2048;
+
+/** Linear-interpolate zero runs of at most `maxRun` buckets (never the ones
+ *  touching either end). Returns a NEW array; `vals` is left untouched. */
+function fillShortZeroRuns(vals, maxRun) {
+    const n = vals.length;
+    const out = Float64Array.from(vals);
+    if (!(maxRun > 0)) return out;
+    let i = 0;
+    while (i < n) {
+        // strict progress: the cursor always advances, so `vals` containing
+        // NaN or negatives cannot turn this into an infinite scan
+        if (out[i] > 0) { i++; continue; }
+        let j = i + 1;
+        while (j < n && !(out[j] > 0)) j++;
+        const len = j - i;
+        if (len <= maxRun && i > 0 && j < n) {
+            const a = out[i - 1], b = out[j];
+            const span = j - (i - 1);
+            const step = (b - a) / span;
+            for (let k = i; k < j; k++) out[k] = a + step * (k - (i - 1));
+        }
+        i = j;
+    }
+    return out;
+}
+
+/** One binomial pass over cur[lo..hi), edges clamped to the run boundaries. */
+function binomialPass(cur, alt, lo, hi) {
+    for (let i = lo; i < hi; i++) {
+        const x = cur[i > lo ? i - 1 : lo];
+        const y = cur[i];
+        const z = cur[i < hi - 1 ? i + 1 : hi - 1];
+        alt[i] = y + 0.25 * ((x - y) + (z - y));
+    }
+}
+
+/** Gaussian-approximating smoothing of one difficulty series.
+ *  `sigmaPx`      target sd in drawn pixels (0 = identity, same reference)
+ *  `innerWidthPx` the plot width the sigma is measured against
+ *  `fillRunMax`   short zero-run fill (see CURVE_FILL_RUN_MAX); pass 0 to
+ *                 leave the series' zeros strictly alone
+ *  `mode`         CURVE_SMOOTH_MODE — 'runs' (default) blurs each maximal run
+ *                 of non-zero samples on its own, edges clamped to the run, so
+ *                 everything outside a run stays at exactly 0; 'uniform' blurs
+ *                 the series as a whole, zeros included.
+ *  The result always has the same length and time base as the input, and never
+ *  exceeds the input's maximum (the kernel is a normalised average). */
+function smoothCurve(vals, sigmaPx, innerWidthPx, fillRunMax, mode) {
+    const n = vals ? vals.length : 0;
+    const sigmaBuckets = curveSigmaBuckets(sigmaPx, n, innerWidthPx);
+    if (!(sigmaBuckets > 0) || n < 2) return vals;
+    const rExact = Math.min(2 * sigmaBuckets * sigmaBuckets, CURVE_MAX_PASSES);
+    const passes = Math.floor(rExact);
+    const frac = rExact - passes < 1e-9 ? 0 : rExact - passes;
+
+    const cur = fillShortZeroRuns(vals, fillRunMax || 0);
+    const alt = new Float64Array(n);
+    const out = new Float64Array(n);
+
+    // map out the regions to blur first, so a region can be processed with
+    // alternating buffers instead of copying the result back each pass
+    const ranges = [];
+    if (mode === 'uniform') {
+        ranges.push(0, n);
+    } else {
+        let i = 0;
+        while (i < n) {
+            while (i < n && !(cur[i] > 0)) i++;
+            if (i >= n) break;
+            let j = i + 1;
+            while (j < n && cur[j] > 0) j++;
+            ranges.push(i, j);
+            i = j;
+        }
+    }
+
+    for (let r = 0; r < ranges.length; r += 2) {
+        const lo = ranges[r], hi = ranges[r + 1];
+        if (hi - lo < 2) {
+            // a lone sample has no neighbours to average with: pass it through
+            for (let k = lo; k < hi; k++) out[k] = cur[k];
+            continue;
+        }
+        let a = cur, b = alt;
+        for (let p = 0; p < passes; p++) {
+            binomialPass(a, b, lo, hi);
+            const t = a; a = b; b = t;
+        }
+        for (let k = lo; k < hi; k++) {
+            const y = a[k];
+            if (frac === 0) {
+                out[k] = y;
+            } else {
+                const x = a[k > lo ? k - 1 : lo];
+                const z = a[k < hi - 1 ? k + 1 : hi - 1];
+                out[k] = y + frac * (0.25 * ((x - y) + (z - y)));
+            }
+        }
+    }
+    return Array.from(out);
+}
+
+// ============================================================
+// v1.0.1 — per-segment difficulty stats
+// ============================================================
+// SECTION_LENGTH_MS buckets are laid out contiguously from firstNoteTime, so
+// sectionTimes[k] is exactly firstNoteTime + k*400 (verified on every test
+// chart). That makes the bucket index derivable from a time and lets a
+// segment's difficulty be read straight off the same curve the timeline and
+// the playhead use — the number in the row therefore always belongs to the
+// tag next to it.
+//
+// Statistic: the plain mean of the covered buckets. The series already is a
+// per-window maximum, and a mean over it is what keeps rest sections low
+// (measured: rest segments read 0.3–7.0 while their hardest single bucket
+// reads up to 11.5, which would be a false alarm next to a "Break" label).
+// `peak` is reported alongside for the tooltip.
+function computeSegmentStats(segments, result) {
+    if (!segments || !result) return null;
+    const times = result.sectionTimes;
+    const diffs = result.sectionDifficulties;
+    if (!times || !times.length) return null;
+    const n = times.length;
+    const out = [];
+    let k = 0;
+    for (const seg of segments) {
+        // advance to the first bucket that still overlaps the segment
+        while (k < n && times[k] + SECTION_LENGTH_MS <= seg.start) k++;
+        let sum = 0, cnt = 0, peak = 0, sumPos = 0, cntPos = 0;
+        for (let j = k; j < n && times[j] < seg.end; j++) {
+            const v = diffs[j];
+            sum += v; cnt++;
+            if (v > peak) peak = v;
+            if (v > 0) { sumPos += v; cntPos++; }
+        }
+        const mean = cnt ? sum / cnt : 0;
+        // same family split the map type uses, from the segment's LN share
+        const kind = seg.family === "ln" ? "LN" : "RC";
+        out.push({
+            mean,
+            activeMean: cntPos ? sumPos / cntPos : 0,
+            peak,
+            buckets: cnt,
+            dan: srToDanLevel(mean, result.keyCount, kind),
+        });
+    }
+    return out;
+}
+
+// ============================================================
+// v1.0.1 — beatmap metadata for the summary line
+// ============================================================
+// Read straight from the .osu header so the summary works for every key count
+// (the 7K-only tag engine is not involved) and does not depend on which
+// fields the running client happens to expose over the websocket.
+function parseOsuMeta(content) {
+    if (!content) return null;
+    const meta = {
+        title: "", artist: "", creator: "", version: "", source: "",
+        od: null, hp: null, keyCount: null,
+        bpm: null, bpmMin: null, bpmMax: null,
+        circles: 0, holds: 0, objects: 0,
+        firstObject: 0, lastObject: 0, durationMs: 0,
+    };
+    const beatLengths = [];
+    let section = "";
+    for (const raw of content.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (line.startsWith("[")) { section = line.slice(1, line.indexOf("]")).toLowerCase(); continue; }
+        const ci = line.indexOf(":");
+        if (section === "metadata" && ci > 0) {
+            const k = line.slice(0, ci).trim(), v = line.slice(ci + 1).trim();
+            if (k === "Title") meta.title = v;
+            else if (k === "Artist") meta.artist = v;
+            else if (k === "Creator") meta.creator = v;
+            else if (k === "Version") meta.version = v;
+            else if (k === "Source") meta.source = v;
+        } else if (section === "difficulty" && ci > 0) {
+            const k = line.slice(0, ci).trim(), v = parseFloat(line.slice(ci + 1).trim());
+            if (k === "CircleSize") meta.keyCount = Math.round(v);
+            else if (k === "OverallDifficulty") meta.od = v;
+            else if (k === "HPDrainRate") meta.hp = v;
+        } else if (section === "timingpoints") {
+            const p = line.split(",");
+            if (p.length < 2) continue;
+            const bl = parseFloat(p[1]);
+            const uninherited = p.length >= 7 ? p[6].trim() !== "0" : bl > 0;
+            // ignore gimmick tempo points (stops, "0 BPM" memes): the summary
+            // line should describe the playable tempo span
+            const bpm = 60000 / bl;
+            if (uninherited && bl > 0 && Number.isFinite(bl) && bpm >= 30 && bpm <= 1500) beatLengths.push(bl);
+        } else if (section === "hitobjects") {
+            const p = line.split(",");
+            if (p.length < 5) continue;
+            const t = parseFloat(p[2]);
+            if (!Number.isFinite(t)) continue;
+            const type = parseInt(p[3], 10);
+            let tail = t;
+            if (type & 128) {
+                meta.holds++;
+                const e = parseFloat(String(p[5] ?? p[4]).split(":")[0]);
+                if (Number.isFinite(e)) tail = Math.max(e, t);
+            } else if (type & 1) {
+                meta.circles++;
+            } else {
+                continue;
+            }
+            meta.objects++;
+            if (meta.objects === 1 || t < meta.firstObject) meta.firstObject = t;
+            if (tail > meta.lastObject) meta.lastObject = tail;
+        }
+    }
+    if (beatLengths.length) {
+        const sorted = beatLengths.slice().sort((a, b) => a - b);
+        // "common" BPM = the median uninherited beat length, so a single stray
+        // timing point does not move the number the way a plain mean would
+        meta.bpm = Math.round(60000 / sorted[Math.floor(sorted.length / 2)]);
+        meta.bpmMax = Math.round(60000 / sorted[0]);
+        meta.bpmMin = Math.round(60000 / sorted[sorted.length - 1]);
+    }
+    if (meta.lastObject < meta.firstObject) meta.lastObject = meta.firstObject;
+    meta.durationMs = Math.max(0, meta.lastObject - meta.firstObject);
+    return meta;
 }
 
 // ============================================================
@@ -2371,7 +2678,7 @@ function processMap(osuContent, mode, speedRate, options) {
     const { sectionDifficulties, sectionTimes } = computeSectionData(
         null, times, Ddisp, times[0], times[times.length - 1]);
     const { sectionDifficulties: rcSectionDifficulties } = computeSectionData(
-        null, times, res.Drc, times[0], times[times.length - 1]);
+        null, times, displayCurvesRC(res), times[0], times[times.length - 1]);
     // LN curve: D masked by g>0 (omitted for pure RC maps — nothing to show)
     let lnSectionDifficulties = null;
     if (hasLn) {
@@ -2415,5 +2722,10 @@ var SPMEngine = {
     computeSectionData, processMap,
     loadDanConstants, srToDanLevel, danLevelToLabel, interpDan,
     danNameForLevel,
+    // v1.0.1
+    CURVE_SIGMA_PX, CURVE_INNER_W, CURVE_FILL_RUN_MAX, CURVE_MAX_PASSES,
+    CURVE_SMOOTH_MODE,
+    curveSigmaBuckets, fillShortZeroRuns, smoothCurve,
+    computeSegmentStats, parseOsuMeta, displayCurvesRC,
 };
 if (typeof window !== "undefined") window.SPMEngine = SPMEngine;

@@ -4,63 +4,150 @@
 <meta charset="UTF-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+    /* v1.0.1 design tokens — every colour in the panel resolves through these,
+       so a colour scheme is a token set rather than a pile of style overrides.
+       The values here are "Default Dark"; applyColorScheme() rewrites them. */
+    --panel-bg: rgba(13, 15, 18, 0.78);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --panel-radius: 12px;
+    --text: #eef1f5;
+    --text-dim: rgba(238, 241, 245, 0.55);
+    --text-faint: rgba(238, 241, 245, 0.35);
+    --rule: rgba(255, 255, 255, 0.07);
+    --surface: rgba(255, 255, 255, 0.035);
+    --surface-border: rgba(255, 255, 255, 0.06);
+    --chip-track: rgba(255, 255, 255, 0.05);
+    --pill: rgba(255, 255, 255, 0.10);
+    --pill-border: rgba(255, 255, 255, 0.14);
+    --cursor: #ffffff;
+    --break: #454b54;
+    --break-text: #5b6470;
+    --rc: #58a6ff;
+    --ln: #ff8c5a;
+    --hb: #c7cdd6;
+    --mix: #8f97a3;
+    --badge-ink: #14171c;
+    --dim-text: #ffffff;
+    --segdiff: #eef1f5;
+    /* ui-style tokens */
+    --hero-size: 42px;
+    --sub-size: 20px;
+    --curve-h: 96px;
+    --dan-size: 15px;
+}
 body {
     background: transparent;
-    color: #eef1f5;
+    color: var(--text);
     font-family: 'Segoe UI', 'Arial', sans-serif;
     overflow: hidden;
     user-select: none;
 }
 /* ---------- v0.5.0 design system ----------
    Two family anchors are used consistently everywhere: RC = cool
-   (#58a6ff), LN = warm (#ff8c5a). Sort badge, sub-ratings, dan values,
-   difficulty curves, tag chips and the segment timeline all follow this
-   mapping, so a color always means the same family. */
+   (default #58a6ff), LN = warm (default #ff8c5a). Sort badge, sub-ratings,
+   dan values, difficulty curves, tag chips and the segment timeline all
+   follow this mapping, so a color always means the same family.
+   v1.0.1 moves the anchors into --rc / --ln so a color scheme can redraw
+   the whole language at once. */
 #container {
     display: flex;
     flex-direction: column;
     gap: 6px;
     padding: 12px 16px 13px;
-    background: rgba(13, 15, 18, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
     backdrop-filter: blur(4px);
     min-width: 380px;
 }
+/* ---------- v1.0.1: map summary line ---------- */
+#summary-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 15px;
+    line-height: 1.4;
+    font-size: 12px;
+}
+#summary-main {
+    flex: 1 1 auto;
+    min-width: 72px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#summary-main .s-artist { color: var(--text-dim); font-weight: 600; }
+#summary-main .s-title { color: var(--text); font-weight: 700; }
+#summary-main .s-diff { color: var(--text-dim); font-weight: 600; }
+#summary-main .s-mapper { color: var(--text-faint); font-weight: 500; }
+/* when the main line is wider than its box it scrolls side to side with a
+   dwell at each end, instead of clipping (updateSummaryMarquee measures and
+   sets --mq-dist / --mq-dur; without them the line keeps the ellipsis) */
+#summary-main .mq-track { display: inline-block; }
+#summary-main.mq-run { text-overflow: clip; }
+#summary-main.mq-run .mq-track {
+    animation: summary-mq var(--mq-dur, 10s) ease-in-out infinite;
+    will-change: transform;
+}
+@keyframes summary-mq {
+    0%, 14% { transform: translateX(0); }
+    46%, 54% { transform: translateX(calc(-1 * var(--mq-dist, 0px))); }
+    86%, 100% { transform: translateX(0); }
+}
+#summary-meta {
+    /* never flex-shrunk: the title truncates first (it has the ellipsis);
+       the fact-fitting loop in renderSummary() drops facts only when the
+       facts alone would exceed the row minus the title's floor */
+    flex: 0 0 auto;
+    max-width: calc(100% - 84px);
+    overflow: hidden;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+#summary-meta .s-sep { opacity: 0.45; }
+#summary-meta .s-keys { color: var(--text-dim); font-weight: 700; }
 #header {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 #rating {
-    font-size: 42px;
+    font-size: var(--hero-size);
     font-weight: 800;
-    color: #fff;
+    color: var(--dim-text);
     letter-spacing: -0.5px;
     line-height: 1.05;
     font-variant-numeric: tabular-nums;
     margin-right: 2px;
 }
-#type-badge {
+#type-badge,
+#min-type-badge {
     font-size: 13px;
     font-weight: 800;
     padding: 3px 11px;
     border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: #14171c;
+    color: var(--badge-ink);
 }
-#type-badge.rc  { background: #58a6ff; }
-#type-badge.ln  { background: #ff8c5a; }
-#type-badge.hb  { background: #c7cdd6; }
-#type-badge.mix { background: #8f97a3; }
+#type-badge.rc,  #min-type-badge.rc  { background: var(--rc); }
+#type-badge.ln,  #min-type-badge.ln  { background: var(--ln); }
+#type-badge.hb,  #min-type-badge.hb  { background: var(--hb); }
+#type-badge.mix, #min-type-badge.mix { background: var(--mix); }
+#min-type-badge { align-self: center; }
 #keys-badge {
     font-size: 13px;
     font-weight: 700;
     padding: 2px 10px;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.22);
-    color: rgba(238, 241, 245, 0.55);
+    color: var(--text-dim);
     letter-spacing: 0.5px;
 }
 #mod-badge {
@@ -68,9 +155,9 @@ body {
     font-weight: 700;
     padding: 2px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    color: #e8ecf1;
+    background: var(--pill);
+    border: 1px solid var(--pill-border);
+    color: var(--text);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -87,17 +174,17 @@ body {
 #rc-ln-row .sub-label {
     font-size: 11px;
     font-weight: 700;
-    color: rgba(238, 241, 245, 0.45);
+    color: var(--text-faint);
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
 #rc-ln-row .sub-value {
     font-weight: 700;
-    font-size: 20px;
+    font-size: var(--sub-size);
     font-variant-numeric: tabular-nums;
 }
-#rc-ln-row .sub-value.rc { color: #58a6ff; }
-#rc-ln-row .sub-value.ln { color: #ff8c5a; }
+#rc-ln-row .sub-value.rc { color: var(--rc); }
+#rc-ln-row .sub-value.ln { color: var(--ln); }
 #rc-ln-row .sep {
     color: rgba(255, 255, 255, 0.12);
     font-size: 20px;
@@ -117,16 +204,16 @@ body {
 #dan-row .dan-label {
     font-size: 11px;
     font-weight: 700;
-    color: rgba(238, 241, 245, 0.4);
+    color: var(--text-faint);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 #dan-row .dan-value {
     font-weight: 700;
-    font-size: 15px;
+    font-size: var(--dan-size);
 }
-#dan-row .dan-value.rc-dan { color: #58a6ff; }
-#dan-row .dan-value.ln-dan { color: #ff8c5a; }
+#dan-row .dan-value.rc-dan { color: var(--rc); }
+#dan-row .dan-value.ln-dan { color: var(--ln); }
 #dan-row .dan-sep {
     color: rgba(255, 255, 255, 0.12);
     font-size: 14px;
@@ -145,16 +232,16 @@ body {
 }
 #curve-canvas {
     width: 100%;
-    height: 96px;
+    height: var(--curve-h);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
 }
 #curve-legend {
     display: flex;
     gap: 14px;
     font-size: 11px;
-    color: rgba(238, 241, 245, 0.5);
+    color: var(--text-dim);
     margin-top: 4px;
 }
 #curve-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -164,11 +251,11 @@ body {
     height: 7px;
     border-radius: 50%;
 }
-#curve-legend .legend-rc i { background: #58a6ff; }
-#curve-legend .legend-ln i { background: #ff8c5a; }
+#curve-legend .legend-rc i { background: var(--rc); }
+#curve-legend .legend-ln i { background: var(--ln); }
 .divider {
     height: 1px;
-    background: rgba(255, 255, 255, 0.07);
+    background: var(--rule);
     margin: 4px 0 2px;
 }
 /* ---- overall pattern tags (chips tinted with family color) ---- */
@@ -215,13 +302,13 @@ body {
     min-width: 44px;
     text-align: right;
     flex: none;
-    color: #eef1f5;
+    color: var(--text);
 }
 #seg-bpm::after {
     content: 'bpm';
     font-size: 10px;
     font-weight: 600;
-    color: rgba(238, 241, 245, 0.35);
+    color: var(--text-faint);
     margin-left: 3px;
 }
 #seg-bpm:empty::after { content: ''; }
@@ -238,20 +325,51 @@ body {
 #seg-tag .secondary {
     font-size: 11.5px;
     font-weight: 600;
-    color: rgba(238, 241, 245, 0.45);
+    color: var(--text-dim);
     margin-left: 6px;
 }
 #seg-conf {
     font-size: 11px;
-    color: rgba(238, 241, 245, 0.35);
+    color: var(--text-faint);
     font-variant-numeric: tabular-nums;
     flex: none;
 }
+/* ---------- v1.0.1: current segment difficulty ---------- */
+#seg-diff {
+    flex: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 1px 8px 2px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+#seg-diff .sd-star {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--segdiff);
+}
+#seg-diff .sd-star::after {
+    content: '\2605';
+    font-size: 9px;
+    margin-left: 2px;
+    opacity: 0.6;
+}
+#seg-diff .sd-dan {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+#seg-diff.rc { border-color: var(--rc); }
+#seg-diff.ln { border-color: var(--ln); }
 #seg-dur {
     margin-left: auto;
     flex: none;
     font-size: 11.5px;
-    color: rgba(238, 241, 245, 0.4);
+    color: var(--text-dim);
     font-variant-numeric: tabular-nums;
 }
 /* ---- segment tag timeline ---- */
@@ -265,8 +383,8 @@ body {
     position: relative;
     height: 14px;
     width: 100%;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: var(--chip-track);
+    border: 1px solid var(--rule);
     border-radius: 7px;
     overflow: hidden;
 }
@@ -283,7 +401,7 @@ body {
     top: -2px;
     width: 2px;
     height: 18px;
-    background: #fff;
+    background: var(--cursor);
     box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
     z-index: 2;
     left: 0;
@@ -293,7 +411,7 @@ body {
     flex-wrap: wrap;
     gap: 2px 10px;
     font-size: 10.5px;
-    color: rgba(238, 241, 245, 0.5);
+    color: var(--text-dim);
 }
 #seg-legend .lg-item {
     white-space: nowrap;
@@ -309,16 +427,131 @@ body {
 }
 #loading {
     font-size: 18px;
-    color: rgba(238, 241, 245, 0.4);
+    color: var(--text-faint);
     text-align: center;
     padding: 16px;
 }
+/* ---------- v1.0.1: ui style variants ----------
+   Both styles render the same nodes in the same order; the style only moves
+   the emphasis. "Dan first" promotes the dan value to the hero line (the
+   metric mania players actually quote) and demotes the star rating to a
+   supporting value, so it is a different information hierarchy rather than a
+   different layout. */
+#hero-dan {
+    display: none;
+    font-size: var(--hero-size);
+    font-weight: 800;
+    color: var(--rc);
+    letter-spacing: -0.3px;
+    line-height: 1.05;
+    margin-right: 2px;
+    white-space: nowrap;
+}
+#container.ui-style-dan-first #hero-dan { display: inline-block; }
+#container.ui-style-dan-first #rating {
+    font-size: var(--sub-size);
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--text);
+    align-self: center;
+    margin-right: 0;
+}
+#container.ui-style-dan-first #rating::before {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 15px;
+    background: rgba(255, 255, 255, 0.12);
+    margin-right: 10px;
+    vertical-align: -2px;
+}
+/* the dan row is hidden only when there is a dan value to promote, so charts
+   outside the measured dan range keep a dan readout (in RD/LN Dan labels) */
+#container.ui-style-dan-first.dan-hero #dan-row { display: none; }
+#container.ui-style-dan-first #hero-dan .hero-dan-suffix {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    opacity: 0.55;
+    margin-left: 4px;
+    text-transform: uppercase;
+}
+/* ---------- v1.0.1: minimal ui style ----------
+   Only the dans and the overall tags: the total dan leads, RC/LN dans sit in
+   a sub-row, and every other block is hidden. */
+#minimal-block { display: none; flex-direction: column; gap: 2px; }
+#container.ui-style-minimal #minimal-block { display: flex; }
+#container.ui-style-minimal #header,
+#container.ui-style-minimal #rc-ln-row,
+#container.ui-style-minimal #dan-row,
+#container.ui-style-minimal #curve-container,
+#container.ui-style-minimal #divider,
+#container.ui-style-minimal #seg-row,
+#container.ui-style-minimal #seg-timeline-wrap { display: none; }
+#min-hero { display: flex; align-items: baseline; gap: 6px; }
+#min-total-dan {
+    font-size: var(--hero-size);
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    line-height: 1.05;
+    color: var(--rc);
+    white-space: nowrap;
+}
+#min-hero-suf {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    opacity: 0.55;
+    text-transform: uppercase;
+}
+#min-sub-row { display: flex; align-items: baseline; gap: 7px; }
+#min-sub-row .min-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+#min-sub-row .min-value { font-weight: 700; font-size: var(--dan-size); }
+#min-sub-row .min-value.rc { color: var(--rc); }
+#min-sub-row .min-value.ln { color: var(--ln); }
+#min-sub-row .min-sep { color: var(--text-faint); }
+/* the LN half is one inline span so it can hide as a unit; inside it needs
+   the same spacing the sub-row's flex gap gives the RC half */
+#min-ln-wrap { display: inline-flex; align-items: baseline; gap: 7px; }
+/* ---------- v1.0.1: panel density ----------
+   Compact trades readability for screen space: smaller hero, tighter rows
+   and a shorter curve. Pure token overrides — the markup does not change. */
+#container.compact {
+    gap: 4px;
+    padding: 8px 12px 9px;
+    --hero-size: 32px;
+    --sub-size: 17px;
+    --curve-h: 72px;
+    --dan-size: 13px;
+}
+#container.compact #seg-row { min-height: 22px; }
+#container.compact #seg-bpm { font-size: 18px; min-width: 36px; }
+#container.compact #seg-tag { font-size: 14px; }
+#container.compact #tags-row { min-height: 0; }
 .hidden { display: none !important; }
 </style>
 </head>
 <body>
 <div id="container" class="hidden">
+    <div id="summary-row" class="hidden">
+        <span id="summary-main"></span>
+        <span id="summary-meta"></span>
+    </div>
+    <div id="minimal-block">
+        <div id="min-hero"><span id="min-total-dan">-</span><span id="min-type-badge" class="rc hidden">RC</span><span id="min-hero-suf"></span></div>
+        <div id="min-sub-row">
+            <span class="min-label">RC</span><span class="min-value rc" id="min-rc-dan">-</span>
+            <span id="min-ln-wrap"><span class="min-sep">|</span><span class="min-label">LN</span><span class="min-value ln" id="min-ln-dan">-</span></span>
+        </div>
+    </div>
     <div id="header">
+        <span id="hero-dan"></span>
         <span id="rating">0.00</span>
         <span id="type-badge" class="rc">RC</span>
         <span id="keys-badge" class="hidden"></span>
@@ -364,6 +597,7 @@ body {
         <span id="seg-bpm"></span>
         <span id="seg-tag">—</span>
         <span id="seg-conf"></span>
+        <span id="seg-diff" class="hidden"><span class="sd-star"></span><span class="sd-dan"></span></span>
         <span id="seg-dur"></span>
     </div>
     <div id="seg-timeline-wrap">
@@ -397,7 +631,11 @@ body {
     // RC = cool hues (the "clean" family), LN = warm hues, composites
     // blend their family, hybrid/break are neutral.
     // (tag set mirrors tagclassifier src/config.ts)
-    const FAMILY = { rc: '#58a6ff', ln: '#ff8c5a', hb: '#c7cdd6', mix: '#8f97a3' };
+    //
+    // v1.0.1: the anchors and the whole tag palette moved into COLOR_SCHEMES.
+    // FAMILY / TAG_COLORS stay as the *live* lookup tables the render code
+    // reads, and applyColorScheme() swaps their contents, so nothing below
+    // needs to know that themes exist.
     const TAG_LABELS = {
         'chordjack': 'Chordjack', 'minijack': 'Minijack',
         'dense chordstream': 'Dense Chordstream', 'fast chordstream': 'Fast Chordstream',
@@ -406,20 +644,85 @@ body {
         'technical': 'Technical', 'release': 'Release', 'ln wildcard': 'LN Wildcard',
         'break': 'Break', 'rc mix': 'RC Mix', 'ln mix': 'LN Mix', 'hybrid': 'Hybrid',
     };
-    const TAG_COLORS = {
-        // RC family — cool ramp (blue → sky → cyan → teal → green, indigo/violet accents)
-        'chordjack': '#4f9cff', 'minijack': '#7fc4ff',
-        'dense chordstream': '#3cc8d8', 'fast chordstream': '#2fc4a8',
-        'speed': '#4ade80', 'tech': '#8b9df0', 'vibro': '#b48cf2',
-        'wildcard': '#9aa1ac',
-        // LN family — warm ramp (red → orange → amber → yellow, rose accent)
-        'inverse': '#ff6b5e', 'coordination': '#ffa257',
-        'density': '#e8b23e', 'release': '#f2d060',
-        'technical': '#ee82a8', 'ln wildcard': '#a89e94',
-        // composites / special
-        'rc mix': '#79b8ff', 'ln mix': '#ffab7a', 'hybrid': '#d7dde6',
-        'break': '#454b54',
+    const TAG_KEYS = Object.keys(TAG_LABELS);
+
+    /** Colour schemes.
+     *  "Default Dark" matches the v1.0.0 palette (panel, family and tag hues,
+     *  dim-text hierarchy), so the upgrade changes nothing for existing users.
+     *  "Aurora" is the new v1.0.1 scheme: cyan-teal RC ramp against an
+     *  orange-red LN ramp — a complementary pair, which separates the two
+     *  families more strongly than blue/orange does at small sizes, and an
+     *  indigo-tinted panel instead of neutral black.
+     *  "High Contrast" is built for readability over bright gameplay: near
+     *  black panel, Okabe-Ito derived hues that stay distinguishable with
+     *  deuteranopia/protanopia. */
+    const COLOR_SCHEMES = {
+        'Default Dark': {
+            panel: { bg: 'rgba(13, 15, 18, 0.78)', border: 'rgba(255, 255, 255, 0.08)', radius: '12px' },
+            text: '#eef1f5', textDim: 'rgba(238, 241, 245, 0.55)', textFaint: 'rgba(238, 241, 245, 0.45)',
+            rule: 'rgba(255, 255, 255, 0.07)', surface: 'rgba(255, 255, 255, 0.035)',
+            surfaceBorder: 'rgba(255, 255, 255, 0.06)', chipTrack: 'rgba(255, 255, 255, 0.05)',
+            pill: 'rgba(255, 255, 255, 0.10)', pillBorder: 'rgba(255, 255, 255, 0.14)',
+            cursor: '#ffffff', badgeInk: '#14171c', dimText: '#ffffff',
+            family: { rc: '#58a6ff', ln: '#ff8c5a', hb: '#c7cdd6', mix: '#8f97a3' },
+            tags: {
+                'chordjack': '#4f9cff', 'minijack': '#7fc4ff',
+                'dense chordstream': '#3cc8d8', 'fast chordstream': '#2fc4a8',
+                'speed': '#4ade80', 'tech': '#8b9df0', 'vibro': '#b48cf2',
+                'wildcard': '#9aa1ac',
+                'inverse': '#ff6b5e', 'coordination': '#ffa257',
+                'density': '#e8b23e', 'release': '#f2d060',
+                'technical': '#ee82a8', 'ln wildcard': '#a89e94',
+                'rc mix': '#79b8ff', 'ln mix': '#ffab7a', 'hybrid': '#d7dde6',
+                'break': '#454b54',
+            },
+        },
+        'Aurora': {
+            panel: { bg: 'rgba(11, 13, 22, 0.80)', border: 'rgba(150, 200, 255, 0.12)', radius: '12px' },
+            text: '#e9eef8', textDim: 'rgba(233, 238, 248, 0.80)', textFaint: 'rgba(233, 238, 248, 0.63)',
+            rule: 'rgba(150, 200, 255, 0.10)', surface: 'rgba(150, 200, 255, 0.05)',
+            surfaceBorder: 'rgba(150, 200, 255, 0.09)', chipTrack: 'rgba(150, 200, 255, 0.07)',
+            pill: 'rgba(150, 200, 255, 0.12)', pillBorder: 'rgba(150, 200, 255, 0.20)',
+            cursor: '#bff3ff', badgeInk: '#06121a', dimText: '#ffffff',
+            family: { rc: '#22d3ee', ln: '#fb7185', hb: '#c4b5fd', mix: '#94a3b8' },
+            tags: {
+                'chordjack': '#38bdf8', 'minijack': '#22d3ee',
+                'dense chordstream': '#2dd4bf', 'fast chordstream': '#34d399',
+                'speed': '#5eead4', 'tech': '#818cf8', 'vibro': '#a78bfa',
+                'wildcard': '#94a3b8',
+                'inverse': '#fb7185', 'coordination': '#fb923c',
+                'density': '#fbbf24', 'release': '#facc15',
+                'technical': '#f472b6', 'ln wildcard': '#a8a29e',
+                'rc mix': '#67e8f9', 'ln mix': '#fda4af', 'hybrid': '#ddd6fe',
+                'break': '#3a4256',
+            },
+        },
+        'High Contrast': {
+            panel: { bg: 'rgba(0, 0, 0, 0.86)', border: 'rgba(255, 255, 255, 0.22)', radius: '10px' },
+            text: '#ffffff', textDim: 'rgba(255, 255, 255, 0.85)', textFaint: 'rgba(255, 255, 255, 0.72)',
+            rule: 'rgba(255, 255, 255, 0.20)', surface: 'rgba(255, 255, 255, 0.08)',
+            surfaceBorder: 'rgba(255, 255, 255, 0.16)', chipTrack: 'rgba(255, 255, 255, 0.12)',
+            pill: 'rgba(255, 255, 255, 0.16)', pillBorder: 'rgba(255, 255, 255, 0.30)',
+            cursor: '#ffe600', badgeInk: '#000000', dimText: '#ffffff',
+            family: { rc: '#56b4e9', ln: '#e69f00', hb: '#f0e442', mix: '#bbbbbb' },
+            tags: {
+                'chordjack': '#0072b2', 'minijack': '#56b4e9',
+                'dense chordstream': '#00bcd4', 'fast chordstream': '#009e73',
+                'speed': '#00c853', 'tech': '#7b7bff', 'vibro': '#cc79a7',
+                'wildcard': '#bbbbbb',
+                'inverse': '#d55e00', 'coordination': '#e69f00',
+                'density': '#f0e442', 'release': '#ffcc33',
+                'technical': '#ff4081', 'ln wildcard': '#c8b89a',
+                'rc mix': '#56b4e9', 'ln mix': '#e69f00', 'hybrid': '#ffffff',
+                'break': '#4a4a4a',
+            },
+        },
     };
+
+    // live lookup tables — swapped by applyColorScheme()
+    const FAMILY = Object.assign({}, COLOR_SCHEMES['Default Dark'].family);
+    const TAG_COLORS = Object.assign({}, COLOR_SCHEMES['Default Dark'].tags);
+
     function tagLabel(t) { return TAG_LABELS[t] || t; }
     function tagColor(t) { return TAG_COLORS[t] || '#9aa1ac'; }
     function hexA(hex, a) {
@@ -429,15 +732,141 @@ body {
         const b = parseInt(h.slice(4, 6), 16);
         return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
     }
+    /** WCAG relative luminance (0 = black, 1 = white). */
+    function luminance(hex) {
+        const h = hex.replace('#', '');
+        const ch = [0, 2, 4].map((i) => {
+            const c = parseInt(h.slice(i, i + 2), 16) / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    }
+    /** WCAG contrast ratio between two opaque hex colours. */
+    function contrastRatio(a, b) {
+        const la = luminance(a), lb = luminance(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+    /** Composite a translucent colour over an opaque one. */
+    function compositeOver(hex, alpha, bgHex) {
+        const h = hex.replace('#', ''), b = bgHex.replace('#', '');
+        const ch = [0, 2, 4].map((i) => {
+            const fg = parseInt(h.slice(i, i + 2), 16);
+            const bv = parseInt(b.slice(i, i + 2), 16);
+            return Math.round(fg * alpha + bv * (1 - alpha));
+        });
+        return '#' + ch.map((v) => v.toString(16).padStart(2, '0')).join('');
+    }
+    /** Lift a hue towards white without changing its identity. */
+    function lighten(hex, k) {
+        const h = hex.replace('#', '');
+        const ch = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        return '#' + ch.map((v) => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0')).join('');
+    }
+    // chip geometry: a translucent tint of the tag hue, the hue as the border,
+    // and an ink that has to clear CHIP_MIN_CONTRAST both against the chip's
+    // own tint AND against the panel underneath it. Measured across all three
+    // schemes that needs a lifted ink for part of the palette: a raw mid
+    // luminance hue (chordjack blue, vibro violet) falls in a dead zone where
+    // it reads against neither. The hue stays on the border, so identity is
+    // preserved even when the ink has been lightened.
+    const CHIP_TINT_ALPHA = 0.20;
+    const CHIP_BORDER_ALPHA = 0.55;
+    const CHIP_MIN_CONTRAST = 4.5;
+    const CHIP_INK_LIFT = 0.14;
+    const BREAK_LIGHTEN = 0.52;
+    // the effective panel colour under the panel's own alpha, over a bright
+    // gameplay frame — the worst case for text contrast. Refreshed by
+    // applyColorScheme. The text colour is a fixed token, so it does not move.
+    let chipBackdrop = '#2a2c30';
+    function updateChipBackdrop(panelBg) {
+        const m = String(panelBg).match(/rgba?\(([^)]+)\)/);
+        if (!m) { chipBackdrop = typeof panelBg === 'string' && panelBg[0] === '#' ? panelBg : chipBackdrop; return; }
+        const p = m[1].split(',').map(parseFloat);
+        const a = p.length > 3 ? p[3] : 1;
+        const bg = [64, 62, 58];   // representative mid-bright gameplay pixel
+        chipBackdrop = '#' + [0, 1, 2].map((i) =>
+            Math.round(p[i] * a + bg[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
+    }
+    // also the worst case over a bright frame, so the ink chosen here is safe
+    // over any gameplay behind the translucent panel
+    let chipBackdropBright = '#3a3a38';
+    function updateChipBackdropBright(panelBg) {
+        const m = String(panelBg).match(/rgba?\(([^)]+)\)/);
+        if (!m) return;
+        const p = m[1].split(',').map(parseFloat);
+        const a = p.length > 3 ? p[3] : 1;
+        const bg = [210, 205, 195];
+        chipBackdropBright = '#' + [0, 1, 2].map((i) =>
+            Math.round(p[i] * a + bg[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
+    }
+    /** Ink for a tag chip: the hue itself when it is dark enough, otherwise the
+     *  hue lifted towards white until it measures on both backdrops. */
+    function chipInk(hex) {
+        const fills = [chipBackdrop, chipBackdropBright].map((bd) => compositeOver(hex, CHIP_TINT_ALPHA, bd));
+        let ink = hex;
+        for (let k = 0; k < 8; k++) {
+            const ok = fills.every((f) => contrastRatio(ink, f) >= CHIP_MIN_CONTRAST)
+                && chipBackdropBright && contrastRatio(ink, chipBackdropBright) >= CHIP_MIN_CONTRAST;
+            if (ok) return ink;
+            ink = lighten(ink, CHIP_INK_LIFT);
+        }
+        return '#ffffff';
+    }
+
+    /** Push a scheme's tokens onto :root and swap the live palettes. */
+    function applyColorScheme(name) {
+        const s = COLOR_SCHEMES[name] || COLOR_SCHEMES['Default Dark'];
+        const root = document.documentElement.style;
+        root.setProperty('--panel-bg', s.panel.bg);
+        root.setProperty('--panel-border', s.panel.border);
+        root.setProperty('--panel-radius', s.panel.radius);
+        root.setProperty('--text', s.text);
+        root.setProperty('--text-dim', s.textDim);
+        root.setProperty('--text-faint', s.textFaint);
+        root.setProperty('--rule', s.rule);
+        root.setProperty('--surface', s.surface);
+        root.setProperty('--surface-border', s.surfaceBorder);
+        root.setProperty('--chip-track', s.chipTrack);
+        root.setProperty('--pill', s.pill);
+        root.setProperty('--pill-border', s.pillBorder);
+        root.setProperty('--cursor', s.cursor);
+        root.setProperty('--badge-ink', s.badgeInk);
+        root.setProperty('--dim-text', s.dimText);
+        root.setProperty('--rc', s.family.rc);
+        root.setProperty('--ln', s.family.ln);
+        root.setProperty('--hb', s.family.hb);
+        root.setProperty('--mix', s.family.mix);
+        root.setProperty('--break', s.tags['break']);
+        // the "Break" label is muted on purpose, but the raw break hue is far
+        // too dark to read as text — lift it towards the scheme's ink
+        root.setProperty('--break-text', lighten(s.tags['break'], BREAK_LIGHTEN));
+        root.setProperty('--segdiff', s.dimText);
+        for (const k of Object.keys(FAMILY)) FAMILY[k] = s.family[k];
+        for (const k of TAG_KEYS) TAG_COLORS[k] = s.tags[k] || '#9aa1ac';
+        updateChipBackdrop(s.panel.bg);
+        updateChipBackdropBright(s.panel.bg);
+        // the canvas cannot read CSS variables, so mirror the few values it
+        // draws with (cursor colour, legend ink) into a plain object
+        CANVAS_INK.cursor = s.cursor;
+        CANVAS_INK.cursorGlow = hexA(s.cursor, 0.6);
+    }
+
+    // canvas-only mirrors of the token values (see applyColorScheme)
+    const CANVAS_INK = { cursor: '#ffffff', cursorGlow: 'rgba(255,255,255,0.6)' };
 
     let settings = {
         algorithm: 'SPM Rating v1.0.0',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
         danDisplayStyle: 'Thirds (low/high)',
         colorScheme: 'Default Dark',
+        uiStyle: 'Rating first',
+        panelDensity: 'Standard',
+        curveSmoothing: 'Medium',
         hideOnPlay: false,
+        showSummary: true,
         showTags: true,
         showSegmentTag: true,
+        showSegmentDiff: true,
         showTimeline: true,
         showBreak: true,
     };
@@ -447,7 +876,31 @@ body {
         switch (settings.danDisplayStyle) {
             case 'Signs (-/+)': return 'pm';
             case 'Number': return 'number';
+            case 'Thirds (low/high)': return 'third';
             default: return 'third';
+        }
+    }
+
+    // ui style key, same idea
+    function uiStyleKey() {
+        switch (settings.uiStyle) {
+            case 'Dan first': return 'dan-first';
+            case 'Minimal': return 'minimal';
+            case 'Rating first': return 'rating-first';
+            default: return 'rating-first';
+        }
+    }
+
+    // curve smoothing key -> the sigma in drawn pixels it stands for; the
+    // engine owns the numbers (SPMEngine.CURVE_SIGMA_PX)
+    function smoothPx() {
+        switch (settings.curveSmoothing) {
+            case 'Off': return 0;
+            case 'Light': return SPMEngine.CURVE_SIGMA_PX.light;
+            case 'Medium': return SPMEngine.CURVE_SIGMA_PX.medium;
+            case 'Strong': return SPMEngine.CURVE_SIGMA_PX.strong;
+            case 'Max': return SPMEngine.CURVE_SIGMA_PX.extreme;
+            default: return SPMEngine.CURVE_SIGMA_PX.medium;
         }
     }
 
@@ -456,13 +909,20 @@ body {
     let currentModSignature = null;
     let currentSpeedRate = 1.0;
     let cachedResult = null;
+    let cachedRawCurves = null;   // v1.0.1: unsmoothed series, so the smoothing setting can be re-applied without re-analysis
     let cachedTagResult = null;   // v0.5.0: segment classifier result (7K only)
+    let cachedSegStats = null;    // v1.0.1: per-segment difficulty, aligned to cachedTagResult.segments
+    let curveScaleMax = 0;        // v1.0.1: y-scale anchor = RAW curve max (smoothing never moves the scale)
+    let cachedMeta = null;        // v1.0.1: beatmap metadata for the summary line
+    let cachedPayloadMeta = null; // v1.0.1: metadata from the tosu frame, if any
+    let segmentDiffFloor = 0;     // v1.0.1: below this a section is treated as a rest
     let cachedKeyCount = 7;
     let cachedOsuContent = null;
     let reconnectTimer = null;
     let animFrameId = null;
     let lastSegIndex = -2;
     let hideOnPlayActive = false;
+    let isPaused = false;         // v1.0.1: game.paused from the tosu frame, drives the pause marker
 
     let songTimeMs = null;
     let prevSongTimeMs = null;
@@ -472,6 +932,17 @@ body {
     const elContainer = document.getElementById('container');
     const elLoading = document.getElementById('loading');
     const elRating = document.getElementById('rating');
+    const elHeroDan = document.getElementById('hero-dan');
+    const elSummaryRow = document.getElementById('summary-row');
+    const elSummaryMain = document.getElementById('summary-main');
+    const elSummaryMeta = document.getElementById('summary-meta');
+    const elMinTotalDan = document.getElementById('min-total-dan');
+    const elMinHeroSuf = document.getElementById('min-hero-suf');
+    const elMinTypeBadge = document.getElementById('min-type-badge');
+    const elMinSubRow = document.getElementById('min-sub-row');
+    const elMinRcDan = document.getElementById('min-rc-dan');
+    const elMinLnDan = document.getElementById('min-ln-dan');
+    const elMinLnWrap = document.getElementById('min-ln-wrap');
     const elTypeBadge = document.getElementById('type-badge');
     const elKeysBadge = document.getElementById('keys-badge');
     const elModBadge = document.getElementById('mod-badge');
@@ -493,6 +964,9 @@ body {
     const elSegBpm = document.getElementById('seg-bpm');
     const elSegTag = document.getElementById('seg-tag');
     const elSegConf = document.getElementById('seg-conf');
+    const elSegDiff = document.getElementById('seg-diff');
+    const elSegDiffStar = elSegDiff.querySelector('.sd-star');
+    const elSegDiffDan = elSegDiff.querySelector('.sd-dan');
     const elSegDur = document.getElementById('seg-dur');
     const elCanvas = document.getElementById('curve-canvas');
     const elCurveLegend = document.getElementById('curve-legend');
@@ -608,10 +1082,21 @@ body {
         return Math.round(v);
     }
 
+    /** Finite max that tolerates a non-finite series (a single NaN would
+     *  otherwise poison every y and blank the whole curve). */
+    function safeMax(arr) {
+        let m = 0;
+        for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i];
+        return m;
+    }
+
     function drawCurve(sectionDiffs, rcSectionDiffs, mapType, cursorTimeMs, sectionTimes, firstNoteTime, lastNoteTime, lnSectionDiffs) {
         const canvas = elCanvas;
-        const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
+        // while "Hide While Playing" has the panel display:none there is nothing
+        // to draw, and a 0-width canvas would produce an inverted x mapping
+        if (!(rect.width > 8)) return;
+        const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         const ctx = canvas.getContext('2d');
@@ -625,22 +1110,37 @@ body {
         const isMix = mapType === 'Mix';
         const showBoth = rcSectionDiffs && rcSectionDiffs.length > 0 && lnSectionDiffs && lnSectionDiffs.length > 0;
 
+        // plot x from the bucket time when the time base is known, so the trace
+        // and the playhead share one time -> x mapping; fall back to the index
+        const mapStart = firstNoteTime != null ? firstNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[0] : 0);
+        const mapEndT = lastNoteTime != null ? lastNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[sectionTimes.length - 1] + 400 : 0);
+        const timeSpan = Math.max(1, mapEndT - mapStart);
+        const hasTimes = !!(sectionTimes && sectionTimes.length);
+        function xAt(i, len) {
+            if (hasTimes && i < sectionTimes.length) {
+                const t = Math.max(mapStart, Math.min(sectionTimes[i], mapEndT));
+                return pad + ((t - mapStart) / timeSpan) * (w - 2 * pad);
+            }
+            return pad + (i / Math.max(len - 1, 1)) * (w - 2 * pad);
+        }
+
         if (showBoth) {
             // RC line = cool family anchor, LN line = warm family anchor —
             // same colors as the sort badge and the RC/LN sub-ratings
-            const allMax = Math.max(
-                Math.max(...rcSectionDiffs, 0.01),
-                lnSectionDiffs && lnSectionDiffs.length > 0 ? Math.max(...lnSectionDiffs, 0.01) : 0.01
-            );
+            // scale anchored to the raw max so the smoothing setting changes
+            // the curve's shape, never its height
+            const allMax = curveScaleMax > 0 ? curveScaleMax
+                : Math.max(safeMax(rcSectionDiffs), safeMax(lnSectionDiffs), 0.01);
 
             function drawLine(data, color, alpha) {
                 if (!data || data.length === 0) return;
+                const len = data.length;
                 ctx.beginPath();
                 ctx.strokeStyle = color;
                 ctx.globalAlpha = alpha;
                 ctx.lineWidth = 2;
-                for (let i = 0; i < data.length; i++) {
-                    const x = pad + (i / Math.max(data.length - 1, 1)) * (w - 2 * pad);
+                for (let i = 0; i < len; i++) {
+                    const x = xAt(i, len);
                     const y = h - pad - (data[i] / allMax) * (h - 2 * pad);
                     if (i === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
@@ -651,13 +1151,11 @@ body {
                 ctx.beginPath();
                 ctx.globalAlpha = alpha * 0.10;
                 ctx.fillStyle = color;
-                ctx.moveTo(pad, h - pad);
-                for (let i = 0; i < data.length; i++) {
-                    const x = pad + (i / Math.max(data.length - 1, 1)) * (w - 2 * pad);
-                    const y = h - pad - (data[i] / allMax) * (h - 2 * pad);
-                    ctx.lineTo(x, y);
+                ctx.moveTo(xAt(0, len), h - pad);
+                for (let i = 0; i < len; i++) {
+                    ctx.lineTo(xAt(i, len), h - pad - (data[i] / allMax) * (h - 2 * pad));
                 }
-                ctx.lineTo(pad + (w - 2 * pad), h - pad);
+                ctx.lineTo(xAt(len - 1, len), h - pad);
                 ctx.closePath();
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
@@ -670,15 +1168,17 @@ body {
             elLegendLn.classList.toggle('hidden', !lnSectionDiffs || lnSectionDiffs.length === 0);
             elCurveLegend.classList.remove('hidden');
         } else if (sectionDiffs && sectionDiffs.length > 0) {
-            const maxVal = Math.max(...sectionDiffs, 0.01);
+            const maxVal = curveScaleMax > 0 ? curveScaleMax
+                : Math.max(safeMax(sectionDiffs), 0.01);
             // single-line fallback follows the map's family
             const curveColor = mapType === 'LN' ? FAMILY.ln : (isMix ? FAMILY.mix : FAMILY.rc);
+            const len = sectionDiffs.length;
             ctx.beginPath();
             ctx.strokeStyle = curveColor;
             ctx.globalAlpha = 0.9;
             ctx.lineWidth = 2;
-            for (let i = 0; i < sectionDiffs.length; i++) {
-                const x = pad + (i / Math.max(sectionDiffs.length - 1, 1)) * (w - 2 * pad);
+            for (let i = 0; i < len; i++) {
+                const x = xAt(i, len);
                 const y = h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
@@ -689,13 +1189,11 @@ body {
             ctx.beginPath();
             ctx.globalAlpha = 0.10;
             ctx.fillStyle = curveColor;
-            ctx.moveTo(pad, h - pad);
-            for (let i = 0; i < sectionDiffs.length; i++) {
-                const x = pad + (i / Math.max(sectionDiffs.length - 1, 1)) * (w - 2 * pad);
-                const y = h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad);
-                ctx.lineTo(x, y);
+            ctx.moveTo(xAt(0, len), h - pad);
+            for (let i = 0; i < len; i++) {
+                ctx.lineTo(xAt(i, len), h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad));
             }
-            ctx.lineTo(pad + (w - 2 * pad), h - pad);
+            ctx.lineTo(xAt(len - 1, len), h - pad);
             ctx.closePath();
             ctx.fill();
             ctx.globalAlpha = 1.0;
@@ -707,15 +1205,11 @@ body {
         // Cursor position
         if (cursorTimeMs !== null && sectionTimes && sectionTimes.length > 0) {
             // cursorTimeMs is already scaled (divided by speedRate) in onmessage handler
-            const scaledTime = cursorTimeMs;
-            const mapStart = firstNoteTime || sectionTimes[0];
-            const mapEnd = lastNoteTime || sectionTimes[sectionTimes.length - 1] + 400;
-            const timeSpan = Math.max(1, mapEnd - mapStart);
-            const clampedTime = Math.max(mapStart, Math.min(scaledTime, mapEnd));
+            const clampedTime = Math.max(mapStart, Math.min(cursorTimeMs, mapEndT));
             const cursorX = pad + ((clampedTime - mapStart) / timeSpan) * (w - 2 * pad);
 
             ctx.beginPath();
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = CANVAS_INK.cursor;
             ctx.globalAlpha = 0.7;
             ctx.lineWidth = 1.5;
             ctx.moveTo(cursorX, pad);
@@ -723,12 +1217,21 @@ body {
             ctx.stroke();
             ctx.globalAlpha = 1.0;
 
-            ctx.beginPath();
-            ctx.fillStyle = '#ffffff';
-            ctx.globalAlpha = 0.9;
-            ctx.arc(cursorX, pad + 4, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
+            if (isPaused) {
+                // pause marker instead of the dot while the game is paused
+                ctx.fillStyle = CANVAS_INK.cursor;
+                ctx.globalAlpha = 0.9;
+                ctx.fillRect(cursorX - 4, pad - 1, 2.5, 11);
+                ctx.fillRect(cursorX + 1.5, pad - 1, 2.5, 11);
+                ctx.globalAlpha = 1.0;
+            } else {
+                ctx.beginPath();
+                ctx.fillStyle = CANVAS_INK.cursor;
+                ctx.globalAlpha = 0.9;
+                ctx.arc(cursorX, pad + 4, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
         }
     }
 
@@ -740,9 +1243,19 @@ body {
         return m + ':' + String(s).padStart(2, '0');
     }
 
-    /** Overall tag chips + top-share outline chips (rendered once per map).
-        Solid chips are tinted with the family color; share chips are
-        border-only with a dimmed percentage. */
+    /** Compact duration for the summary line: "3:12" under an hour, "1h 02m"
+     *  above it. Avoids the ambiguous "9:00" / "10:00" pair in a cramped line. */
+    function fmtDuration(ms) {
+        const total = Math.max(0, Math.round(ms / 1000));
+        const m = Math.floor(total / 60);
+        if (m < 60) return m + ':' + String(total % 60).padStart(2, '0');
+        return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+    }
+
+    /** Overall tag chips + top-share chips (rendered once per map).
+        v1.0.1: solid chips are tinted with the tag hue and carry the ink that
+        maximises contrast against that tint; share chips stay outline-only so
+        the two chip kinds are still distinguishable at a glance. */
     function renderOverallTags(tagRes) {
         elTagsRow.innerHTML = '';
         if (!tagRes) return;
@@ -751,9 +1264,9 @@ body {
             const c = tagColor(t);
             const chip = document.createElement('span');
             chip.className = 'ov-tag';
-            chip.style.background = hexA(c, 0.16);
-            chip.style.borderColor = hexA(c, 0.38);
-            chip.style.color = c;
+            chip.style.background = hexA(c, CHIP_TINT_ALPHA);
+            chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
+            chip.style.color = chipInk(c);
             chip.textContent = tagLabel(t);
             elTagsRow.appendChild(chip);
         }
@@ -773,8 +1286,8 @@ body {
             const c = tagColor(t);
             const chip = document.createElement('span');
             chip.className = 'ov-share';
-            chip.style.borderColor = hexA(c, 0.30);
-            chip.style.color = hexA(c, 0.9);
+            chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
+            chip.style.color = chipInk(c);
             chip.textContent = tagLabel(t);
             const pct = document.createElement('span');
             pct.className = 'pct';
@@ -785,6 +1298,12 @@ body {
         }
     }
 
+    /** Solid tag chips for the timeline legend. */
+    function makeLegendDot(color) {
+        const dot = document.createElement('i');
+        dot.style.background = color;
+        return dot;
+    }
     function renderSegTimeline(tagRes) {
         // keep the cursor node; strip segment nodes only
         elTimeline.querySelectorAll('.tl-seg').forEach((n) => n.remove());
@@ -793,13 +1312,16 @@ body {
         const first = tagRes.map.firstNote, last = tagRes.map.lastNote;
         const span = Math.max(1, last - first);
         const used = [];
-        for (const seg of tagRes.segments) {
+        for (let i = 0; i < tagRes.segments.length; i++) {
+            const seg = tagRes.segments[i];
             const d = document.createElement('div');
             d.className = 'tl-seg' + (seg.tag === 'break' ? ' tl-break' : '');
             d.style.left = (((seg.start - first) / span) * 100) + '%';
             d.style.width = Math.max(0.15, ((seg.end - seg.start) / span) * 100) + '%';
             d.style.background = tagColor(seg.tag);
-            d.title = fmtTimeShort(seg.start) + ' ' + tagLabel(seg.tag) + (seg.equivBpm ? ' @' + seg.equivBpm : '');
+            d.title = fmtTimeShort(seg.start) + ' ' + tagLabel(seg.tag)
+                + (seg.equivBpm ? ' @' + seg.equivBpm : '')
+                + segDifficultyTip(i);
             elTimeline.appendChild(d);
             if (seg.tag !== 'break' && !used.includes(seg.tag)) used.push(seg.tag);
         }
@@ -807,12 +1329,20 @@ body {
         for (const t of used) {
             const item = document.createElement('span');
             item.className = 'lg-item';
-            const dot = document.createElement('i');
-            dot.style.background = tagColor(t);
-            item.appendChild(dot);
+            item.appendChild(makeLegendDot(tagColor(t)));
             item.appendChild(document.createTextNode(tagLabel(t)));
             elSegLegend.appendChild(item);
         }
+    }
+
+    /** " — 6.42★ (peak 7.10)" for a timeline tooltip, or '' when unavailable. */
+    function segDifficultyTip(idx) {
+        if (!settings.showSegmentDiff || !cachedSegStats || !cachedSegStats[idx]) return '';
+        const seg = cachedTagResult && cachedTagResult.segments[idx];
+        if (seg && seg.tag === 'break') return '';
+        const s = cachedSegStats[idx];
+        if (!(s.mean > segmentDiffFloor)) return '';
+        return ' — ' + s.mean.toFixed(2) + '\u2605 (peak ' + s.peak.toFixed(2) + ')';
     }
 
     function findSegment(segments, t) {
@@ -826,6 +1356,37 @@ body {
         return ans;
     }
 
+    /** v1.0.1: current-segment difficulty chip. The value is the mean of the
+        difficulty curve over this segment — the same series the graph draws
+        and the playhead points into, so the number always belongs to the tag
+        shown beside it. Rest sections are skipped: a near-zero average would
+        render as a meaningless "0th". The tooltip carries peak and dan. */
+    function renderSegDiff(idx) {
+        const stat = cachedSegStats && idx >= 0 ? cachedSegStats[idx] : null;
+        const seg = cachedTagResult && idx >= 0 ? cachedTagResult.segments[idx] : null;
+        if (!settings.showSegmentDiff || !stat || !seg || seg.tag === 'break'
+            || !(stat.mean > segmentDiffFloor)) {
+            elSegDiff.classList.add('hidden');
+            elSegDiff.removeAttribute('title');
+            return;
+        }
+        const kind = segKind(idx);
+        const danTxt = stat.dan != null
+            ? SPMEngine.danLevelToLabel(stat.dan, cachedKeyCount, kind, danStyleKey())
+            : '';
+        elSegDiff.className = kind === 'LN' ? 'ln' : 'rc';
+        elSegDiffStar.textContent = stat.mean.toFixed(2);
+        elSegDiffDan.textContent = danTxt;
+        elSegDiff.title = 'Segment difficulty (mean of the section curve: '
+            + stat.mean.toFixed(2) + '\u2605, peak ' + stat.peak.toFixed(2) + '\u2605)'
+            + (danTxt ? '\n' + kind + ' dan: ' + danTxt : '');
+    }
+
+    function segKind(idx) {
+        const seg = cachedTagResult && cachedTagResult.segments[idx];
+        return seg && seg.family === 'ln' ? 'LN' : 'RC';
+    }
+
     /** Per-frame: current segment row + timeline cursor. */
     function updateSegmentLive(cursorTime) {
         if (!cachedTagResult || cursorTime === null) return;
@@ -836,7 +1397,7 @@ body {
             lastSegIndex = idx;
             if (idx < 0) {
                 elSegTag.textContent = '—';
-                elSegTag.style.color = 'rgba(238,241,245,0.4)';
+                elSegTag.style.color = 'var(--text-faint)';
                 elSegTag.style.opacity = '1';
                 elSegBpm.textContent = '';
                 elSegConf.textContent = '';
@@ -845,7 +1406,7 @@ body {
                 const seg = segments[idx];
                 if (seg.tag === 'break') {
                     elSegTag.textContent = settings.showBreak ? 'Break' : '—';
-                    elSegTag.style.color = '#5b6470';
+                    elSegTag.style.color = 'var(--break-text)';
                     elSegTag.style.opacity = '1';
                     elSegBpm.textContent = '';
                     elSegConf.textContent = '';
@@ -864,11 +1425,140 @@ body {
                 }
                 elSegDur.textContent = ((seg.end - seg.start) / 1000).toFixed(1) + 's';
             }
+            renderSegDiff(idx);
         }
 
         const first = cachedTagResult.map.firstNote, last = cachedTagResult.map.lastNote;
         const pct = Math.max(0, Math.min(100, ((cursorTime - first) / Math.max(1, last - first)) * 100));
         elSegCursor.style.left = pct + '%';
+    }
+
+    /** v1.0.1: map summary line — "Artist - Title [Version]" on the left and
+        the factual chips (mapper, keys, BPM, objects, length) on the right.
+        Values come from the tosu frame when the client exposes them and fall
+        back to the parsed .osu header, so the line is complete in every client
+        and every key count. */
+    /** v1.0.1: side-to-side scroll when the summary's main line overflows.
+        Constant scroll speed (~45 px/s) with a dwell at each end; the scroll
+        legs each take ~32% of the cycle, so the duration scales with the
+        overflow. Falls back to the ellipsis when the panel has no layout yet
+        (hidden) — showResult re-renders and re-measures once visible. */
+    function updateSummaryMarquee() {
+        const track = elSummaryMain.firstChild;
+        elSummaryMain.classList.remove('mq-run');
+        elSummaryMain.style.removeProperty('--mq-dist');
+        elSummaryMain.style.removeProperty('--mq-dur');
+        if (!track || !track.classList || !track.classList.contains('mq-track')) return;
+        const box = elSummaryMain.clientWidth;
+        if (box === 0) return;
+        const overflow = track.scrollWidth - box;
+        if (overflow <= 2) return;
+        const dist = Math.ceil(overflow) + 6; // pad so the tail clears the edge
+        const dur = Math.min(30, Math.max(6, dist / 45 / 0.32));
+        elSummaryMain.style.setProperty('--mq-dist', dist + 'px');
+        elSummaryMain.style.setProperty('--mq-dur', dur.toFixed(2) + 's');
+        elSummaryMain.classList.add('mq-run');
+    }
+
+    function renderSummary() {
+        if (!settings.showSummary) {
+            elSummaryRow.classList.add('hidden');
+            return;
+        }
+        const frame = cachedPayloadMeta || {};
+        const meta = cachedMeta || {};
+        const artist = frame.artist || meta.artist || '';
+        const title = frame.title || meta.title || '';
+        const version = frame.version || meta.version || '';
+        const mapper = frame.mapper || meta.creator || '';
+
+        elSummaryMain.innerHTML = '';
+        elSummaryMeta.innerHTML = '';
+        // the parts live in an inline-block track: the summary box clips it,
+        // and updateSummaryMarquee() scrolls the track when it overflows
+        const track = document.createElement('span');
+        track.className = 'mq-track';
+        elSummaryMain.appendChild(track);
+        let mainParts = 0;
+        const add = (cls, text, sep) => {
+            if (!text) return;
+            if (sep && mainParts) {
+                const d = document.createElement('span');
+                d.className = 's-sep';
+                d.textContent = sep;
+                track.appendChild(d);
+            }
+            const s = document.createElement('span');
+            s.className = cls;
+            s.textContent = text;
+            track.appendChild(s);
+            mainParts++;
+        };
+        add('s-artist', artist, '');
+        add('s-title', title, artist ? ' \u2013 ' : '');
+        add('s-diff', version ? '[' + version + ']' : '', title || artist ? ' ' : '');
+        // mapper rides the truncating left zone: it is the first thing to go
+        // when the song name is long, and the diff name identifies the chart
+        add('s-mapper', mapper ? 'by ' + mapper : '', title || artist || version ? ' \u00b7 ' : '');
+
+        const keys = frame.keyCount || meta.keyCount;
+        const objects = frame.objects || meta.objects;
+        // Mod-aware values: the parsed .osu BPM is the map's original, so it
+        // scales with the speed rate (DT/HT), and the played length is the
+        // engine's note span, which is already rate-scaled. The tosu payload
+        // values are only fallbacks for clients where the parse found nothing.
+        const rate = currentSpeedRate || 1;
+        const bpmSrc = meta.bpm ? { bpm: meta.bpm, min: meta.bpmMin, max: meta.bpmMax, scale: rate }
+            : { bpm: frame.bpm, min: frame.bpmMin, max: frame.bpmMax, scale: 1 };
+        const durationMs = cachedResult && cachedResult.lastNoteTime > cachedResult.firstNoteTime
+            ? cachedResult.lastNoteTime - cachedResult.firstNoteTime
+            : (frame.durationMs != null ? frame.durationMs
+                : (meta.durationMs > 0 ? meta.durationMs / rate : 0));
+
+        elSummaryMeta.innerHTML = '';
+        const facts = [];
+        if (keys) facts.push({ text: keys + 'K', cls: 's-keys' });
+        if (bpmSrc.bpm) {
+            const bpm = Math.round(bpmSrc.bpm * bpmSrc.scale);
+            const bpmMin = bpmSrc.min && Math.round(bpmSrc.min * bpmSrc.scale);
+            const bpmMax = bpmSrc.max && Math.round(bpmSrc.max * bpmSrc.scale);
+            // a range only when the chart's BPM actually moves; when the common
+            // BPM is already one of the extremes the range would read "157-157"
+            const varies = bpmMin && bpmMax && bpmMax - bpmMin >= 2
+                && bpm !== bpmMin && bpm !== bpmMax;
+            facts.push({ text: varies ? bpmMin + '\u2013' + bpmMax + ' BPM' : bpm + ' BPM' });
+        }
+        if (durationMs > 0) facts.push({ text: fmtDuration(durationMs) });
+        if (objects) {
+            // LN share tells the player how hold-heavy the chart is at a glance
+            const lnPct = cachedResult && cachedResult.lnCount > 0
+                ? Math.round((cachedResult.lnRatio || 0) * 100) : 0;
+            facts.push({ text: objects + ' obj' + (lnPct > 0 ? ' (' + lnPct + '% LN)' : '') });
+        }
+        const od = meta.od != null ? meta.od : (cachedResult ? cachedResult.od : null);
+        if (Number.isFinite(od)) facts.push({ text: 'OD ' + (Math.round(od * 10) / 10) });
+        // fit the row: while the facts overflow their share, drop the
+        // rightmost (least important) one and rebuild
+        while (facts.length) {
+            elSummaryMeta.innerHTML = '';
+            facts.forEach((f, i) => {
+                if (i) {
+                    const sep = document.createElement('span');
+                    sep.className = 's-sep';
+                    sep.textContent = '\u00b7';
+                    elSummaryMeta.appendChild(sep);
+                }
+                const s = document.createElement('span');
+                if (f.cls) s.className = f.cls;
+                s.textContent = f.text;
+                elSummaryMeta.appendChild(s);
+            });
+            if (elSummaryMeta.scrollWidth <= elSummaryMeta.clientWidth + 1
+                || facts.length === 1 || elSummaryMeta.clientWidth === 0) break;
+            facts.pop();
+        }
+        updateSummaryMarquee();
+        elSummaryRow.classList.toggle('hidden', facts.length === 0 && mainParts === 0);
     }
 
     /** Show/hide the classification-related blocks (sort badge, tags, segment UI). */
@@ -882,11 +1572,75 @@ body {
         elTagsRow.classList.toggle('hidden', !classified || !settings.showTags);
         elSegRow.classList.toggle('hidden', !classified || !settings.showSegmentTag);
         elTimelineWrap.classList.toggle('hidden', !classified || !settings.showTimeline);
+        if (!classified || !settings.showSegmentTag) {
+            elSegDiff.classList.add('hidden');
+        }
         // the divider separates the difficulty zone from the pattern zone —
         // hide it when the whole pattern zone is gone (non-7K or all toggled off)
         const anyPatternVisible = classified &&
             (settings.showTags || settings.showSegmentTag || settings.showTimeline);
         elDivider.classList.toggle('hidden', !anyPatternVisible);
+    }
+
+    /** v1.0.1: read the summary-line facts out of a tosu frame. Everything is
+        optional — capturePayloadMeta keeps the previous value when a client
+        does not populate a field, and renderSummary() falls back to the parsed
+        .osu header per field. */
+    function capturePayloadMeta(data) {
+        const bm = data && data.beatmap;
+        if (!bm) return;
+        const clean = (v) => (typeof v === 'string' && v.trim() && v.trim() !== '-' ? v.trim() : '');
+        const prev = cachedPayloadMeta || {};
+        const next = {
+            artist: clean(bm.artistUnicode) || clean(bm.artist) || prev.artist || '',
+            title: clean(bm.titleUnicode) || clean(bm.title) || prev.title || '',
+            version: clean(bm.version) || prev.version || '',
+            mapper: clean(bm.mapper) || prev.mapper || '',
+        };
+        const st = bm.stats || {};
+        const cs = st.cs ? Number(st.cs.original) : NaN;
+        if (Number.isFinite(cs) && cs > 0) next.keyCount = Math.round(cs);
+        const bpm = st.bpm || {};
+        const common = Number(bpm.common), lo = Number(bpm.min), hi = Number(bpm.max);
+        if (Number.isFinite(common) && common > 0) {
+            next.bpm = Math.round(common);
+            if (Number.isFinite(lo) && Number.isFinite(hi) && lo > 0 && hi > 0) {
+                next.bpmMin = Math.round(lo);
+                next.bpmMax = Math.round(hi);
+            }
+        }
+        const objs = st.objects ? Number(st.objects.total) : NaN;
+        if (Number.isFinite(objs) && objs > 0) next.objects = objs;
+        const t = bm.time || {};
+        const first = Number(t.firstObject), last = Number(t.lastObject);
+        // note-to-note span; not mp3Length, which includes the lead-out
+        if (Number.isFinite(first) && Number.isFinite(last) && last > first) {
+            next.durationMs = last - first;
+        }
+        // only redraw when something actually changed (this runs per frame)
+        const merged = Object.assign({}, prev, next);
+        if (JSON.stringify(merged) !== JSON.stringify(prev)) {
+            cachedPayloadMeta = merged;
+            renderSummary();
+        }
+    }
+
+    /** v1.0.1: push the ui-style / density / theme settings onto the container. */
+    function applyUiStyle() {
+        const styleKey = uiStyleKey();
+        const first = styleKey === 'dan-first';
+        elContainer.classList.toggle('ui-style-dan-first', first);
+        elContainer.classList.toggle('ui-style-minimal', styleKey === 'minimal');
+        elContainer.classList.toggle('compact', settings.panelDensity === 'Compact');
+        // the dan row is redundant when it would show exactly the promoted
+        // value (pure RC charts); when it still carries the secondary dans
+        // (LN/HB/Mix charts) it stays visible under the hero
+        const lnItemShown = !elLnDanItem.classList.contains('hidden');
+        const totalItemShown = elDanRow.classList.contains('hb') || elDanRow.classList.contains('mix');
+        const rowRedundant = !lnItemShown && !totalItemShown;
+        // no dan value to promote (outside the measured range) -> keep the row
+        elContainer.classList.toggle('dan-hero',
+            first && elHeroDan.dataset.hasDan === '1' && rowRedundant);
     }
 
     function showResult(result) {
@@ -898,6 +1652,10 @@ body {
         }
         elLoading.classList.add('hidden');
         elContainer.classList.remove('hidden');
+        // the curves are pre-computed against a nominal plot width while the
+        // panel is still hidden; now that it has been laid out, redo them with
+        // the real width if it differs
+        maybeResizeCurves();
 
         // Main rating = total SR
         elRating.textContent = result.rating.toFixed(2);
@@ -935,6 +1693,55 @@ body {
             elDanRow.classList.add('mix');
         }
 
+        // v1.0.1: primary dan for the "Dan first" ui style. The hero carries
+        // the skill the map is dominated by; the data-dan flag lets
+        // applyUiStyle() fall back to the labelled dan row when the chart sits
+        // outside the measured dan range.
+        const heroKind = result.mapType === 'LN' ? 'LN' : 'RC';
+        const heroDan = result.mapType === 'LN' ? result.lnDan : result.totalDan;
+        const heroTxt = heroDan != null
+            ? SPMEngine.danLevelToLabel(heroDan, result.keyCount, heroKind, style) : '';
+        // HB/Mix promote the Total dan; labelling it "RC dan" would be wrong
+        const heroSuf = (result.mapType === 'HB' || result.mapType === 'Mix')
+            ? 'Total dan' : heroKind + ' dan';
+        elHeroDan.dataset.hasDan = heroTxt && heroTxt !== '-' ? '1' : '0';
+        elHeroDan.innerHTML = '';
+        elHeroDan.appendChild(document.createTextNode(heroTxt || ''));
+        if (heroTxt) {
+            const suf = document.createElement('span');
+            suf.className = 'hero-dan-suffix';
+            suf.textContent = heroSuf;
+            elHeroDan.appendChild(suf);
+        }
+        // hero colour follows the value it shows: the LN dan is warm, the RC
+        // dan cool; the Total dan (HB/Mix charts) stays neutral, matching the
+        // standard Total readout — the type badge carries the family colour
+        const heroColor = result.mapType === 'LN' ? 'var(--ln)'
+            : result.mapType === 'RC' ? 'var(--rc)' : 'var(--text)';
+        elHeroDan.style.color = heroColor;
+
+        // v1.0.1: "Minimal" ui style content — total dan hero + type badge +
+        // RC/LN sub-row; the ui-style-minimal CSS hides every other block
+        elMinTotalDan.textContent = heroTxt || '-';
+        elMinTotalDan.style.color = heroColor;
+        elMinTypeBadge.textContent = result.mapType;
+        elMinTypeBadge.className = result.mapType.toLowerCase()
+            + (result.classified ? '' : ' hidden');
+        // the family suffix is only needed where the badge cannot show
+        // (unclassified non-7K charts)
+        elMinHeroSuf.textContent = heroTxt && !result.classified ? heroSuf : '';
+        elMinRcDan.textContent = result.rcDan != null
+            ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
+        elMinLnDan.textContent = result.lnDan != null
+            ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-';
+        elMinLnWrap.classList.toggle('hidden', result.lnDan == null);
+        // pure RC charts: the sub-row would only repeat the hero — drop it
+        elMinSubRow.classList.toggle('hidden', result.mapType === 'RC' && result.lnCount === 0);
+        applyUiStyle();
+
+        // v1.0.1: map summary line
+        renderSummary();
+
         // v0.5.0: classification blocks (hidden automatically for non-7K maps)
         applyClassificationVisibility();
         if (result.classified && cachedTagResult) {
@@ -961,6 +1768,70 @@ body {
         elLoading.textContent = msg || 'SPM Map Analyser';
     }
 
+    /** v1.0.1: rebuild the smoothed series from the cached raw series and
+        re-derive the per-segment difficulty. Runs whenever the smoothing
+        setting changes or the curve is resized — never per animation frame. */
+    function rebuildCurves() {
+        if (!cachedRawCurves || !cachedResult) return;
+        const px = smoothPx();
+        const w = curveInnerWidth();
+        cachedResult.sectionDifficulties = SPMEngine.smoothCurve(
+            cachedRawCurves.sectionDifficulties, px, w, SPMEngine.CURVE_FILL_RUN_MAX);
+        cachedResult.rcSectionDifficulties = SPMEngine.smoothCurve(
+            cachedRawCurves.rcSectionDifficulties, px, w, SPMEngine.CURVE_FILL_RUN_MAX);
+        // the LN line's zeros are structural ("nothing held"), so no gap fill
+        cachedResult.lnSectionDifficulties = cachedRawCurves.lnSectionDifficulties
+            ? SPMEngine.smoothCurve(cachedRawCurves.lnSectionDifficulties, px, w, 0) : null;
+        // stats come from the RAW series, not the drawn one: the smoothing
+        // setting is display-only and must not move the reported numbers
+        cachedSegStats = cachedTagResult
+            ? SPMEngine.computeSegmentStats(cachedTagResult.segments, {
+                sectionTimes: cachedResult.sectionTimes,
+                sectionDifficulties: cachedRawCurves.sectionDifficulties,
+                keyCount: cachedResult.keyCount,
+            })
+            : null;
+        // a section whose average sits far below the map's own typical level is
+        // effectively a rest, and its star value would print as a pointless "0th"
+        segmentDiffFloor = 0.35 * medianOfPositive(cachedRawCurves.sectionDifficulties);
+        // y-scale anchor for drawCurve (raw max over every drawn series)
+        curveScaleMax = Math.max(
+            safeMax(cachedRawCurves.sectionDifficulties),
+            safeMax(cachedRawCurves.rcSectionDifficulties),
+            cachedRawCurves.lnSectionDifficulties ? safeMax(cachedRawCurves.lnSectionDifficulties) : 0,
+            0.01);
+    }
+
+    /** Median of the strictly positive values, or 0 when there are none. */
+    function medianOfPositive(arr) {
+        if (!arr || !arr.length) return 0;
+        const pos = [];
+        for (let i = 0; i < arr.length; i++) if (arr[i] > 0) pos.push(arr[i]);
+        if (!pos.length) return 0;
+        pos.sort((a, b) => a - b);
+        return pos[pos.length >> 1];
+    }
+
+    /** Inner plot width in CSS pixels; falls back to the design width before
+     *  the canvas has been laid out. */
+    function curveInnerWidth() {
+        const w = elCanvas.getBoundingClientRect().width - 6;
+        return w > 8 ? w : SPMEngine.CURVE_INNER_W;
+    }
+
+    /** Re-run the (cheap) smoothing when the plot width changed, e.g. after the
+     *  panel becomes visible for the first time or the overlay is resized. */
+    let lastCurveWidth = 0;
+    function maybeResizeCurves() {
+        if (!cachedResult || !cachedRawCurves) return;
+        const w = curveInnerWidth();
+        if (Math.abs(w - lastCurveWidth) < 1) return;
+        lastCurveWidth = w;
+        rebuildCurves();
+        lastSegIndex = -2;
+        if (cachedTagResult) renderSegTimeline(cachedTagResult);
+    }
+
     async function fetchAndRate(speedRate) {
         try {
             const resp = await fetch(`http://localhost:${TOSU_PORT}/files/beatmap/file`);
@@ -976,6 +1847,7 @@ body {
 
             cachedOsuContent = content;
             cachedKeyCount = parseKeyCount(content);
+            cachedMeta = SPMEngine.parseOsuMeta(content);
 
             // v0.5.0: segment-based sort/tag classification (7K only)
             cachedTagResult = null;
@@ -991,7 +1863,11 @@ body {
                 }
             }
 
-            const subScheme = settings.subDifficultyScheme === 'Legacy v0.5.1' ? 'v051' : 'direct';
+            // sub-difficulty scheme: both option labels are named explicitly so
+            // a stale stored value falls back rather than silently switching
+            let subScheme = 'direct';
+            if (settings.subDifficultyScheme === 'Legacy v0.5.1') subScheme = 'v051';
+            else if (settings.subDifficultyScheme === 'Direct (RC/LN sub-model)') subScheme = 'direct';
             const result = processMap(content, 'full', speedRate, { subDifficultyScheme: subScheme });
             if (result) {
                 // 7K charts with a tag-engine result keep the classification UI;
@@ -1002,10 +1878,21 @@ body {
             if (!result) {
                 showLoading('No notes found');
                 cachedResult = null;
+                cachedRawCurves = null;
+                cachedSegStats = null;
                 return;
             }
-
+            // keep the unsmoothed series so the smoothing setting can be
+            // changed later without re-analysing the chart
+            cachedRawCurves = {
+                sectionDifficulties: result.sectionDifficulties,
+                rcSectionDifficulties: result.rcSectionDifficulties,
+                lnSectionDifficulties: result.lnSectionDifficulties,
+            };
             cachedResult = result;
+            // rebuildCurves() reads cachedResult, so it must run after it is set
+            rebuildCurves();
+
             showResult(result);
         } catch (e) {
             console.error('SPM Map Analyser error:', e);
@@ -1056,12 +1943,30 @@ body {
             settings.danDisplayStyle = d.danDisplayStyle;
         }
         if (typeof d.colorScheme === 'string') {
-            changed = changed || settings.colorScheme !== d.colorScheme;
-            settings.colorScheme = d.colorScheme;
+            if (settings.colorScheme !== d.colorScheme) {
+                changed = true;
+                settings.colorScheme = d.colorScheme;
+                applyColorScheme(settings.colorScheme);
+            }
         }
-        if ('hideOnPlay' in d) {
+        if (typeof d.uiStyle === 'string') {
+            changed = changed || settings.uiStyle !== d.uiStyle;
+            settings.uiStyle = d.uiStyle;
+        }
+        if (typeof d.panelDensity === 'string') {
+            changed = changed || settings.panelDensity !== d.panelDensity;
+            settings.panelDensity = d.panelDensity;
+        }
+        if (typeof d.curveSmoothing === 'string') {
+            changed = changed || settings.curveSmoothing !== d.curveSmoothing;
+            settings.curveSmoothing = d.curveSmoothing;
+        }        if ('hideOnPlay' in d) {
             changed = changed || settings.hideOnPlay !== !!d.hideOnPlay;
             settings.hideOnPlay = !!d.hideOnPlay;
+        }
+        if ('showSummary' in d) {
+            changed = changed || settings.showSummary !== !!d.showSummary;
+            settings.showSummary = !!d.showSummary;
         }
         if ('showTags' in d) {
             changed = changed || settings.showTags !== !!d.showTags;
@@ -1070,6 +1975,10 @@ body {
         if ('showSegmentTag' in d) {
             changed = changed || settings.showSegmentTag !== !!d.showSegmentTag;
             settings.showSegmentTag = !!d.showSegmentTag;
+        }
+        if ('showSegmentDiff' in d) {
+            changed = changed || settings.showSegmentDiff !== !!d.showSegmentDiff;
+            settings.showSegmentDiff = !!d.showSegmentDiff;
         }
         if ('showTimeline' in d) {
             changed = changed || settings.showTimeline !== !!d.showTimeline;
@@ -1088,6 +1997,11 @@ body {
     }
 
     function reapplySettingsToUI() {
+        // the smoothing setting re-derives the curves from the cached raw
+        // series; everything else is a pure re-render
+        rebuildCurves();
+        applyColorScheme(settings.colorScheme);
+        applyUiStyle();
         applyClassificationVisibility();
         if (cachedResult) {
             lastSegIndex = -2;
@@ -1164,6 +2078,14 @@ body {
             const checksum = data.beatmap?.checksum;
             const mode = data.beatmap?.mode?.number;
 
+            // v1.0.1: summary-line facts straight from the frame; the parsed
+            // .osu header fills in whatever the client does not expose
+            capturePayloadMeta(data);
+
+            // pause marker state; the beatmap clock freezes on its own, this
+            // only swaps the playhead dot for the pause glyph
+            isPaused = !!(data && data.game && data.game.paused);
+
             const modData = getModData(data);
             const liveTimeMs = extractSongTimeMs(data);
 
@@ -1178,7 +2100,11 @@ body {
             if (mode !== 3) {
                 if (cachedResult !== null) {
                     cachedResult = null;
+                    cachedRawCurves = null;
                     cachedTagResult = null;
+                    cachedSegStats = null;
+                    cachedMeta = null;
+                    cachedPayloadMeta = null;
                     stopAnimationLoop();
                     showLoading('Not Mania');
                 }
@@ -1253,6 +2179,15 @@ body {
             SPMEngine.loadDanConstants(await res.json());
         } catch { /* keep inlined defaults */ }
     }
+
+    // paint the default scheme before the first frame arrives, so the panel
+    // never flashes the wrong palette while settings are still loading
+    applyColorScheme(settings.colorScheme);
+    applyUiStyle();
+
+    // overlay resized (OBS browser source, tosu layout change): redo the
+    // pixel-space smoothing against the new plot width
+    window.addEventListener('resize', maybeResizeCurves);
 
     showLoading('Connecting to tosu...');
     connectSettings();

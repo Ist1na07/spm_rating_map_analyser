@@ -32,6 +32,30 @@
     "value": ""
   },
   {
+    "uniqueID": "uiStyle",
+    "type": "options",
+    "title": "UI Style",
+    "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: only the dans (total, RC, LN) and the overall pattern tags",
+    "options": ["Rating first", "Dan first", "Minimal"],
+    "value": "Rating first"
+  },
+  {
+    "uniqueID": "panelDensity",
+    "type": "options",
+    "title": "Panel Density",
+    "description": "Standard is the full-size layout; Compact shrinks fonts, spacing and the curve to cover less of the screen",
+    "options": ["Standard", "Compact"],
+    "value": "Standard"
+  },
+  {
+    "uniqueID": "colorScheme",
+    "type": "options",
+    "title": "Color Scheme",
+    "description": "Overlay palette. Aurora is the new v1.0.1 theme; High Contrast is tuned for readability over bright gameplay",
+    "options": ["Default Dark", "Aurora", "High Contrast"],
+    "value": "Default Dark"
+  },
+  {
     "uniqueID": "danDisplayStyle",
     "type": "options",
     "title": "Dan Display Style",
@@ -40,12 +64,12 @@
     "value": "Thirds (low/high)"
   },
   {
-    "uniqueID": "colorScheme",
+    "uniqueID": "curveSmoothing",
     "type": "options",
-    "title": "Color Scheme",
-    "description": "Overlay color scheme (reserved for future themes)",
-    "options": ["Default Dark"],
-    "value": "Default Dark"
+    "title": "Curve Smoothing",
+    "description": "Softens the difficulty curve. Off draws the raw per-400ms values; higher settings remove more jaggedness while keeping the peaks",
+    "options": ["Off", "Light", "Medium", "Strong", "Max"],
+    "value": "Medium"
   },
   {
     "uniqueID": "hVisibility",
@@ -64,6 +88,14 @@
     "value": false
   },
   {
+    "uniqueID": "showSummary",
+    "type": "checkbox",
+    "title": "Show Map Summary",
+    "description": "Display the song, difficulty name, mapper, key count, BPM, object count and length at the top of the panel",
+    "options": [],
+    "value": true
+  },
+  {
     "uniqueID": "showTags",
     "type": "checkbox",
     "title": "Show Pattern Tags",
@@ -76,6 +108,14 @@
     "type": "checkbox",
     "title": "Show Current Segment",
     "description": "Display the live segment tag and equivalent bpm at the playhead",
+    "options": [],
+    "value": true
+  },
+  {
+    "uniqueID": "showSegmentDiff",
+    "type": "checkbox",
+    "title": "Show Segment Difficulty",
+    "description": "Display the current segment's difficulty (star rating and dan) next to its pattern tag. 7K only; needs Show Current Segment",
     "options": [],
     "value": true
   },
