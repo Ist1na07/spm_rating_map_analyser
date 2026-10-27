@@ -1,5 +1,5 @@
 {
- "_note": "SPM Rating v1.2.0-rc3 + SPMSubmodel dan nodes (RC/LN sub-scores, reference scale) for both v1.2.0 model variants: detail (完整) and compact (精简). RC/LN star nodes measured on dan course packs (4K/6K), the 7K dan dataset subset (RegularDan/LNDan) and maps/ 7K Dan Phase IV; interpolation maps reference-scale star -> continuous dan level. The legacy top-level 4K/6K/7K tables mirror the detail variant.",
+ "_note": "SPM Rating v1.2.0-rc3 + SPMSubmodel dan nodes (RC/LN sub-scores, reference scale) for both v1.2.0 model variants: Detailed and Compact. RC/LN star nodes measured on dan course packs (4K/6K), the 7K dan dataset subset (RegularDan/LNDan) and maps/ 7K Dan Phase IV; interpolation maps reference-scale star -> continuous dan level. The legacy top-level 4K/6K/7K tables mirror the detail variant.",
  "dan_names": [
   "0th",
   "1st",

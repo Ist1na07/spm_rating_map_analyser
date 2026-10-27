@@ -15,7 +15,7 @@
   - **LN** — 长键（按住）部分的难度
 - 纯 RC 谱面会自动隐藏 LN 难度，只显示有意义的数值。
 - 评级使用 SPM Rating 的**参考尺度**（每个键数按各自的标注域对齐），因此星数请在同一键数内比较。
-- **SPM Rating v1.2.0 的两个模型都已内置**，可在 **Rating Algorithm** 中切换：**Detailed / 完整**（完整模型，默认）与 **Compact / 精简**（上游的轻量模型，差异为 16 个标定参数、角色价格与参考尺度对齐）。切换后会立即重新计算当前谱面。
+- **SPM Rating v1.2.0 的两个模型都已内置**，可在 **Rating Algorithm** 中切换：**SPM Rating v1.2.0-Detailed**（完整模型，默认）与 **SPM Rating v1.2.0-Compact**（上游的轻量模型，差异为 16 个标定参数、角色价格与参考尺度对齐）。切换后会立即重新计算当前谱面。
 
 ### 谱面摘要
 
@@ -49,7 +49,7 @@
   - **4K RC**：1st ~ 10th，其后为 **Alpha / Beta / Gamma / Delta / Epsilon** · **4K LN**：1st ~ 15th
   - **6K RC**：Start ~ 9th · **6K LN**：0th ~ 14th
   - **7K RC / LN**：0th ~ Stellium
-- 段位节点按**两种 Rating Algorithm 模型分别实测**（Detailed / 完整 与 Compact / 精简），因此切换算法时段位阶梯的含义保持不变
+- 段位节点按**两种 Rating Algorithm 模型分别实测**（SPM Rating v1.2.0-Detailed 与 SPM Rating v1.2.0-Compact），因此切换算法时段位阶梯的含义保持不变
 - 超出实测范围时显示 `< ...` / `> ...`（如 `< 0th`、`> Stellium`）
 - 段位值支持三种显示风格：**三段**（low / high）、**符号**（`-` / `+`）、**小数数字**（+0.5 偏移：8.5 对应 8dan 整、7K 中 11.5 对应 Gamma）
 - Hybrid 谱面额外显示 **Total** 段位
@@ -95,7 +95,7 @@
 
 | 设置项 | 说明 | 默认 |
 |-------|------|------|
-| Rating Algorithm | SPM Rating v1.2.0 的模型选择：**Detailed / 完整**（完整模型）或 **Compact / 精简**（轻量模型）。两者各有独立实测的段位节点，切换后当前谱面会立即重新计算 | Detailed |
+| Rating Algorithm | SPM Rating v1.2.0 的模型选择：**SPM Rating v1.2.0-Detailed**（完整模型）或 **SPM Rating v1.2.0-Compact**（轻量模型）。两者各有独立实测的段位节点，切换后当前谱面会立即重新计算 | Detailed |
 | Sub Difficulty Scheme | **Direct**：RC/LN 子难度始终来自新子模型；**Legacy v0.5.1**：LN 谱面的 LN 难度等于总难度 | Direct |
 | UI Style | **Rating first**、**Dan first** 或 **Minimal**（只显示摘要、段位与整体键型标签） | Rating first |
 | Panel Density | **Standard** 或 **Compact** 面板密度 | Standard |
@@ -114,7 +114,7 @@
 
 ### v1.2.0
 - **算法升级到 SPM Rating v1.2.0-rc3 + 全新 SPMSubmodel RC/LN 模型**
-- **v1.2.0 的两个模型都可选用**：**Rating Algorithm** 中可选 Detailed / 完整（完整模型）与 Compact / 精简（轻量模型）。两者差异为 16 个标定参数、角色价格与参考尺度对齐；段位节点对两种模型分别重测，切换后当前谱面立即重新计算
+- **v1.2.0 的两个模型都可选用**：**Rating Algorithm** 中可选 SPM Rating v1.2.0-Detailed（完整模型）与 SPM Rating v1.2.0-Compact（轻量模型）。两者差异为 16 个标定参数、角色价格与参考尺度对齐；段位节点对两种模型分别重测，切换后当前谱面立即重新计算
 - **总难度 / RC 难度 / LN 难度**改用新的手部接触、手指角色、和弦手势与两级聚合模型；每张谱面与其镜像谱一起评分，两份难度场取平均
 - **段位映射重测**：按新参考尺度重新标定 4K / 6K / 7K 的 RC / LN 节点，阶梯形状与 `< ...` / `> ...` 越界标记保持不变
 - **小数段位显示 +0.5 偏移**：显示的数字即 mania 玩家习惯引用的值，因此 8.5 对应 8dan 整、7K 中 11.5 对应 Gamma。三段、符号显示风格、评级数值、曲线及其他逻辑均不变

@@ -858,8 +858,8 @@ body {
         // Rating algorithm = SPM Rating v1.2.0 model variant. The stored value
         // is the settings-panel label; algorithmModel() maps it to the engine
         // variant id. A stale pre-1.2.0 value ("SPM Rating v1.2.0") keeps the
-        // detailed (完整) model.
-        algorithm: 'SPM Rating v1.2.0 (Detailed / 完整)',
+        // detailed model.
+        algorithm: 'SPM Rating v1.2.0-Detailed',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
         danDisplayStyle: 'Thirds (low/high)',
         colorScheme: 'Default Dark',
@@ -876,8 +876,8 @@ body {
     };
 
     /** Rating-algorithm setting -> engine model variant id ("detail" | "compact").
-     *  Only the compact label selects the compact (精简) model; unknown or
-     *  stale values keep the detailed (完整) model. */
+     *  Only the compact label selects the compact model; unknown or stale
+     *  values keep the detailed model. */
     function algorithmModel() {
         return /compact/i.test(String(settings.algorithm || '')) ? 'compact' : 'detail';
     }
