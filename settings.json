@@ -12,8 +12,8 @@
     "type": "options",
     "title": "Rating Algorithm",
     "description": "Difficulty algorithm used for the rating (reserved for future algorithm versions)",
-    "options": ["SPM Rating v1.0.0"],
-    "value": "SPM Rating v1.0.0"
+    "options": ["SPM Rating v1.2.0"],
+    "value": "SPM Rating v1.2.0"
   },
   {
     "uniqueID": "subDifficultyScheme",
@@ -59,7 +59,7 @@
     "uniqueID": "danDisplayStyle",
     "type": "options",
     "title": "Dan Display Style",
-    "description": "Within-dan position: three segments (low/high), signs (-/+) or decimal number",
+    "description": "Within-dan position: three segments (low/high), signs (-/+) or decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K)",
     "options": ["Thirds (low/high)", "Signs (-/+)", "Number"],
     "value": "Thirds (low/high)"
   },

@@ -14,6 +14,7 @@
   - **RC** — 常规（非长键）部分的难度
   - **LN** — 长键（按住）部分的难度
 - 纯 RC 谱面会自动隐藏 LN 难度，只显示有意义的数值。
+- 评级使用 SPM Rating 的**参考尺度**（每个键数按各自的标注域对齐），因此星数请在同一键数内比较。
 
 ### 谱面摘要
 
@@ -48,7 +49,7 @@
   - **6K RC**：Start ~ 9th · **6K LN**：0th ~ 14th
   - **7K RC / LN**：0th ~ Stellium
 - 超出实测范围时显示 `< ...` / `> ...`（如 `< 0th`、`> Stellium`）
-- 段位值支持三种显示风格：**三段**（low / high）、**符号**（`-` / `+`）、**小数数字**
+- 段位值支持三种显示风格：**三段**（low / high）、**符号**（`-` / `+`）、**小数数字**（+0.5 偏移：8.5 对应 8dan 整、7K 中 11.5 对应 Gamma）
 - Hybrid 谱面额外显示 **Total** 段位
 
 ### 配色方案与界面风格
@@ -92,12 +93,12 @@
 
 | 设置项 | 说明 | 默认 |
 |-------|------|------|
-| Rating Algorithm | 算法选择（预留给未来版本） | SPM Rating v1.0.0 |
+| Rating Algorithm | 算法选择（预留给未来版本） | SPM Rating v1.2.0 |
 | Sub Difficulty Scheme | **Direct**：RC/LN 子难度始终来自新子模型；**Legacy v0.5.1**：LN 谱面的 LN 难度等于总难度 | Direct |
 | UI Style | **Rating first**、**Dan first** 或 **Minimal**（只显示摘要、段位与整体键型标签） | Rating first |
 | Panel Density | **Standard** 或 **Compact** 面板密度 | Standard |
 | Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Default Dark |
-| Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字 | Thirds |
+| Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字（+0.5 偏移：8.5 对应 8dan、11.5 对应 Gamma） | Thirds |
 | Curve Smoothing | 难度曲线的平滑强度：Off、Light、Medium、Strong、Max | Medium |
 | Hide While Playing | 开始游玩后隐藏 overlay（结算界面会再次显示） | 关 |
 | Show Map Summary | 显示曲师/曲名/难度名/谱师/键数/BPM/物量/时长摘要行 | 开 |
@@ -108,6 +109,13 @@
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.0
+- **算法升级到 SPM Rating v1.2.0-rc3（detailed 模型）+ 全新 SPMSubmodel RC/LN 模型**
+- **总难度 / RC 难度 / LN 难度**改用新的手部接触、手指角色、和弦手势与两级聚合模型；每张谱面与其镜像谱一起评分，两份难度场取平均
+- **段位映射重测**：按新参考尺度重新标定 4K / 6K / 7K 的 RC / LN 节点，阶梯形状与 `< ...` / `> ...` 越界标记保持不变
+- **小数段位显示 +0.5 偏移**：显示的数字即 mania 玩家习惯引用的值，因此 8.5 对应 8dan 整、7K 中 11.5 对应 Gamma。三段、符号显示风格、评级数值、曲线及其他逻辑均不变
+- 设置、metadata 与其余谱面分析逻辑保持不变
 
 ### v1.0.1
 - **新增配色**：**Aurora** 与 **High Contrast**，并对三套配色做了 WCAG 对比度校验（标签文字、次级文字与 Break 文字原本低于 4.5:1，现已全部达标）
@@ -188,6 +196,7 @@
 
 - [tosu](https://tosu.app) — 本 overlay 的运行环境
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — 难度算法
+- [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — RC / 长键子模型
 
 ## License
 

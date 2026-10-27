@@ -1,290 +1,337 @@
 /**
- * SPM Map Analyser — SPM Rating v1.0.0 + RC/LN sub-model (rc-ln-0.1.0)
+ * SPM Map Analyser — SPM Rating v1.2.0-rc3 (detail model) + SPMSubmodel rcln
  *
- * Overlay v1.0.1 additions (display-only; ratings unchanged):
- *   smoothCurve / curveSigmaBuckets / fillShortZeroRuns — curve smoothing
- *   computeSegmentStats — per-segment difficulty read off the display curve
- *   parseOsuMeta        — .osu header reader for the map summary line
- *   displayCurvesRC     — RC display curve on the calibrated star scale
+ * Overlay v1.2.0:
+ *   Full JavaScript port of SPMRating v1.2.0-rc3 (hand/role/geometry/recovery,
+ *   chord gesture, AGG-D two-level aggregation) and SPMSubmodel's RC/LN model.
+ *   The v1.0.x display pipeline (curve smoothing, segment stats, metadata,
+ *   dan mapping) is kept unchanged apart from the score scale and dan nodes.
  *
  * JavaScript port of:
- *   spm_rating_v1.0.0/core (parser, grid, model, components)
- *   rc_ln_model/rcln       (RC = de-LN chart's spm rating,
- *                           LN = LN-presence-weighted aggregation)
+ *   SPMRating/spm_rating/{parser,engine,api,hand,hand_cost,role,geometry,
+ *                          recovery,clock,actions,coordinates}
+ *   SPMRating/spm_rating/_core/{batch,grid,model,components}
+ *   SPMSubmodel/rcln/engine.py
  *
- * Pipeline (single chart):
- *   parse → rows → struct → curves → D (combine)
- *     → aggregate(hold_w=true)  → postprocess → star   (spm)
- *     → Pbar recompute (ln_body_ms = 0), Rbar/Cbar = 0
- *       → aggregate(hold_w=false) → postprocess → rc   (RC)
- *     → g(t) presence weights on D
- *       → aggregate_ln → postprocess_ln         → ln   (LN)
+ * Pipeline (single chart, integer clock):
+ *   canonicalise (role.canonical) → chart and mirror views
+ *   per view: rows → struct → curves → hand/role/recovery → combine
+ *     → average the two D fields
+ *     → aggregate(AGG-D, hold_w=true) → postprocess → spm (raw)
+ *     → LN: presence weights g(t) + AGG-D two-level aggregation → ln (raw)
+ *     → RC: de-LN (tap) view, RC/LN window modulation → rc (raw)
+ *   each raw score → key-count reference alignment (models/detail.json)
  *
  * 4K charts are embedded into the 7-column frame (cols 1,2,4,5) so the
- * geometry logic is shared; 6K spreads columns evenly (0..6 with thumb).
+ * geometry logic is shared; 6K uses the (0,1,2,4,5,6) embedding.
  */
 
 "use strict";
 
 // ============================================================
-// PARAMETERS — rc-ln-0.1.0 (spm-rating-1.0.0 + rcln group)
+// PARAMETERS — SPM Rating v1.2.0-rc3 detail model
 // ============================================================
-const SPM_V1_PARAMS = {
-  a_c:10.717498918905136,
-  a_cb:4.0,
-  a_cb_4k:11.357365798773392,
-  a_cbc:10.310670820602846,
-  a_p:0.457050886903945,
-  a_p_4k:0.9671708233722217,
-  a_r:59.95490931764664,
-  a_r_4k:0.0,
-  abar_active:0.02531712913365081,
-  abar_c0:0.729854838334696,
-  abar_c1:0.6730069593477146,
-  abar_k:5.869324658227848,
-  abar_mx:0.48830826958952744,
-  abar_mx_thr:0.10636359112398937,
-  abar_mx_w:0.45817570312814426,
-  abar_scale:1.009862473386292,
-  abar_thr_hi:0.09447563280275387,
-  abar_thr_lo:0.01682395583948343,
-  abar_weld:1.0,
-  agg_C:5.7765188650680015,
-  agg_gamma:0.3142734186203886,
-  agg_gap_w:1.0873927743990874,
-  agg_k:3.923290274033005,
-  agg_mode:3.0,
-  agg_nseg:30.0,
-  agg_wc:1.145022164188944,
-  aj:4.107175656089324,
-  an_a0:0.17043768459177114,
-  an_a1:0.34850214310770977,
-  an_cubic:6.806495193662656,
-  an_on_p:-0.3268168035336469,
-  ap:0.8414094716039964,
-  at:5.704296617075204,
-  c_chord2:0.5,
-  c_fj:1.1223698076832407,
-  c_fj_4k:1.6384853006440867,
-  c_ja:-0.001250731346377573,
-  c_jc:0.13300526379892,
-  c_jm:0.5136914244166452,
-  c_s:0.4182231311873207,
-  calib_a:1.0269058337789674,
-  calib_b:0.506803040656835,
-  cap_a:10.84672199638674,
-  cap_b:0.7669642744433789,
-  cb_holdtap:0.0,
-  cb_holdtap_pow:1.0,
-  cb_lock_pow:1.0,
-  cb_lockanchor:0.0,
-  cb_lockjack:0.0,
-  cb_par:0.0,
-  cb_shield:0.0,
-  cb_shield_lock:0.8062,
-  cb_shield_tau:56.24,
-  cbv_churn:2.7804415879691047,
-  cbv_churn_4k:0.0018149727082640878,
-  cbv_holdage:3.4070743387277163,
-  cbv_holdage_4k:0.0017655285135421454,
-  cbv_holdtap:-1.0227403453455164,
-  cbv_lock_pow:0.9662307730974806,
-  cbv_lockanchor:1.3023578337914123,
-  cbv_lockstack:0.5382064568725327,
-  cbv_ls_1h_split:0.6669564049783417,
-  cbv_ls_2h_split:0.628481439284875,
-  cbv_ls_cross:0.6384201937709314,
-  cbv_ls_sh_adj:0.9897529278156161,
-  cbv_ls_sh_split:0.694320421215397,
-  cbv_ov_1h_split:0.8912801595852077,
-  cbv_ov_2h_split:0.628660224600841,
-  cbv_ov_cap:2451.2427577736403,
-  cbv_ov_cross:0.43216200109373926,
-  cbv_ov_dt_max:1511.5378347371243,
-  cbv_ov_sh_adj:1.2272220519138874,
-  cbv_ov_sh_split:1.2153000673016874,
-  cbv_overlap:0.9863986916717904,
-  cbv_sh_dt_max:256.0406131304308,
-  cbv_sh_ln_tau:145.443782024068,
-  cbv_sh_ln_w:1.0790072249120857,
-  cbv_sh_lock:1.0870780764260457,
-  cbv_sh_tau:75.33463318028997,
-  cbv_shield:1.1200999548581216,
-  cbv_str_1h_split:0.5323308514011785,
-  cbv_str_2h_split:0.17479688357773077,
-  cbv_str_bal:1.141728630652899,
-  cbv_str_cross:0.09922357503493356,
-  cbv_str_h0:0.8793037998512705,
-  cbv_str_h1:0.9113686383081036,
-  cbv_str_h2:0.8557205717895041,
-  cbv_str_h3:0.5028456653288493,
-  cbv_str_maxd:2.048176307602251,
-  cbv_str_sh_adj:0.19036255960279166,
-  cbv_str_sh_split:0.9209759560022021,
-  cbv_straddle:0.45854924271224995,
-  cbv_w:1140.2267181326677,
-  chord2_w:998.3068456460403,
-  chord_tau_c:28.00006103515625,
-  churn_event_rate:0.0,
-  churn_sat:14.712127862753169,
-  churn_w:1022.5551356347157,
-  cj_norm:1.9757525590733565,
-  cj_size_exp:1.0152415724691892,
-  d_b1:1.4529112152056358,
-  d_b2:0.4343400978218659,
-  d_ds:0.5436886594030598,
-  d_dt:1.3838263378115971,
-  d_eye:0.0818717181241305,
-  d_eye_4k:0.014013206098578592,
-  d_read:0.0,
-  d_read_4k:0.0,
-  d_rec:0.78125,
-  d_sh:-0.18851239465270642,
-  env_ms:395.28032205483703,
-  env_w:0.0033333333333333335,
-  eye_tau:0.2,
-  eye_w_ref:4000.0,
-  eye_w_s:500.0,
-  holdage_cap:0.9712508526439506,
-  holdage_th:0.25073103183213685,
-  hw_a:-4.833333333333334,
-  hw_half:51.932695284873475,
-  j_agg_pow:4.220517945172583,
-  j_c1:0.11994305455701491,
-  j_nerf_a:-2.266651862989442e-05,
-  j_nerf_c:0.07443739821757173,
-  j_nerf_off:0.15369105717534054,
-  j_triple_gain:0.01930565188193239,
-  j_triple_gain_4k:0.5356436393950172,
-  j_triple_pow:1.005976267076746,
-  j_triple_tau:135.97491132645644,
-  ja_coord_exp:-9.268498548764114e-05,
-  ja_gap_thr:253.00356478769385,
-  ja_len_exp:1.0047596122947928,
-  ja_len_floor:4.074244535477681,
-  ja_norm:5.981391018054386,
-  ln_calib_a:1.0,
-  ln_calib_b:0.0,
-  ln_eff_tail_ms:0.0,
-  ln_g_exp:0.5,
-  ln_gain:1.0,
-  ln_mask_w:700.0,
-  ln_n0:59.287573788026904,
-  ln_note_level:0.0,
-  mean_pow:6.465267031930503,
-  mj_dilute:0.23679879956914796,
-  mj_dilute_exp:0.9615171298692908,
+const SPM_V120_PARAMS = {
+  od_mult_jm:1.2040048799564311,
+  od_mult_jc:-0.293176786084059,
   od_mult_ja:-1.0,
-  od_mult_jc:-0.37109374999999944,
-  od_mult_jm:0.7504257038347726,
-  od_mult_p:1.1264849156945338,
-  od_mult_r:1.064323992348447,
-  od_mult_x:1.1651306736110387,
-  out_a:0.699552129082087,
-  out_b:-0.7830329139461331,
-  p83_c:2.667686959362696,
-  p93_c:2.505172683584436,
+  od_mult_p:1.1286927800588342,
+  od_mult_x:1.1974891491877375,
+  od_mult_r:1.058858405816053,
+  w_jm:934.2448253030639,
+  w_jc:-0.4552854599596368,
+  w_ja:0.0,
+  w_p:902.5681256843202,
+  w_x:927.941415540503,
+  w_r:1972.5181634749874,
+  w_cb:1716.856156378797,
+  w_a:75.76213228110679,
+  j_c1:0.16126641911276896,
+  j_nerf_a:-4.0585915711448676e-05,
+  j_nerf_off:0.09265897011180577,
+  j_nerf_c:0.0924591760779166,
+  j_agg_pow:2.8052526777466564,
+  j_triple_tau:140.9631484638465,
+  j_triple_pow:2.0072942534242566,
+  j_triple_gain:-0.5645803329343817,
+  j_triple_gain_4k:0.7804879223793608,
+  c_fj:1.291464498859916,
+  c_fj_4k:1.1891597740767534,
+  fj_bounded:0.0,
+  d_sh:0.0,
+  shd_w:1007.2471613945766,
+  d_hc:1.0188595536994098,
+  hc_e:1.7049026540688783,
+  mj_dilute:-0.022067037291399555,
+  mj_dilute_exp:1.7147578892981583,
+  cj_size_exp:2.3090892612901857,
+  cj_norm:3.9223792605276984,
+  ja_gap_thr:250.97771855895374,
+  ja_len_exp:0.873949786346038,
+  ja_coord_exp:0.012636794260452278,
+  ja_len_floor:1.0,
+  ja_norm:4.912805983390194,
+  p_lam3:60.0,
+  p_scale:0.0573287291354225,
+  p_lam2:0.005077940680001312,
+  p_v_norm:-0.03652823337937215,
   p_boost:-1e-05,
-  p_boost_hi:401.3793072521453,
-  p_boost_lo:186.3466709871835,
-  p_burst3:0.05749725160072005,
-  p_burst4:0.041571581046874806,
-  p_bv_max:1.023169107328028,
+  p_boost_lo:117.67575960429505,
+  p_boost_hi:296.9197535881636,
+  p_bv_max:0.7121791011599433,
+  p_sat_a:12.967278061527875,
+  p_sat_b:2.3046546300449706,
   p_chw2:0.6997350782823039,
   p_chw3:1.4710731528472405,
   p_chw4:0.82149995851254,
   p_chw5:0.8676070127257947,
   p_chw6:0.7474127532548505,
   p_chw7:1.03284160083206,
-  p_lam2:0.006084380903675146,
-  p_lam3:27.838293996532915,
-  p_sat_a:10.690152688495372,
-  p_sat_b:2.0349325289971496,
-  p_scale:0.05862260059258437,
-  p_v_norm:-0.005007331887365899,
-  pp_div:1.617868498725467,
-  pp_n0:59.287573788026904,
-  pp_scale:1.0018513493936536,
-  pp_thr:7.703696089438818,
-  r_I_off:1.679847001293981,
-  r_I_steep:3.8155719025104933,
-  r_I_w:1.0611113361746765,
-  r_ain0:1.402277599248007,
-  r_ain1:0.8487725298502042,
-  r_ain2:0.9889530992577216,
-  r_ain3:1.4808396303580251,
-  r_coord_e:0.6807568539174652,
-  r_cw_cross:0.6899948287076584,
-  r_cw_hand:0.42489506847315023,
-  r_cw_same:0.9824539263359018,
-  r_cw_thumb:0.3660514384223894,
-  r_dt_max:5985.197267885601,
-  r_dtr_min:0.015,
-  r_lock:0.1775454477373913,
-  r_order_pen:0.04982726415201301,
-  r_order_tau:404.3308885287425,
-  r_same_col:0.39414011153048933,
-  r_seq:0.06596340070980779,
-  r_short_red:0.10936100877002214,
-  r_short_thr:440.09681230961536,
-  r_sim_tau:10.0,
-  r_simul:0.08534094291675064,
+  chord_tau_c:24.345887557552615,
+  note_chord:1.0,
+  chord_soft_att:1.0,
+  chord_no_dilute:1.0,
+  chord2_hard:1.0,
+  ga_alpha:0.0,
+  ga_gam:1.0,
+  ga_q:1.0,
+  ga_pw:1.0,
+  p_burst3:0.14316462240732145,
+  p_burst4:-0.02452677135839032,
+  an_a0:0.20919909312275142,
+  an_a1:0.37286666751258996,
+  an_cubic:8.862618779101767,
+  an_on_p:-0.32562582197542633,
+  abar_scale:0.9908465677870455,
+  abar_active:0.02959105293159399,
+  abar_thr_lo:0.01389142404428909,
+  abar_thr_hi:0.11599034279776298,
+  abar_c0:0.6575435661594596,
+  abar_c1:1.3302402303785177,
+  abar_k:5.052287546779305,
+  abar_mx:0.451610888785001,
+  abar_mx_thr:0.05208686478341369,
+  abar_mx_w:0.4754900770279769,
+  abar_weld:1.0,
+  x_amp:0.09636644976733964,
+  x_cw0:0.03724653823590479,
+  x_cw1:0.8550132389171754,
+  x_cw2:0.4722195790253056,
+  x_cw3:0.023511327398546056,
+  x_din:0.21329641269001137,
+  x_dout:0.3884059305040078,
+  x_fc_a:0.5315844156004722,
+  x_fc_off:62.51708153410152,
+  x_fc_floor:0.07402097926631954,
+  x_fc_w:1.68396911611816,
+  x_jump_w:-1.1360108646508114,
+  x_jh_p:0.761399733967284,
+  x_jh_e:0.7460102426771034,
+  x_jt:0.5379957175084137,
+  x_jd_p:0.038157319982258006,
+  x_jd_e:2.070662416719641,
+  x_dir_in:0.7935947499263032,
+  x_dir_out:-0.46052690940589464,
+  r_tail:0.030479803326367228,
+  r_seq:0.06635864238365655,
+  r_I_steep:7.138399583260547,
+  r_I_off:1.6936500452160337,
+  r_I_w:1.3201531009318856,
+  r_dt_max:6749.562099456267,
+  r_dtr_min:0.004050313466366775,
+  r_sim_tau:11.405453069087805,
   r_soft_edges:1.0,
-  r_straddle:-0.11540999412449468,
-  r_tail:0.02898542543998874,
-  r_tt:3.5417544104085192,
-  read_clip_hi:1.5,
-  read_clip_lo:0.5,
-  read_n_win:16.0,
-  read_tol:0.18,
-  rec_half:0.4886690846205094,
-  recov_w:989.9492044110127,
-  recov_wl:21003.231873446508,
-  s_p:1.2386750812693854,
-  shd_w:1071.1117107781824,
-  t_jack_mix:-0.35552500051452174,
-  t_s_off:0.4819735114526039,
+  r_same_col:0.19578505600824977,
+  r_coord_e:2.2703135423553786,
+  r_tt:0.0,
+  r_short_thr:232.63366268425537,
+  r_short_red:0.0,
+  r_lock:2.064385891165511,
+  r_simul:0.48507152260049274,
+  r_cw_same:1.5375480228960465,
+  r_cw_hand:0.46562083856474745,
+  r_cw_thumb:0.011960920198257674,
+  r_cw_cross:0.7315226193212329,
+  r_order_pen:0.23401924932585802,
+  r_order_tau:702.5373743325986,
+  r_straddle:0.4485333102831889,
+  r_ain0:-3.0,
+  r_ain1:2.466978961221889,
+  r_ain2:2.5020134256224296,
+  r_ain3:1.2702424995871497,
+  cb_shield:0.0,
+  cb_shield_tau:56.24,
+  cb_shield_lock:0.8062,
+  cb_lockjack:0.0,
+  cb_lock_pow:1.0,
+  cb_lockanchor:0.0,
+  cb_par:0.0,
+  cb_holdtap:0.0,
+  cb_holdtap_pow:1.0,
   use_cbar_v2:1.0,
-  use_cbv_holdtap:1.0,
-  use_cbv_lockanchor:1.0,
-  use_cbv_lockstack:1.0,
-  use_cbv_overlap:1.0,
+  churn_event_rate:0.0,
+  cbv_w:421.0782656735729,
   use_cbv_shield:1.0,
+  cbv_shield:-1.976620227141156,
   use_cbv_straddle:1.0,
-  use_eye:1.0,
+  cbv_straddle:9.213308770964225,
+  use_cbv_lockstack:1.0,
+  cbv_lockstack:1.4797072901013206,
+  use_cbv_lockanchor:1.0,
+  cbv_lockanchor:1.4544619305858701,
+  use_cbv_overlap:1.0,
+  cbv_overlap:-1.8394647223580556,
+  use_cbv_holdtap:1.0,
+  cbv_holdtap:-3.2366101454102796,
+  cbv_sh_tau:498.1744137671231,
+  cbv_sh_dt_max:330.6326350747474,
+  cbv_sh_ln_w:3.0,
+  cbv_sh_ln_tau:387.1884382046885,
+  cbv_sh_lock:-0.7927305755124643,
+  cbv_str_sh_adj:-0.8710391482004185,
+  cbv_str_sh_split:0.3664690221870731,
+  cbv_str_1h_split:1.3155287246626448,
+  cbv_str_2h_split:0.9916617411662032,
+  cbv_str_cross:-0.6289598036143927,
+  cbv_str_h0:0.3224021808746196,
+  cbv_str_h1:-2.2868450899924073,
+  cbv_str_h2:2.6136511203207173,
+  cbv_str_h3:2.340428184412323,
+  cbv_str_bal:4.0,
+  cbv_str_maxd:2.6813954311063055,
+  cbv_lock_pow:0.9791217299061639,
+  cbv_ls_sh_adj:1.269688790631109,
+  cbv_ls_sh_split:1.8020347216322286,
+  cbv_ls_1h_split:0.8899569281922335,
+  cbv_ls_2h_split:0.3813338943482818,
+  cbv_ls_cross:0.28425190948656204,
+  cbv_ov_sh_adj:0.6949297766284019,
+  cbv_ov_sh_split:-2.1906780704262263,
+  cbv_ov_1h_split:-4.674473945804736,
+  cbv_ov_2h_split:1.5020006436255016,
+  cbv_ov_cross:4.935679036129201,
+  cbv_ov_dt_max:2276.1965593534787,
+  cbv_ov_cap:3446.987025249341,
   use_hb:1.0,
-  use_read:0.0,
-  w83:0.4815139944602175,
+  cbv_churn:3.6654074897742612,
+  cbv_churn_4k:4.298621698858253,
+  churn_sat:20.70743322086763,
+  churn_w:1167.6875064558421,
+  cbv_holdage:18.945855743518063,
+  cbv_holdage_4k:10.303537336083915,
+  holdage_th:0.15716538407588404,
+  holdage_cap:0.42468477879654104,
+  c_chord2:0.0,
+  chord2_w:998.3068456460403,
+  d_rec:12.279350811907214,
+  rec_half:0.3671841225596574,
+  recov_w:968.8229953754064,
+  recov_wl:38307.95803840174,
+  aj:1.430584921574431,
+  ap:3.5424464326854332,
+  at:12.654197587970756,
+  cap_a:22.11098017221394,
+  cap_b:0.5877082264222335,
+  c_jm:0.356418909837854,
+  c_jc:-0.021333358663360977,
+  c_ja:0.038468075195409575,
+  c_s:0.2848251338028861,
+  s_p:1.1959916923340246,
+  a_p:0.4016531544080434,
+  a_r:108.50536487992183,
+  a_c:25.83867288316744,
+  a_cb:4.234752287195439,
+  a_cbc:2.506126891341002,
+  a_p_4k:0.7336548088255943,
+  a_r_4k:58.25324080278074,
+  a_cb_4k:11.60113975415644,
+  t_jack_mix:-0.3805743609330355,
+  t_s_off:3.0179360184812842,
+  d_b1:1.2519368453250523,
+  d_ds:0.5851191625546722,
+  d_dt:0.7540471413982772,
+  d_b2:0.6276354594810581,
+  c_stam:0.0,
+  stam_tau:8000.0,
+  stam_grp:30.0,
+  agg_mode:4.0,
+  agg_k:3.923290274033005,
+  agg_C:5.7765188650680015,
+  agg_gamma:0.3142734186203886,
+  agg_nseg:30.0,
+  agg_wc:1.145022164188944,
+  agg_gap_w:1.0873927743990874,
+  aggw_src:0.0,
+  aggw_gap_cap:0.0,
+  aggC_ms:4397.439342626505,
+  aggC_gap:2270.295764558157,
+  aggC_ms_4k:3078.207539838553,
+  aggC_gap_4k:1222.4669501466997,
+  aggC_pw1:2.516135362334202,
+  aggC_pw2:4.4266132719189,
+  aggC_wc:2.5507155298795627,
+  aggC_gw:1.2909164079307989,
+  aggC_gc:387.1237698484442,
+  aggC_hw:1.0,
+  aggC_tau:4027.709861084976,
+  aggC_kap:0.8250936661252044,
+  env_w:0.5401340304888701,
+  env_ms:296.6324480607108,
+  p93_c:2.505172683584436,
   w93:0.3605157897072774,
-  w_a:60.794584215917084,
-  w_cb:1716.856156378797,
-  w_ja:0.0,
-  w_jc:-0.4781249999999999,
-  w_jm:842.9060364136417,
-  w_p:806.2241563795392,
-  w_r:1349.4219390385326,
-  w_x:939.2935347185421,
+  p83_c:2.667686959362696,
+  w83:0.4815139944602175,
   wmean:2.1613377064577026,
-  x_amp:0.14776064699735425,
-  x_cw0:0.1460113252705887,
-  x_cw1:0.3535388218642357,
-  x_cw2:0.3389326726836199,
-  x_cw3:0.04918990446028124,
-  x_din:-0.595854461464495,
-  x_dir_in:0.2845860534263308,
-  x_dir_out:-0.016749922744166222,
-  x_dout:0.9858637139438629,
-  x_fc_a:0.541953977488367,
-  x_fc_floor:0.04577642898224647,
-  x_fc_off:60.317605380705,
-  x_fc_w:1.6631718126735746,
-  x_jd_e:1.0765985987293114,
-  x_jd_p:0.0456784859552089,
-  x_jh_e:1.6812589290379765,
-  x_jh_p:1.0261744953668672,
-  x_jt:0.5592172136082718,
-  x_jump_w:-0.852278272911138,
+  mean_pow:6.465267031930503,
+  pp_n0:0.0,
+  pp_thr:8.416405509249257,
+  pp_div:1.559992046815954,
+  pp_scale:0.9866220368284715,
+  calib_a:0.9877134644832144,
+  calib_b:0.6823998306913243,
+  hw_a:-4.833333333333334,
+  hw_half:51.932695284873475,
+  ln_eff_tail_ms:11.348134111824663,
+  ln_note_level:0.0,
+  use_read:0.0,
+  d_read:0.0,
+  d_read_4k:0.0,
+  read_tol:0.18,
+  read_n_win:16.0,
+  read_clip_lo:0.5,
+  read_clip_hi:1.5,
+  use_eye:1.0,
+  d_eye:0.03491913373673157,
+  d_eye_4k:-0.022838270713520077,
+  eye_w_ref:4000.0,
+  eye_w_s:500.0,
+  eye_tau:0.2,
+  out_a:0.8686939253627315,
+  out_b:-0.9591165705858606,
+  hand_beta:0.0,
+  hand_power:1.0,
+  hand_sync:30.0,
+  hand_lookback:1200.0,
+  hand_predecessor:6.0,
+  hand_tau:400.0,
+  hand_floor:0.0,
+  hand_null:0.1,
+  hand_projection:500.0,
+  hand_average:1.0,
+  group_jump:6.0,
+  hand_entry:1.0,
+  x_adj_w:-1.4830291674247595,
+  jc_scale:1.4332747701403683,
+  ja_scale:0.9792209480655096,
 };
+const SPM_V120_MODEL = {
+  name: "detail",
+  role_price: 0.10220147228915628,
+  alignment: {"4": {"scale": 1.4664817902516922, "power": 0.8430605071120153, "domain": "4K supplied reference scale; not calibrated cross-key equivalence"}, "6": {"scale": 3.8921399991761465, "power": 0.7190202896943204, "domain": "6K supplied reference scale; not calibrated cross-key equivalence"}, "7": {"scale": 1.366527116787871, "power": 0.8237384240102189, "domain": "7K SPM annotation scale"}}
+};
+
+// Back-compat alias: display-only helpers still read SPM_V1_PARAMS.
+const SPM_V1_PARAMS = SPM_V120_PARAMS;
 
 const K = 7;
 const N_BOUND = 8;
@@ -596,6 +643,25 @@ function popcount7(v) {
 function buildStruct(b, p) {
     const n = b.n;
     const s = { b, n };
+    // v1.2.0 single-chart struct fields (python build_struct)
+    s.t = b.t;
+    s.tg = b.t;
+    s.mask = b.mask;
+    s.size = b.size;
+    s.isLn = b.isLn;
+    s.lnEnd = b.lnEnd;
+    s.x = b.x;
+    s.od = b.od;
+    s.keyCount = b.keyCount;
+    s.nNotes = b.nNotes;
+    s.chart = new Int32Array(n);                       // one chart: all zeros
+    s.starts = new Int32Array([0, n]);
+    s.is4k = new Uint8Array(n);
+    if (b.is4k) s.is4k.fill(1);
+    s.dtDiff = new Float64Array(n);                    // ms gap to next row, 0 on last row
+    for (let r2 = 0; r2 + 1 < n; r2++) s.dtDiff[r2] = b.t[r2 + 1] - b.t[r2];
+    s.duration = b.duration;
+    s.nNotesVal = b.nNotes;
 
     // ---- column chains: dcol (per-column gap to next hit in that column)
     // python: dcol[k] = chain_scatter(...) which returns ZEROS outside the
@@ -606,7 +672,8 @@ function buildStruct(b, p) {
         const pos = b.colPos[k], g = b.colG[k];
         // value for gap j holds on rows [pos[j], pos[j+1])
         for (let j = 0; j + 1 < pos.length; j++) {
-            const v = Number.isFinite(g[j]) ? g[j] : 1e9;
+            // python stores dcol as np.float32; keep the same precision in JS
+            const v = Math.fround(Number.isFinite(g[j]) ? g[j] : 1e9);
             for (let r = pos[j]; r < pos[j + 1]; r++) arr[r] = v;
         }
         dcol.push(arr);
@@ -777,6 +844,41 @@ function wmean(b, s, val, W) {
     return out;
 }
 
+// ---- window interpolation operator (used by geometry.linear_wmean)
+function wmeanIndexOp(b, s, W) {
+    const n = b.n, t = b.t;
+    const jhi = new Int32Array(n), dhi = new Float64Array(n),
+          jlo = new Int32Array(n), dlo = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const zhi = Math.min(t[r] + 0.5 * W, t[n - 1]);
+        const zlo = Math.max(t[r] - 0.5 * W, t[0]);
+        let lo = 0, hi = n;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zhi) lo = mid + 1; else hi = mid; }
+        jhi[r] = clamp(lo - 1, 0, n - 2);
+        dhi[r] = zhi - t[jhi[r]];
+        lo = 0; hi = n;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zlo) lo = mid + 1; else hi = mid; }
+        jlo[r] = clamp(lo - 1, 0, n - 2);
+        dlo[r] = zlo - t[jlo[r]];
+    }
+    return { jhi, dhi, jlo, dlo };
+}
+
+function geometryHelpers(b, s) {
+    return {
+        wmean: function (ss, val, W) { return wmean(b, ss, val, W); },
+        wmeanIndex: function (ss, W) { return wmeanIndexOp(b, ss, W); },
+        triWindowCount: function (ss, val, tau) { return triWindowCount(b, ss, val, tau); },
+        segCumsum: function (x, starts) {
+            const n = x.length, out = new Float64Array(n);
+            let acc = 0;
+            for (let r = 0; r < n; r++) { acc += x[r]; out[r] = acc; }
+            return out;
+        },
+        EPS: EPS,
+    };
+}
+
 // ---- step scatter: val[j] holds on rows [idx0[j], idx1[j])
 function stepScatter(idx0, idx1, val, n) {
     const diff = zeros(n + 1);
@@ -866,6 +968,85 @@ function edgeRamp(x, cutoff) {
 }
 
 // ============================================================
+// v1.2.0 chord gesture (core/model._note_kernel / _row_gesture / _chord_g)
+// ============================================================
+function noteKernel(x, mode) {
+    const v = clamp(x, 0.0, 1.0);
+    if (mode === 1) return 1.0 - v * v * (3.0 - 2.0 * v);
+    if (mode === 2) return 0.5 * (1.0 + Math.cos(Math.PI * v));
+    return 1.0 - v;
+}
+
+function rowGesture(b, s, tau) {
+    const n = s.n;
+    const uL = full(n, 1.0), uR = full(n, 1.0);
+    let gsz = full(n, 1.0), wbar = full(n, 1.0);
+    const wbRow = zeros(n);
+    const npop = b.nNotes;
+    if (npop === 0 || tau <= 0.0) return { uL, uR, gsz, wbar, wbRow };
+    const r = b.noteRow;                      // single chart: starts[nchart] = 0
+    const msk = s.mask;
+    const left = zeros(n), right = zeros(n);
+    for (let rr = 0; rr < n; rr++) {
+        left[rr] = popcount7(msk[rr] & 15);
+        right[rr] = popcount7(msk[rr] & 112);
+    }
+    const uLv = triWindowCount(b, s, left, tau);
+    const uRv = triWindowCount(b, s, right, tau);
+    for (let rr = 0; rr < n; rr++) { uL[rr] = uLv[rr]; uR[rr] = uRv[rr]; gsz[rr] = uLv[rr] + uRv[rr]; }
+    const ncnt = zeros(n);
+    for (let i = 0; i < npop; i++) ncnt[r[i]] += 1.0;
+    for (let rr = 0; rr < n; rr++) {
+        const c = Math.max(ncnt[rr], 1.0);
+        wbar[rr] = c > 1.0 ? Math.max(gsz[rr] - 1.0, 0.0) / Math.max(c - 1.0, 1e-12) : 1.0;
+        wbar[rr] = clamp(wbar[rr], 0.0, 1.0);
+    }
+    const first = new Uint8Array(npop);
+    const firstRow = new Uint8Array(n);
+    first[0] = 1;
+    for (let i = 1; i < npop; i++) first[i] = b.noteRow[i] !== b.noteRow[i - 1] ? 1 : 0;
+    for (let i = 0; i < npop; i++) if (first[i]) firstRow[r[i]] = 1;
+    const cur = new Int32Array(n), prev = new Int32Array(n);
+    for (let i = 0; i < npop; i++) if (first[i]) cur[r[i]] = i;
+    for (let rr = 1; rr < n; rr++) prev[rr] = cur[rr - 1];
+    // has_prev[0] is False in python _row_gesture: the first row has no
+    // previous attack, so wb_row[0] is always 0 (starting at rr=1).
+    for (let rr = 1; rr < n; rr++) {
+        if (!firstRow[rr]) continue;
+        const gap = Math.abs(b.noteT[cur[rr]] - b.noteT[prev[rr]]);
+        wbRow[rr] = clamp(1.0 - gap / tau, 0.0, 1.0);
+    }
+    return { uL, uR, gsz, wbar, wbRow };
+}
+
+function rowGestureCached(b, s, p) {
+    const key = Math.round(p.chord_tau_c * 1e6) / 1e6;
+    s.chordnOps = s.chordnOps || new Map();
+    let got = s.chordnOps.get(key);
+    if (!got) {
+        got = rowGesture(b, s, key);
+        if (s.chordnOps.size > 8) s.chordnOps.clear();
+        s.chordnOps.set(key, got);
+    }
+    return got;
+}
+
+function chordG(uL, uR, p) {
+    const al = p.ga_alpha === undefined ? 0.12 : p.ga_alpha;
+    const ga = Math.max(p.ga_gam === undefined ? 1.3 : p.ga_gam, 0.001);
+    const q = Math.max(p.ga_q === undefined ? 3.0 : p.ga_q, 1.0);
+    const pw = Math.max(p.ga_pw === undefined ? 1.0 : p.ga_pw, 0.001);
+    const P = Math.max(ga * q, 0.001);
+    const out = zeros(uL.length);
+    for (let i = 0; i < uL.length; i++) {
+        const ul = Math.max(uL[i], 0.0), ur = Math.max(uR[i], 0.0);
+        const lam = Math.pow(Math.pow(ul, P) + Math.pow(ur, P), 1.0 / P);
+        out[i] = 1.0 + al * Math.pow(Math.max(lam - 1.0, 0.0), pw);
+    }
+    return out;
+}
+
+// ============================================================
 // CURVES (core/model.compute_curves + components)
 // ============================================================
 function jackKernel(g, xk, p, odMult) {
@@ -884,11 +1065,23 @@ function buildJackStats(b, s, p) {
     const gapThr = p.ja_gap_thr / 1000.0;
     const h3Tau = Math.max(p.j_triple_tau, 1.0) / 1000.0;
     const tauC = p.chord_tau_c || 0.0;
-    let attCum = null, wf = null, wb = null;
+    let attCum = null, attSoftCum = null, wf = null, wb = null;
     if (tauC > 0.0) {
-        [wf, wb] = chordCoupling(b, s, tauC);
-        attCum = new Float64Array(n + 1);
-        for (let r = 0; r < n; r++) attCum[r + 1] = attCum[r] + (wb[r] === 0.0 ? 1.0 : 0.0);
+        const cc = chordCoupling(b, s, tauC);
+        wf = cc[0]; wb = cc[1];
+        if ((p.chord_soft_att || 0.0) >= 0.5) {
+            attSoftCum = new Float64Array(n + 1);
+            for (let r = 0; r < n; r++) attSoftCum[r + 1] = attSoftCum[r] + (1.0 - wb[r]);
+        } else {
+            attCum = new Float64Array(n + 1);
+            for (let r = 0; r < n; r++) attCum[r + 1] = attCum[r] + (wb[r] === 0.0 ? 1.0 : 0.0);
+        }
+    }
+    let chordRow = null;
+    if ((p.chord_no_dilute || 0.0) >= 0.5 && (p.note_chord || 0.0) >= 0.5) {
+        const gzc = rowGestureCached(b, s, p).gsz;
+        chordRow = new Uint8Array(n);
+        for (let r = 0; r < n; r++) chordRow[r] = gzc[r] >= 2.0 ? 1 : 0;
     }
     const g7 = p.j_triple_gain;
     const g4k = p.j_triple_gain_4k < 0.0 ? g7 : p.j_triple_gain_4k;
@@ -902,41 +1095,45 @@ function buildJackStats(b, s, p) {
               load = new Float64Array(M), runlen = new Float64Array(M),
               trip = new Float64Array(M), tgain = new Float64Array(M),
               fj = new Float64Array(M), xr = new Float64Array(M), kern = new Float64Array(M);
-        // full-row size cumsum: python total = cumsize[pos[j+1]] - cumsize[pos[j]]
-        // = sizes of ALL rows in [pos[j], pos[j+1]) (other columns included)
         const rowSizeCum = new Float64Array(n + 1);
         for (let r2 = 0; r2 < n; r2++) rowSizeCum[r2 + 1] = rowSizeCum[r2] + b.size[r2];
-        // run lengths: (g <= gap_thr) & valid
         const keepRun = new Uint8Array(M);
         for (let j = 0; j < M; j++) {
             const isValid = Number.isFinite(g[j]);
             valid[j] = isValid ? 1 : 0;
             gs[j] = Math.max(isValid ? g[j] : 1.0, 1e-4);
-            // attCum[r] = number of attack rows (wb==0) in rows [0, r) —
-            // matches python att_cum semantics; the pair window [pos[j], pos[j+1])
-            // excludes both endpoints.
-            nrows[j] = Math.max(attCum ? attCum[pos[j + 1]] - attCum[pos[j]] : pos[j + 1] - pos[j], 1.0);
+            if (attCum) nrows[j] = Math.max(attCum[pos[j + 1]] - attCum[pos[j]], 1.0);
+            else if (attSoftCum) nrows[j] = Math.max(attSoftCum[pos[j + 1]] - attSoftCum[pos[j]], 1.0);
+            else nrows[j] = Math.max(pos[j + 1] - pos[j], 1.0);
             const total = rowSizeCum[pos[j + 1]] - rowSizeCum[pos[j]];
             other[j] = Math.max(total - 1.0, 0.0);
             load[j] = total / nrows[j];
             if (isValid && g[j] <= gapThr) keepRun[j] = 1;
             tgain[j] = b.is4k ? g4k : g7;
-            if (isValid && gs[j] < 0.150) fj[j] = (1.0 / gs[j]) * Math.max(1.0 - gs[j] / 0.150, 0.0);
-            xr[j] = Math.pow(b.x, 0); // placeholder, real x applied in kernel
+            if ((p.fj_bounded || 0.0) >= 0.5) {
+                fj[j] = (isValid && gs[j] < 0.150) ? clamp(1.0 - gs[j] / 0.150, 0.0, 1.0) : 0.0;
+            } else {
+                fj[j] = (isValid && gs[j] < 0.150) ? (1.0 / gs[j]) * Math.max(1.0 - gs[j] / 0.150, 0.0) : 0.0;
+            }
+            xr[j] = b.x;
             kern[j] = jackKernel(gs[j], b.x, p, p.od_mult_jm);
         }
         const rl = runLengths(keepRun, M);
         for (let j = 0; j < M; j++) runlen[j] = rl[j];
-        // same-column triple: valid[j] & valid[j+1] & (pos[j+2]-pos[j]) span
         for (let j = 0; j + 2 < pos.length; j++) {
             if (valid[j] && valid[j + 1]) {
                 const spanS = (b.t[pos[j + 2]] - b.t[pos[j]]) / 1000.0;
                 trip[j] = Math.max(0.0, 1.0 - spanS / (2.0 * h3Tau));
             }
         }
-        stats.push({ pos, gs, valid, nrows, other, load, runlen, trip, tgain, fj, kern });
+        let cr = null;
+        if (chordRow) {
+            cr = new Uint8Array(M);
+            for (let j = 0; j < M; j++) cr[j] = chordRow[pos[j]];
+        }
+        stats.push({ pos, gs, valid, nrows, other, load, runlen, trip, tgain, fj, kern, chordRow: cr });
     }
-    s.jackStatsCache = { stats, attCum, wf, wb, tauC };
+    s.jackStatsCache = { stats, attCum, attSoftCum, wf, wb, tauC };
     return s.jackStatsCache;
 }
 
@@ -945,7 +1142,6 @@ function computeCurves(b, s, p) {
 
     // ================================================== jack family
     const aggPow = Math.max(p.j_agg_pow, 0.25);
-    const mjDilute = p.mj_dilute, mjExp = p.mj_dilute_exp;
     const cjExp = p.cj_size_exp, jaLenExp = p.ja_len_exp,
           jaCoordExp = p.ja_coord_exp, jaFloor = p.ja_len_floor;
     const cjNorm = Math.max(p.cj_norm, 1e-3), jaNorm = Math.max(p.ja_norm, 1e-3);
@@ -957,7 +1153,7 @@ function computeCurves(b, s, p) {
     let odJa = p.od_mult_ja; if (odJa < 0) odJa = odJm;
 
     const js = buildJackStats(b, s, p);
-    const stats = js.stats, attCum = js.attCum, wbG = js.wb, tauC = js.tauC;
+    const stats = js.stats, tauC = js.tauC, wbG = js.wb;
 
     function jackChannel(kind, wMs, odMult) {
         const num = zeros(n), den = zeros(n);
@@ -969,12 +1165,9 @@ function computeCurves(b, s, p) {
             for (let j = 0; j < M; j++) {
                 if (!st.valid[j]) { mod[j] = 0; continue; }
                 if (kind === "plain") mod[j] = 1.0;
-                else if (kind === "mj") {
-                    mod[j] = (1.0 / (1.0 + mjDilute * Math.pow(st.other[j] / st.nrows[j], mjExp)))
-                        * (1.0 + st.tgain[j] * st.trip[j]);
-                } else if (kind === "cj") {
-                    mod[j] = Math.pow(Math.max(st.load[j], 1e-6) / cjNorm, cjExp);
-                } else { // ja
+                else if (kind === "mj") mod[j] = 1.0 + st.tgain[j] * st.trip[j];
+                else if (kind === "cj") mod[j] = Math.pow(Math.max(st.load[j], 1e-6) / cjNorm, cjExp);
+                else {
                     const e = Math.max(st.runlen[j] + 2.0 - jaFloor, 0.0);
                     const runf = Math.pow(e / (e + jaNorm), jaLenExp);
                     mod[j] = runf * Math.pow(1.0 + st.other[j] / st.nrows[j], jaCoordExp);
@@ -982,7 +1175,6 @@ function computeCurves(b, s, p) {
             }
             const v = new Float64Array(M);
             for (let j = 0; j < M; j++) v[j] = st.valid[j] ? st.kern[j] * mod[j] : 0.0;
-            // kern is stored at odJm; recompute when the channel OD differs
             if (odMult !== odJm) {
                 for (let j = 0; j < M; j++)
                     if (st.valid[j]) v[j] = jackKernel(st.gs[j], b.x, p, odMult) * mod[j];
@@ -990,7 +1182,8 @@ function computeCurves(b, s, p) {
             const cur = wmean(b, s, chainScatter(st.pos, v, n, st.valid), wMs);
             const wv = new Float64Array(M);
             for (let j = 0; j < M; j++) wv[j] = st.valid[j] ? 1.0 / st.gs[j] : 0.0;
-            const wArr = chainScatter(st.pos, wv, n, st.valid);
+            let wArr = chainScatter(st.pos, wv, n, st.valid);
+            if (kind === "mj") wArr = wmean(b, s, wArr, wMs);
             for (let r = 0; r < n; r++) {
                 num[r] += Math.pow(Math.max(cur[r], 0.0), aggPow) * wArr[r];
                 den[r] += wArr[r];
@@ -1006,7 +1199,7 @@ function computeCurves(b, s, p) {
 
     const Jbar = jackChannel("plain", wJm, odJm);
     let Jm = Jbar;
-    if (p.c_jm || p.t_jack_mix || p.cbv_lockstack) Jm = jackChannel("mj", wJm, odJm);
+    if (p.c_jm || p.t_jack_mix || p.cb_lockjack) Jm = jackChannel("mj", wJm, odJm);
 
     const cFj = p.c_fj || 0.0, cFj4k = p.c_fj_4k || 0.0;
     if (cFj !== 0.0 || cFj4k !== 0.0) {
@@ -1028,17 +1221,29 @@ function computeCurves(b, s, p) {
     const Jc = needCj ? jackChannel("cj", wJc, odJc) : Jm;
     const Ja = needJa ? jackChannel("ja", wJa, odJa) : Jm;
 
+    const noteChord = tauC > 0.0 && (p.note_chord || 0.0) >= 0.5;
+    let gest = null;
+    if (noteChord) gest = rowGestureCached(b, s, p);
+
     // ================================================== Pbar
     const xrowP = Math.pow(b.x, p.od_mult_p);
     const d = b.dtModel;
     let dFp = d;
     if (tauC > 0.0) {
-        // d_fp = gap to next attack (rows with wb==0)
-        const attIdx = [];
-        for (let r = 0; r < n; r++) if (wbG[r] === 0.0) attIdx.push(r);
+        let att = null, attIdx;
+        if (noteChord) {
+            att = new Float64Array(n);
+            attIdx = [];
+            for (let r = 0; r < n; r++) {
+                att[r] = 1.0 - gest.wbRow[r];
+                if (gest.wbRow[r] <= 0.0) attIdx.push(r);
+            }
+        } else {
+            attIdx = [];
+            for (let r = 0; r < n; r++) if (wbG[r] === 0.0) attIdx.push(r);
+        }
         dFp = Float64Array.from(d);
         for (let r = 0; r < n; r++) {
-            // first attack index > r
             let lo = 0, hi = attIdx.length;
             while (lo < hi) { const mid = (lo + hi) >> 1; if (attIdx[mid] <= r) lo = mid + 1; else hi = mid; }
             if (lo < attIdx.length) {
@@ -1063,22 +1268,31 @@ function computeCurves(b, s, p) {
     for (let r = 0; r < n; r++)
         vv[r] = 1.0 + p.p_lam2 * s.lnBodyMs[r] / Math.pow(Math.max(b.dtMs[r], 1.0), p.p_v_norm);
     const chw = [1.0, 1.0, p.p_chw2, p.p_chw3, p.p_chw4, p.p_chw5, p.p_chw6, p.p_chw7];
-    let inc;
-    if (tauC > 0.0) {
+    let inc = zeros(n);
+    if (noteChord) {
+        const chwU = chordG(gest.uL, gest.uR, p);
+        for (let r = 0; r < n; r++) {
+            const att = 1.0 - gest.wbRow[r];
+            const mix = p.p_bv_max > 0.5
+                ? att * Math.max(bst[r], 1.0) + Math.max(vv[r] - 1.0, 0.0)
+                : att * bst[r] * vv[r];
+            inc[r] = (1.0 / d[r]) * fp[r] * chwU[r] * mix;
+        }
+    } else if (tauC > 0.0) {
         const u = triWindowCount(b, s, Float64Array.from(b.size), tauC);
         const att = new Float64Array(n);
         for (let r = 0; r < n; r++) att[r] = 1.0 - wbG[r];
-        inc = zeros(n);
         for (let r = 0; r < n; r++) {
             const uu = clamp(u[r], 1.0, K);
             const i0 = Math.min(Math.floor(uu), K - 1);
             const frac = uu - i0;
             const chwU = chw[i0] * (1.0 - frac) + chw[i0 + 1] * frac;
-            const mix = att[r] * Math.max(bst[r], 1.0) + Math.max(vv[r] - 1.0, 0.0);
+            const mix = p.p_bv_max > 0.5
+                ? att[r] * Math.max(bst[r], 1.0) + Math.max(vv[r] - 1.0, 0.0)
+                : att[r] * bst[r] * vv[r];
             inc[r] = (1.0 / d[r]) * fp[r] * chwU * mix;
         }
     } else {
-        inc = zeros(n);
         for (let r = 0; r < n; r++) {
             const chwU = chw[Math.min(b.size[r], K)];
             const mix = p.p_bv_max > 0.5 ? Math.max(bst[r], vv[r]) : bst[r] * vv[r];
@@ -1103,8 +1317,7 @@ function computeCurves(b, s, p) {
 
     // ================================================== Abar
     const A = new Float64Array(n).fill(1.0);
-    const abarActive = p.abar_active >= 0.5;
-    if (abarActive) {
+    if (p.abar_active >= 0.5) {
         let prevD = full(n, -1.0), prevA = full(n, -1.0);
         for (let k = 0; k < K; k++) {
             const d1 = s.dcol[k], on = s.act[k];
@@ -1114,8 +1327,7 @@ function computeCurves(b, s, p) {
                 if (isOn) {
                     const mx = Math.max(prevD[r], d1[r]);
                     const dd = Math.abs(prevD[r] - d1[r]) + p.abar_mx_w * Math.max(0.0, mx - p.abar_mx_thr);
-                    const val = abarVal(dd, mx, p);
-                    A[r] *= val;
+                    A[r] *= abarVal(dd, mx, p);
                 }
                 nd[r] = on[r] ? d1[r] : prevD[r];
                 na[r] = on[r] ? 1.0 : prevA[r];
@@ -1149,14 +1361,15 @@ function computeCurves(b, s, p) {
         if (pos.length < 2) { fcRows.push(zeros(n)); continue; }
         let posK = pos, g = b.bndG[bd], eArr = b.bndE[bd];
         if (tauC > 0.0) {
-            // merge boundary events closer than tauC into single attacks
-            const keepP = [], keepE = [];
+            const keepP = [];
             for (let j = 0; j < pos.length; j++) {
-                if (j === 0) { keepP.push(pos[j]); keepE.push(eArr[j]); continue; }
+                if (j === 0) { keepP.push(pos[j]); continue; }
                 const bg = (b.t[pos[j]] - b.t[pos[j - 1]]) / 1000.0;
-                if (bg >= tauC / 1000.0) { keepP.push(pos[j]); keepE.push(eArr[j]); }
+                if (bg >= tauC / 1000.0) keepP.push(pos[j]);
             }
-            posK = keepP; eArr = keepE;
+            posK = keepP;
+            // v1.2.0: boundary coordinates are smoothed by coordinates.coordinate
+            eArr = SPMExtGeometry.coordinate(s, bd, posK, tauC);
             const M2 = Math.max(keepP.length - 1, 0);
             const g2 = new Float64Array(M2);
             for (let j = 0; j + 1 < keepP.length; j++)
@@ -1174,11 +1387,9 @@ function computeCurves(b, s, p) {
             }
             Xb[j] = v;
         }
-        // boundary weight + chain scatter (same-chart always true)
         const sc = stepScatter(posK.slice(0, M2), posK.slice(1), Xb, n);
         const bgw = cw[BOUND_GROUP[bd]];
         for (let r = 0; r < n; r++) Xsum[r] += bgw * sc[r];
-        // fast cross product term
         const fc = new Float64Array(M2);
         for (let j = 0; j < M2; j++) {
             const base = Math.max(g[j], p.x_fc_floor, 0.75 * xrowX);
@@ -1196,36 +1407,58 @@ function computeCurves(b, s, p) {
         const jump = jumpChannel(b, s, p, xrowX);
         for (let r = 0; r < n; r++) Xsum[r] += p.x_jump_w * jump[r];
     }
-    const Xbar = wmean(b, s, Xsum, p.w_x);
+    let Xbar;
+    if ((p.group_jump || 0.0) === 6.0 && (p.x_adj_w || 0.0) !== 0.0) {
+        // geometry.compute_curves: Xbar = clip(linear_wmean(Xsum) + x_adj_w * adjacency)
+        const helpers = geometryHelpers(b, s);
+        const adj = SPMExtGeometry.geometryWindowCurve(b, s, p, helpers);
+        const base = SPMExtGeometry.linearWmean(s, Xsum, p.w_x, helpers);
+        Xbar = new Float64Array(n);
+        for (let r = 0; r < n; r++) Xbar[r] = Math.max(base[r] + p.x_adj_w * adj[r], 0.0);
+    } else {
+        Xbar = wmean(b, s, Xsum, p.w_x);
+    }
 
     // ================================================== Rbar
     const Rbar = computeRbar(b, s, p, Math.pow(b.x, p.od_mult_r));
 
-    // same-hand chord density (SHd)
-    const shd = new Float64Array(n);
+    // ================================================== SHd / HCd (v1.2.0 chord gesture)
+    const mask = s.mask;
+    const left = zeros(n), right = zeros(n);
     for (let r = 0; r < n; r++) {
-        const m = b.mask[r];
-        let left = 0, right = 0;
-        for (let k = 0; k < 3; k++) if ((m >> k) & 1) left++;
-        for (let k = 4; k < 7; k++) if ((m >> k) & 1) right++;
-        if (tauC > 0.0) {
-            // graded via triangular window handled below (approximated with
-            // exact same-shape computation for perf: rows are the grid)
-            const le = left, ri = right;
-            shd[r] = le * clamp(le - 1.0, 0.0, 1.0) + ri * clamp(ri - 1.0, 0.0, 1.0);
-        } else {
-            shd[r] = (left >= 2 ? left : 0.0) + (right >= 2 ? right : 0.0);
-        }
+        left[r] = popcount7(mask[r] & 15);
+        right[r] = popcount7(mask[r] & 112);
+    }
+    const shd = zeros(n);
+    if (noteChord) {
+        for (let r = 0; r < n; r++)
+            shd[r] = gest.uL[r] * clamp(gest.uL[r] - 1.0, 0.0, 1.0) + gest.uR[r] * clamp(gest.uR[r] - 1.0, 0.0, 1.0);
+    } else if (tauC > 0.0) {
+        const le = triWindowCount(b, s, left, tauC);
+        const ri = triWindowCount(b, s, right, tauC);
+        for (let r = 0; r < n; r++)
+            shd[r] = le[r] * clamp(le[r] - 1.0, 0.0, 1.0) + ri[r] * clamp(ri[r] - 1.0, 0.0, 1.0);
+    } else {
+        for (let r = 0; r < n; r++)
+            shd[r] = (left[r] >= 2 ? left[r] : 0.0) + (right[r] >= 2 ? right[r] : 0.0);
     }
     const SHd = wmean(b, s, shd, Math.max(p.shd_w, 50.0));
+    const hcE = Math.max(p.hc_e === undefined ? 1.5 : p.hc_e, 1.0);
+    const hc = zeros(n);
+    if (noteChord) {
+        for (let r = 0; r < n; r++)
+            hc[r] = Math.pow(Math.max(gest.uL[r] - 1.0, 0.0), hcE) + Math.pow(Math.max(gest.uR[r] - 1.0, 0.0), hcE);
+    } else {
+        for (let r = 0; r < n; r++)
+            hc[r] = Math.pow(Math.max(left[r] - 1.0, 0.0), hcE) + Math.pow(Math.max(right[r] - 1.0, 0.0), hcE);
+    }
+    const HCd = wmean(b, s, hc, Math.max(p.shd_w, 50.0));
 
     // ================================================== Cbar
     let Cbar = zeros(n);
     let anyLn = false;
     for (let r = 0; r < n; r++) if (b.lnEnd[r] > 0) { anyLn = true; break; }
     if (anyLn) {
-        // v1 terms are all 0 in release params → only shield/lockjack/
-        // lockanchor/par/holdtap skipped (weights 0). Kept for exactness:
         if (p.cb_shield || p.cb_lockjack || p.cb_lockanchor || p.cb_par || p.cb_holdtap) {
             Cbar = computeCbarV1(b, s, p, Jbar, Ja);
         }
@@ -1252,15 +1485,8 @@ function computeCurves(b, s, p) {
                 Cbar[r] += w * holdage[r];
             }
         }
-        if (p.c_chord2) {
-            const c2w = Math.max(p.chord2_w, 50.0);
-            const flag = new Uint8Array(n);
-            for (let r = 0; r < n; r++) flag[r] = b.size[r] === 2 ? 1 : 0;
-            Chord2 = wmean(b, s, Float64Array.from(flag), c2w);
-        }
-        if (p.d_rec) {
-            Recov = computeRecov(b, s, p);
-        }
+        if (p.c_chord2) Chord2 = computeChord2V120(b, s, p, gest);
+        if (p.d_rec) Recov = computeRecov(b, s, p);
     }
 
     // ================================================== eye (visual regularity)
@@ -1268,7 +1494,27 @@ function computeCurves(b, s, p) {
     if (p.use_eye) EyeR = computeEyeCurve(b, s, p);
 
     return { Jbar, Jm, Jc, Ja, Pbar, Xbar, Abar, Rbar, Cbar,
-             EyeR, Chord2, Recov, SHd };
+             EyeR, Chord2, Recov, SHd, HCd };
+}
+
+function computeChord2V120(b, s, p, gest) {
+    const n = b.n;
+    const w = Math.max(p.chord2_w === undefined ? 1000.0 : p.chord2_w, 50.0);
+    const noteChord = (p.note_chord || 0.0) >= 0.5 && (p.chord_tau_c || 0.0) > 0.0;
+    if (noteChord) {
+        const g = gest ? gest : rowGestureCached(b, s, p);
+        const mu = zeros(n);
+        if ((p.chord2_hard || 0.0) >= 0.5) {
+            for (let r = 0; r < n; r++) mu[r] = Math.round(g.gsz[r]) === 2.0 ? 1.0 : 0.0;
+        } else {
+            for (let r = 0; r < n; r++)
+                mu[r] = clamp(1.0 - Math.abs(g.gsz[r] - 2.0), 0.0, 1.0) * clamp(g.wbar[r], 0.0, 1.0);
+        }
+        return wmean(b, s, mu, w);
+    }
+    const flag = zeros(n);
+    for (let r = 0; r < n; r++) flag[r] = b.size[r] === 2 ? 1.0 : 0.0;
+    return wmean(b, s, flag, w);
 }
 
 function abarVal(dd, mx, p) {
@@ -1727,7 +1973,7 @@ function computeCbarV2(b, s, p, stats) {
             const Mi = M[ci];
             for (let j2 = i + 1; j2 < N; j2++) {
                 const rj = rSorted[j2], tj = tLoc[rj];
-                if (tj - ti >= dtmax) break;
+                if (tj - ti > dtmax) break;
                 if (ei <= tj) continue;
                 const ej = lnEndLoc[rj];
                 if (ej <= ei) continue;
@@ -1735,11 +1981,12 @@ function computeCbarV2(b, s, p, stats) {
                 const val = (ov / 1000.0) * Mi[cSorted[j2]];
                 if (val === 0) continue;
                 diff[rj] += val;
-                // end row: first row with t >= tj + ov (exclusive end)
+                // end row: first row with t >= tj + ov, clipped to the chart
                 const z = tj + ov;
                 let lo = 0, hi = n;
                 while (lo < hi) { const mid = (lo + hi) >> 1; if (tLoc[mid] < z) lo = mid + 1; else hi = mid; }
-                if (lo > rj && lo <= n) diff[lo] -= val;
+                const endRow = Math.max(rj, Math.min(lo, n - 1));
+                diff[endRow] -= val;
             }
         }
         const out = zeros(n);
@@ -1861,12 +2108,12 @@ function combine(b, s, cur, p) {
     const n = b.n;
     const A = new Float64Array(n);
     for (let r = 0; r < n; r++) A[r] = Math.max(cur.Abar[r], 1e-6);
-    const Ks = s.Ks, C = s.C;
-
-    const is4kRow = b.is4k; // single chart: one frame
-    const aP = is4kRow && p.a_p_4k !== 0.0 ? p.a_p_4k : p.a_p;
-    const aR = is4kRow && p.a_r_4k !== 0.0 ? p.a_r_4k : p.a_r;
-    const aCb = is4kRow && p.a_cb_4k !== 0.0 ? p.a_cb_4k : p.a_cb;
+    const Ks = s.Ks, C = new Float64Array(n);
+    for (let r = 0; r < n; r++) C[r] = Math.max(s.C[r], 0.0);
+    const is4kRow = b.is4k;
+    const aP = is4kRow && (p.a_p_4k || 0.0) !== 0.0 ? p.a_p_4k : p.a_p;
+    const aR = is4kRow && (p.a_r_4k || 0.0) !== 0.0 ? p.a_r_4k : p.a_r;
+    const aCb = is4kRow && (p.a_cb_4k || 0.0) !== 0.0 ? p.a_cb_4k : p.a_cb;
 
     function branchVal(v, mult, r) {
         const cap = p.cap_a + p.cap_b * Math.max(v, 0.0);
@@ -1878,17 +2125,22 @@ function combine(b, s, cur, p) {
         JcB[r] = branchVal(cur.Jc[r], p.aj, r);
         JaB[r] = branchVal(cur.Ja[r], p.aj, r);
     }
+    const jcScale = p.jc_scale === undefined ? 1.0 : p.jc_scale;
+    const jaScale = p.ja_scale === undefined ? 1.0 : p.ja_scale;
+    const dSh = p.d_sh || 0.0, dHc = p.d_hc || 0.0;
+    const dEye = p.d_eye || 0.0;
+    const dEye4k = p.d_eye_4k || 0.0;
+    const eyeOn = p.use_eye && (dEye !== 0.0 || dEye4k !== 0.0);
+    const dEyeRow = (is4kRow && dEye4k !== 0.0) ? dEye4k : dEye;
     const stream = new Float64Array(n);
     for (let r = 0; r < n; r++) {
-        stream[r] = Math.pow(A[r], p.ap) * (
-            aP * Math.max(cur.Pbar[r], 0.0)
+        let sval = aP * Math.max(cur.Pbar[r], 0.0)
             + aR * Math.max(cur.Rbar[r], 0.0) / (C[r] + p.a_c)
             + aCb * Math.max(cur.Cbar[r], 0.0) / (C[r] + p.a_cbc)
-            + (p.d_sh || 0.0) * (cur.SHd ? cur.SHd[r] : 0.0)
-            + (p.use_eye && (p.d_eye !== 0.0 || p.d_eye_4k !== 0.0)
-                ? (is4kRow && p.d_eye_4k !== 0.0 ? p.d_eye_4k : p.d_eye)
-                  * Math.max(cur.Pbar[r], 0.0) * cur.EyeR[r]
-                : 0.0));
+            + dSh * (cur.SHd ? cur.SHd[r] : 0.0)
+            + dHc * (cur.HCd ? cur.HCd[r] : 0.0);
+        if (eyeOn) sval += dEyeRow * Math.max(cur.Pbar[r], 0.0) * cur.EyeR[r];
+        stream[r] = Math.pow(A[r], p.ap) * sval;
     }
     if (p.use_hb) {
         const cChord2 = p.c_chord2 || 0.0;
@@ -1906,17 +2158,21 @@ function combine(b, s, cur, p) {
     const S = new Float64Array(n);
     if (Math.abs(sp - 1.0) < 1e-6) {
         for (let r = 0; r < n; r++)
-            S[r] = p.c_jm * JmB[r] + p.c_jc * JcB[r] + p.c_ja * JaB[r] + p.c_s * stream[r];
+            S[r] = p.c_jm * JmB[r] + p.c_jc * JcB[r] * jcScale + p.c_ja * JaB[r] * jaScale + p.c_s * stream[r];
     } else {
         for (let r = 0; r < n; r++) {
-            const inner = p.c_jm * Math.pow(JmB[r], sp) + p.c_jc * Math.pow(JcB[r], sp)
-                + p.c_ja * Math.pow(JaB[r], sp) + p.c_s * Math.pow(Math.max(stream[r], 0.0), sp);
+            const inner = p.c_jm * Math.pow(JmB[r], sp) + p.c_jc * Math.pow(JcB[r], sp) * jcScale
+                + p.c_ja * Math.pow(JaB[r], sp) * jaScale + p.c_s * Math.pow(Math.max(stream[r], 0.0), sp);
             S[r] = Math.pow(Math.max(inner, 0.0), 1.0 / sp);
         }
     }
+    // technique context uses the pre-hand/role Jm (engine passes Jm_context)
+    const JmCtx = cur.Jm_context ? cur.Jm_context : cur.Jm;
+    const JmCtxB = new Float64Array(n);
+    for (let r = 0; r < n; r++) JmCtxB[r] = branchVal(JmCtx[r], p.aj, r);
     const T = new Float64Array(n), D = new Float64Array(n);
     for (let r = 0; r < n; r++) {
-        const Xt = Math.max(cur.Xbar[r], 0.0) + p.t_jack_mix * JmB[r];
+        const Xt = Math.max(Math.max(cur.Xbar[r], 0.0) + p.t_jack_mix * JmCtxB[r], 0.0);
         T[r] = Math.pow(A[r], p.at / Ks[r]) * Xt / (Xt + S[r] + p.t_s_off);
         D[r] = p.d_b1 * Math.pow(S[r], p.d_ds) * Math.pow(Math.max(T[r], 1e-9), p.d_dt)
             + p.d_b2 * S[r];
@@ -1926,8 +2182,30 @@ function combine(b, s, cur, p) {
 }
 
 // ============================================================
-// AGGREGATE (core/model.aggregate, mode 3 = weighted power mean)
+// AGGREGATE (core/model.aggregate v1.2.0; default mode 4 = AGG-D)
 // ============================================================
+function peakEnvelope(b, s, D, ms) {
+    // per-chart centred rolling max over +-ms/2 (scipy maximum_filter1d)
+    const n = b.n;
+    const out = new Float64Array(n);
+    const dur = Math.max(b.duration, 1.0);
+    const medDt = Math.max(dur / Math.max(n, 1), 1.0);
+    const half = Math.max(1, Math.round(0.5 * ms / medDt));
+    const dq = [];
+    let next = 0;
+    for (let i = 0; i < n; i++) {
+        const hi = Math.min(i + half, n - 1);
+        while (next <= hi) {
+            while (dq.length && D[dq[dq.length - 1]] <= D[next]) dq.pop();
+            dq.push(next);
+            next++;
+        }
+        while (dq.length && dq[0] < i - half) dq.shift();
+        out[i] = D[dq[0]];
+    }
+    return out;
+}
+
 function aggregateWeights(b, s, p, holdW) {
     const n = b.n;
     const w = new Float64Array(n);
@@ -1946,25 +2224,6 @@ function aggregateWeights(b, s, p, holdW) {
     return w;
 }
 
-function peakEnvelope(b, s, D, ms) {
-    // per-chart rolling max over +-ms/2 (mode 'nearest')
-    const n = b.n;
-    const out = new Float64Array(n);
-    const dur = Math.max(b.duration, 1.0);
-    const medDt = Math.max(dur / Math.max(n, 1), 1.0);
-    const half = Math.max(1, Math.round(0.5 * ms / medDt));
-    const size = 2 * half + 1;
-    // sliding window max via monotonic deque
-    const dq = [];
-    for (let i = 0; i < n; i++) {
-        while (dq.length && dq[0] <= i - size) dq.shift();
-        while (dq.length && D[dq[dq.length - 1]] <= D[i]) dq.pop();
-        dq.push(i);
-        out[i] = D[dq[0]];
-    }
-    return out;
-}
-
 function aggregatePow(b, s, D, w, p) {
     const pw = Math.max(p.agg_k, 0.05);
     let acc = 0, sw = 0;
@@ -1977,6 +2236,153 @@ function aggregatePow(b, s, D, w, p) {
     return [Math.pow(acc / Math.max(sw, EPS), 1.0 / pw), sw];
 }
 
+function aggcGeom(p) {
+    let ms = Math.max(p.aggC_ms, 50.0);
+    let gap = Math.max(p.aggC_gap, 50.0);
+    let ms4 = (p.aggC_ms_4k || 0.0);
+    let gap4 = (p.aggC_gap_4k || 0.0);
+    ms4 = ms4 > 0.0 ? Math.max(ms4, 50.0) : -1.0;
+    gap4 = gap4 > 0.0 ? Math.max(gap4, 50.0) : -1.0;
+    const use4k = (ms4 > 0.0 && ms4 !== ms) || (gap4 > 0.0 && gap4 !== gap);
+    return { ms, gap, ms4, gap4, use4k };
+}
+
+function aggcMass(s, gp, p, holdW) {
+    const n = s.n;
+    const m = new Float64Array(n);
+    const wc = Math.max(p.aggC_wc, 0.0);
+    const gw = p.aggC_gw || 0.0;
+    const gc = Math.max(p.aggC_gc === undefined ? 400.0 : p.aggC_gc, 1.0);
+    const holdOn = holdW && (p.aggC_hw || 0.0) && (p.hw_a || 0.0);
+    const half = Math.max(p.hw_half === undefined ? 1.0 : p.hw_half, 1e-6);
+    for (let r = 0; r < n; r++) {
+        let v = Math.pow(Math.max(s.C[r], 0.0), wc);
+        if (gw !== 0.0) v *= Math.pow(Math.min(Math.max(gp[r], 0.0), gc), gw);
+        if (holdOn) v *= 1.0 + p.hw_a * s.held[r] / (s.held[r] + half);
+        m[r] = Math.max(Number.isFinite(v) ? v : 0.0, 0.0);
+    }
+    return m;
+}
+
+const AGG_WIDX = 1 << 22;
+function aggcWindows(s, ms, gap) {
+    const n = s.n;
+    const first = new Uint8Array(n);
+    first[0] = 1;
+    const prevGap = new Float64Array(n);
+    for (let r = 1; r < n; r++) prevGap[r] = s.dtDiff[r - 1];
+    const boundary = new Uint8Array(n);
+    for (let r = 0; r < n; r++) boundary[r] = (first[r] || prevGap[r] >= gap) ? 1 : 0;
+    // sec = cumsum(boundary)-1
+    const sec = new Int32Array(n);
+    let acc = 0;
+    for (let r = 0; r < n; r++) { acc += boundary[r]; sec[r] = acc - 1; }
+    const t0 = [];
+    for (let r = 0; r < n; r++) if (boundary[r]) t0.push(s.t[r]);
+    // window index within each section; keys are non-decreasing along rows
+    const inv = new Int32Array(n);
+    const startsW = [];
+    let winId = -1;
+    let lastKey = -1;
+    for (let r = 0; r < n; r++) {
+        const widx = Math.floor(Math.max(s.t[r] - t0[sec[r]], 0.0) / ms);
+        const key = sec[r] * AGG_WIDX + widx;
+        if (key !== lastKey) { winId++; lastKey = key; startsW.push(r); }
+        inv[r] = winId;
+    }
+    const nw = winId + 1;
+    const reset = new Uint8Array(nw), preGap = new Float64Array(nw);
+    for (let w = 0; w < nw; w++) { reset[w] = boundary[startsW[w]]; preGap[w] = prevGap[startsW[w]]; }
+    return { inv, nw, startsW, reset, preGap };
+}
+
+function aggcTwoLevel(b, s, D, gp, p, holdW) {
+    const m = aggcMass(s, gp, p, holdW);
+    const pw1 = Math.max(p.aggC_pw1, 0.05);
+    const pw2 = Math.max(p.aggC_pw2, 0.05);
+    const geom = aggcGeom(p);
+    let ms = geom.ms, gap = geom.gap;
+    if (geom.use4k) {
+        if (b.is4k) { ms = geom.ms4 > 0 ? geom.ms4 : ms; gap = geom.gap4 > 0 ? geom.gap4 : gap; }
+        // single chart is entirely 4K or not: non-4K charts keep ms/gap
+    }
+    const win = aggcWindows(s, ms, gap);
+    const nw = win.nw;
+    const M = new Float64Array(nw), num1 = new Float64Array(nw);
+    for (let r = 0; r < s.n; r++) {
+        const w = win.inv[r];
+        M[w] += m[r];
+        num1[w] += m[r] * Math.pow(Math.max(D[r], 0.0), pw1);
+    }
+    let num = 0, den = 0;
+    for (let w = 0; w < nw; w++) {
+        const d1 = Math.pow(num1[w] / Math.max(M[w], EPS), 1.0 / pw1);
+        num += M[w] * Math.pow(Math.max(d1, 0.0), pw2);
+        den += M[w];
+    }
+    return Math.pow(num / Math.max(den, EPS), 1.0 / pw2);
+}
+
+function aggcDemand(b, s, D, gp, p, holdW) {
+    const m = aggcMass(s, gp, p, holdW);
+    const pw1 = Math.max(p.aggC_pw1, 0.05);
+    const tau = Math.max(p.aggC_tau, 50.0);
+    const kap = Math.max(p.aggC_kap, 1e-9);
+    const geom = aggcGeom(p);
+    let ms = geom.ms, gap = geom.gap;
+    if (geom.use4k && b.is4k) { ms = geom.ms4 > 0 ? geom.ms4 : ms; gap = geom.gap4 > 0 ? geom.gap4 : gap; }
+    const win = aggcWindows(s, ms, gap);
+    const nw = win.nw;
+    const M = new Float64Array(nw), N1 = new Float64Array(nw);
+    for (let r = 0; r < s.n; r++) {
+        const w = win.inv[r];
+        M[w] += m[r];
+        N1[w] += m[r] * Math.pow(Math.max(D[r], 0.0), pw1);
+    }
+    const DD = new Float64Array(nw);
+    for (let w = 0; w < nw; w++) DD[w] = Math.pow(N1[w] / Math.max(M[w], EPS), 1.0 / pw1);
+    const DEC = new Float64Array(nw);
+    for (let w = 0; w < nw; w++) DEC[w] = win.reset[w] ? 0.0 : Math.exp(-win.preGap[w] / tau);
+    let hi = 0;
+    for (let w = 0; w < nw; w++) hi = Math.max(hi, DD[w] + 1.0);
+    let lo = 0.0;
+    for (let it = 0; it < 26; it++) {
+        const mid = 0.5 * (lo + hi);
+        let F = 0.0, peak = 0.0;
+        for (let w = 0; w < nw; w++) {
+            F = Math.max(0.0, F * DEC[w] + M[w] * (DD[w] - mid));
+            peak = Math.max(peak, F);
+        }
+        if (peak <= kap) lo = mid; else hi = mid;
+    }
+    return 0.5 * (lo + hi);
+}
+
+function aggregateSR(b, s, D, p, holdW) {
+    const n = b.n;
+    let Dv = D;
+    if (p.env_w) {
+        const E = peakEnvelope(b, s, D, Math.max(p.env_ms === undefined ? 800.0 : p.env_ms, 50.0));
+        Dv = new Float64Array(n);
+        for (let r = 0; r < n; r++) Dv[r] = (1.0 - p.env_w) * D[r] + p.env_w * E[r];
+    }
+    const gp = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const dnext = r + 1 < n ? b.dtMs[r] : 0.0;
+        const dprev = r > 0 ? b.dtMs[r - 1] : 0.0;
+        gp[r] = Math.max(0.5 * (dnext + dprev), 0.0);
+    }
+    const gapCap = p.aggw_gap_cap || 0.0;
+    if (gapCap > 0.0) for (let r = 0; r < n; r++) gp[r] = Math.min(gp[r], gapCap);
+    const mode = Math.round(p.agg_mode);
+    if (mode === 4) return aggcTwoLevel(b, s, Dv, gp, p, holdW);
+    if (mode === 5) return aggcDemand(b, s, Dv, gp, p, holdW);
+    const w = aggregateWeights(b, s, p, holdW);
+    if (mode === 3) return aggregatePow(b, s, Dv, w, p)[0];
+    throw new Error("aggregate mode " + mode + " is not implemented in the v1.2.0 JS port");
+}
+
+// output alignment (core/model.postprocess)
 function postprocess(b, s, sr, p) {
     const nEff = b.nNotes;
     let v = sr * nEff / (nEff + Math.max(p.pp_n0, 1e-6));
@@ -1986,235 +2392,365 @@ function postprocess(b, s, sr, p) {
 }
 
 // ============================================================
-// RC / LN (rc_ln_model/rcln/engine.py)
+// RC / LN — SPMSubmodel rcln v1.2 engine (Python rcln/engine.py port)
+// Single-chart simplification; integer-clock path (clock.plan === None).
 // ============================================================
 
-// RC curves: ln_body_ms = 0, then full recompute; Rbar/Cbar zeroed
-// Light RC path: only Pbar depends on ln_body_ms (proven bit-identical to the
-// full recompute by rc_ln_model tests/test_identity.py T6). All other curves
-// are unchanged by zeroing ln_body; Rbar/Cbar are zeroed explicitly.
-function computePbarRC(b, s, p) {
-    const n = b.n;
-    const xp = Math.pow(b.x, p.od_mult_p);
-    const d = b.dtModel;
-    const tauC = p.chord_tau_c || 0.0;
-    let dFp = d;
-    if (tauC > 0.0) {
-        const [wf, wb] = chordCoupling(b, s, tauC);
-        const attIdx = [];
-        for (let r = 0; r < n; r++) if (wb[r] === 0.0) attIdx.push(r);
-        dFp = Float64Array.from(d);
-        for (let r = 0; r < n; r++) {
-            let lo = 0, hi = attIdx.length;
-            while (lo < hi) { const mid = (lo + hi) >> 1; if (attIdx[mid] <= r) lo = mid + 1; else hi = mid; }
-            if (lo < attIdx.length) {
-                const na = attIdx[lo];
-                const v = (b.t[na] - b.t[r]) / 1000.0;
-                if (v > 0) dFp[r] = v;
+function canonicalNotes(notes) {
+    // role.canonical: stable sort by (time,col); merge exact duplicates on the
+    // same physical key; conflicting tails are an input error.
+    const n = notes.nNotes;
+    const order = Array.from({ length: n }, (_, i) => i);
+    order.sort((a, b) => notes.time[a] - notes.time[b] || notes.col[a] - notes.col[b]);
+    const t = new Float64Array(n), c = new Int32Array(n), e = new Float64Array(n), ln = new Uint8Array(n);
+    let m = 0;
+    for (let k = 0; k < n; k++) {
+        const i = order[k];
+        if (m > 0 && t[m - 1] === notes.time[i] && c[m - 1] === notes.col[i]) {
+            if (e[m - 1] !== notes.lnEnd[i]) throw new Error('Conflicting simultaneous objects on one physical key.');
+            continue;
+        }
+        t[m] = notes.time[i]; c[m] = notes.col[i];
+        e[m] = notes.lnEnd[i]; ln[m] = notes.isLn[i]; m++;
+    }
+    return { time: t.subarray(0, m), col: c.subarray(0, m), lnEnd: e.subarray(0, m),
+             isLn: ln.subarray(0, m), keyCount: notes.keyCount, od: notes.od,
+             rate: notes.rate, nNotes: m };
+}
+
+function mirrorNotes(notes) {
+    const n = notes.nNotes;
+    const order = Array.from({ length: n }, (_, i) => i);
+    order.sort((a, b) => notes.time[a] - notes.time[b] || (6 - notes.col[a]) - (6 - notes.col[b]));
+    const t = new Float64Array(n), c = new Int32Array(n), e = new Float64Array(n), ln = new Uint8Array(n);
+    for (let k = 0; k < n; k++) {
+        const i = order[k];
+        t[k] = notes.time[i]; c[k] = 6 - notes.col[i];
+        e[k] = notes.lnEnd[i]; ln[k] = notes.isLn[i];
+    }
+    return { time: t, col: c, lnEnd: e, isLn: ln, keyCount: notes.keyCount, od: notes.od,
+             rate: notes.rate, nNotes: n };
+}
+
+function cmpRawBytes(a, b) {
+    // lexicographic compare of the little-endian byte representation
+    const len = Math.min(a.length, b.length);
+    const dvA = new DataView(new ArrayBuffer(8)), dvB = new DataView(new ArrayBuffer(8));
+    for (let i = 0; i < len; i++) {
+        if (a instanceof Int32Array) { dvA.setInt32(0, a[i], true); dvB.setInt32(0, b[i], true); }
+        else { dvA.setFloat64(0, a[i], true); dvB.setFloat64(0, b[i], true); }
+        for (let j = 0; j < 4; j++) {
+            const x = dvA.getUint8(j), y = dvB.getUint8(j);
+            if (x !== y) return x < y ? -1 : 1;
+        }
+        // int32 has 4 bytes, float64 has 8
+        if (a instanceof Float64Array) {
+            for (let j = 4; j < 8; j++) {
+                const x = dvA.getUint8(j), y = dvB.getUint8(j);
+                if (x !== y) return x < y ? -1 : 1;
             }
         }
     }
-    const fp = new Float64Array(n), bst = new Float64Array(n);
-    for (let r = 0; r < n; r++) {
-        const q = Math.min(dFp[r] - xp / 2.0, xp / 6.0);
-        fp[r] = Math.pow(Math.max(p.p_scale / xp * (1.0 - (p.p_lam3 / xp) * q * q), 0.0), 0.25);
-        const rr = 7.5 / d[r];
-        bst[r] = (rr > p.p_boost_lo && rr < p.p_boost_hi)
-            ? 1.0 + p.p_boost * (rr - p.p_boost_lo) * Math.pow(rr - p.p_boost_hi, 2.0) : 1.0;
-    }
-    const chw = [1.0, 1.0, p.p_chw2, p.p_chw3, p.p_chw4, p.p_chw5, p.p_chw6, p.p_chw7];
-    const inc = zeros(n);
-    if (tauC > 0.0) {
-        const u = triWindowCount(b, s, Float64Array.from(b.size), tauC);
-        for (let r = 0; r < n; r++) {
-            const uu = clamp(u[r], 1.0, K);
-            const i0 = Math.min(Math.floor(uu), K - 1);
-            const frac = uu - i0;
-            const chwU = chw[i0] * (1.0 - frac) + chw[i0 + 1] * frac;
-            // vv = 1 → body term zero; attack discount from coupling
-            const mix = Math.max(bst[r], 1.0);
-            inc[r] = (1.0 / d[r]) * fp[r] * chwU * mix;
-        }
-        // attack discount on the rate part
-        const [wf, wb] = chordCoupling(b, s, tauC);
-        for (let r = 0; r < n; r++) inc[r] *= (1.0 - wb[r]);
-    } else {
-        for (let r = 0; r < n; r++) {
-            const chwU = chw[Math.min(b.size[r], K)];
-            inc[r] = (1.0 / d[r]) * fp[r] * chwU * Math.max(bst[r], 1.0);
-        }
-    }
-    for (let r = 0; r < n; r++) {
-        const am = 1.0 + p.an_on_p * Math.min(s.anchorRaw[r] - p.an_a0,
-            p.an_cubic * Math.pow(s.anchorRaw[r] - p.an_a1, 3.0));
-        const v0 = inc[r] * am;
-        inc[r] = Math.min(v0, Math.max(inc[r], inc[r] * p.p_sat_b - p.p_sat_a));
-    }
-    if (p.p_burst3) {
-        const b3 = wcount(b, s, s.noteImpulse, 100.0);
-        for (let r = 0; r < n; r++) inc[r] += p.p_burst3 * b3[r] * 10.0;
-    }
-    if (p.p_burst4) {
-        const b4 = wcount(b, s, s.noteImpulse, 150.0);
-        for (let r = 0; r < n; r++) inc[r] += p.p_burst4 * b4[r] * 6.6667;
-    }
-    return wmean(b, s, inc, p.w_p);
+    return a.length - b.length;
 }
 
-function computeCurvesRC(b, s, p, curMain) {
-    const n = b.n;
-    const curRc = {
-        Jbar: curMain.Jbar, Jm: curMain.Jm, Jc: curMain.Jc, Ja: curMain.Ja,
-        Pbar: curMain.Pbar, Xbar: curMain.Xbar, Abar: curMain.Abar,
-        Rbar: zeros(n), Cbar: zeros(n),
-        EyeR: curMain.EyeR, Chord2: curMain.Chord2, Recov: curMain.Recov,
-        SHd: curMain.SHd,
-    };
-    if (b.tailN === 0) {
-        // no LNs: RC chart — identical curves (Rbar/Cbar already 0 in main)
-        curRc.Rbar = curMain.Rbar;
-        curRc.Cbar = curMain.Cbar;
-        return curRc;
-    }
-    const saved = Float64Array.from(s.lnBodyMs);
-    s.lnBodyMs.fill(0.0);
-    curRc.Pbar = computePbarRC(b, s, p);
-    s.lnBodyMs.set(saved);
-    return curRc;
+function tapNotes(notes) {
+    const n = notes.nNotes;
+    const ln = new Uint8Array(n), e = new Float64Array(n);
+    for (let i = 0; i < n; i++) e[i] = notes.time[i];
+    return { time: notes.time, col: notes.col, lnEnd: e, isLn: ln,
+             keyCount: notes.keyCount, od: notes.od, rate: notes.rate, nNotes: n };
 }
 
-// LN presence weights g(t)
-function lnPresence(b, s, p) {
-    const n = b.n;
-    const ind = new Uint8Array(n);
-    for (let r = 0; r < n; r++) ind[r] = s.held[r] > 0 ? 1 : 0;
-    for (let r = 0; r < n; r++) if (b.isLn[r]) ind[r] = 1;
-    for (let j = 0; j < b.tailN; j++) ind[b.tailJ0[j]] = 1;
-    const indF = new Float64Array(n);
-    for (let r = 0; r < n; r++) indF[r] = ind[r];
-    const wMs = Math.max(p.ln_mask_w, 50.0);
-    const g = wmean(b, s, indF, wMs);
+function alignScore(raw, keyCount, modelInfo) {
+    const a = modelInfo.alignment[String(keyCount)];
+    if (!a) return raw;
+    return a.scale * Math.pow(Math.max(raw, 0.0), a.power);
+}
+
+function presenceWeights(notes, s, width, exponent) {
+    width = width === undefined ? 700.0 : width;
+    exponent = exponent === undefined ? 0.5 : exponent;
+    const n = s.n;
+    const present = new Float64Array(n);
+    for (let r = 0; r < n; r++) present[r] = s.held[r] > 0 ? 1.0 : 0.0;
+    let anyLn = false;
+    for (let i = 0; i < notes.nNotes; i++) if (notes.isLn[i]) { anyLn = true; break; }
+    if (anyLn) {
+        for (let i = 0; i < notes.nNotes; i++) {
+            if (!notes.isLn[i]) continue;
+            // head row: searchsorted(s.t, time) (exact row time)
+            const head = lowerBound(s.t, notes.time[i]);
+            if (head < n) present[head] = 1.0;
+            const tail = lowerBound(s.t, notes.lnEnd[i]);
+            if (tail < n) present[tail] = 1.0;
+        }
+    }
     const out = new Float64Array(n);
-    for (let r = 0; r < n; r++) out[r] = Math.pow(clamp(g[r] * (p.ln_gain || 1.0), 0.0, 1.0), p.ln_g_exp);
+    const g = wmean(s.b, s, present, width);
+    for (let r = 0; r < n; r++) out[r] = Math.pow(clamp(g[r], 0.0, 1.0), exponent);
     return out;
 }
 
-// LN aggregation: row weights * g(t), power mean (mode 3 shape)
-function aggregateLN(b, s, D, g, p) {
-    const n = b.n;
-    let Dv = D;
-    if (p.env_w) {
-        const E = peakEnvelope(b, s, D, Math.max(p.env_ms, 50.0));
-        Dv = new Float64Array(n);
-        for (let r = 0; r < n; r++) Dv[r] = (1.0 - p.env_w) * D[r] + p.env_w * E[r];
-    }
-    // python aggregate_ln always applies the hold downweight (unlike
-    // aggregate(hold_w=False) on the RC path)
-    const w = aggregateWeights(b, s, p, true);
-    const pw = Math.max(p.agg_k, 0.05);
-    let acc = 0, swl = 0, sw = 0;
+function lowerBound(arr, x) {
+    let lo = 0, hi = arr.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < x) lo = mid + 1; else hi = mid; }
+    return lo;
+}
+
+function engagementMass(s, p) {
+    const n = s.n;
+    const gp = new Float64Array(n);
     for (let r = 0; r < n; r++) {
-        const wl = w[r] * g[r];
-        const DD = Math.max(Number.isFinite(Dv[r]) ? Dv[r] : 0.0, 0.0);
-        acc += wl * Math.pow(DD, pw);
-        swl += wl;
-        sw += w[r];
+        const dnext = r + 1 < n ? s.dtDiff[r] : 0.0;
+        const dprev = r > 0 ? s.dtDiff[r - 1] : 0.0;
+        gp[r] = Math.max(0.5 * (dnext + dprev), 0.0);
     }
-    const cov = swl / Math.max(sw, EPS);
-    let sr = swl > 1e-9 ? Math.pow(acc / Math.max(swl, EPS), 1.0 / pw) : 0.0;
-    return [sr, cov];
+    const cap = p.aggw_gap_cap || 0.0;
+    if (cap > 0.0) for (let r = 0; r < n; r++) gp[r] = Math.min(gp[r], cap);
+    return aggcMass(s, gp, p, true);
 }
 
-function postprocessLN(b, s, sr, cov, p) {
-    const nEff = b.nNotes * clamp(cov, 0.0, 1.0);
-    const n0 = Math.max(p.ln_n0, 1e-6);
-    let v = sr * nEff / (nEff + n0);
-    const thr = p.pp_thr, div = Math.max(p.pp_div, 1e-3);
-    if (v > thr) v = thr + (v - thr) / div;
-    v = v * p.pp_scale * p.calib_a + p.calib_b;
-    v = v * (p.ln_calib_a || 1.0) + (p.ln_calib_b || 0.0);
-    return Math.max(v, 0.0);
+function preparedField(s, field, p) {
+    const n = s.n;
+    const out = new Float64Array(n);
+    const env = p.env_w || 0.0;
+    if (env) {
+        const E = peakEnvelope(s.b, s, field, Math.max(p.env_ms === undefined ? 800.0 : p.env_ms, 50.0));
+        for (let r = 0; r < n; r++) out[r] = Math.max((1.0 - env) * field[r] + env * E[r], 0.0);
+    } else {
+        for (let r = 0; r < n; r++) out[r] = Math.max(Number.isFinite(field[r]) ? field[r] : 0.0, 0.0);
+    }
+    return out;
+}
+
+function windowGeometryFor(s, p) {
+    const geom = aggcGeom(p);
+    let ms = geom.ms, gap = geom.gap;
+    if (geom.use4k && s.is4k[0]) { ms = geom.ms4 > 0 ? geom.ms4 : ms; gap = geom.gap4 > 0 ? geom.gap4 : gap; }
+    return { ms, gap };
+}
+
+function lnAggregate(s, field, g, p) {
+    const n = s.n;
+    const D = preparedField(s, field, p);   // note: preparedField applies env; python does its own env here
+    const gp = new Float64Array(n);
+    for (let r = 0; r < n; r++) {
+        const dnext = r + 1 < n ? s.dtDiff[r] : 0.0;
+        const dprev = r > 0 ? s.dtDiff[r - 1] : 0.0;
+        gp[r] = Math.max(0.5 * (dnext + dprev), 0.0);
+    }
+    const cap = p.aggw_gap_cap || 0.0;
+    if (cap > 0.0) for (let r = 0; r < n; r++) gp[r] = Math.min(gp[r], cap);
+    const mass = aggcMass(s, gp, p, true);
+    let sw = 0, sm = 0;
+    const weighted = new Float64Array(n);
+    for (let r = 0; r < n; r++) { weighted[r] = mass[r] * g[r]; sw += weighted[r]; sm += mass[r]; }
+    const cov = sm ? sw / sm : 0.0;
+    const geo = windowGeometryFor(s, p);
+    const win = aggcWindows(s, geo.ms, geo.gap);
+    const nw = win.nw;
+    const W = new Float64Array(nw), V = new Float64Array(nw);
+    const a = Math.max(p.aggC_pw1, 0.05), b = Math.max(p.aggC_pw2, 0.05);
+    for (let r = 0; r < n; r++) {
+        const w = win.inv[r];
+        W[w] += weighted[r];
+        V[w] += weighted[r] * Math.pow(D[r], a);
+    }
+    let num = 0, den = 0;
+    for (let w = 0; w < nw; w++) {
+        const d1 = Math.pow(V[w] / Math.max(W[w], 1e-9), 1.0 / a);
+        num += W[w] * Math.pow(d1, b);
+        den += W[w];
+    }
+    let raw = Math.pow(num / Math.max(den, 1e-9), 1.0 / b);
+    const count = s.nNotesVal * cov;
+    raw *= count / (count + Math.max(p.pp_n0, 1e-6));
+    if (raw > p.pp_thr) raw = p.pp_thr + (raw - p.pp_thr) / Math.max(p.pp_div, 0.001);
+    let score = Math.max(raw * p.pp_scale * p.calib_a + p.calib_b, 0.0);
+    return [score * Math.min(cov / 0.40, 1.0), cov];
+}
+
+function rcWindows(full, rice, fullField, riceField, g, p) {
+    const dRc = preparedField(rice, riceField, p);
+    const dLn = preparedField(full, fullField, p);
+    const geo = windowGeometryFor(rice, p);
+    const win = aggcWindows(rice, geo.ms, geo.gap);
+    const nw = win.nw;
+    const power = Math.max(p.aggC_pw1, 0.05);
+    const rm = engagementMass(rice, p);
+    const lm = engagementMass(full, p);
+    const rw = new Float64Array(nw), accRc = new Float64Array(nw),
+          totalLn = new Float64Array(nw), presentLn = new Float64Array(nw), accLn = new Float64Array(nw);
+    for (let r = 0; r < rice.n; r++) {
+        const w = win.inv[r];
+        rw[w] += rm[r];
+        accRc[w] += rm[r] * Math.pow(dRc[r], power);
+    }
+    for (let r = 0; r < full.n; r++) {
+        // rice and full share the same row grid for integer charts
+        const w = win.inv[r];
+        totalLn[w] += lm[r];
+        presentLn[w] += lm[r] * g[r];
+        accLn[w] += lm[r] * g[r] * Math.pow(dLn[r], power);
+    }
+    const rc = new Float64Array(nw), ln = new Float64Array(nw);
+    for (let w = 0; w < nw; w++) {
+        rc[w] = Math.pow(accRc[w] / Math.max(rw[w], 1e-9), 1.0 / power);
+        ln[w] = Math.pow(accLn[w] / Math.max(presentLn[w], 1e-9), 1.0 / power);
+        const localCov = presentLn[w] / Math.max(totalLn[w], 1e-9);
+        ln[w] *= clamp(localCov / 0.40, 0.0, 1.0);
+    }
+    return { rw, rc, ln };
+}
+
+function rcAggregate(full, rice, fullField, riceField, g, lnScore, headScore, p) {
+    const w = rcWindows(full, rice, fullField, riceField, g, p);
+    const power = Math.max(p.aggC_pw2, 0.05);
+    let num = 0, den = 0;
+    for (let k = 0; k < w.rw.length; k++) {
+        const ratio = w.ln[k] / Math.max(w.rc[k], 1e-9);
+        const share = clamp(ratio, 0.0, 1.0);
+        const chartRatio = lnScore / Math.max(headScore, 1e-9);
+        const intensity = 0.90 * clamp((1.60 - chartRatio) / 0.40, 0.0, 1.0);
+        const weight = w.rw[k] * (1.0 - intensity * share);
+        num += weight * Math.pow(w.rc[k], power);
+        den += weight;
+    }
+    return Math.pow(num / Math.max(den, 1e-9), 1.0 / power);
 }
 
 // ============================================================
-// MAIN ENTRY — evaluate one chart
+// MAIN ENTRY — evaluate one chart (SPM Rating v1.2.0 + SPMSubmodel rcln)
 // ============================================================
-function evaluateChart(osuContent, speedRate, p) {
-    p = p || SPM_V1_PARAMS;
-    const nt = parseOsu(osuContent, speedRate);
+function evaluateChart(osuContent, speedRate, p, modelInfo) {
+    p = p || SPM_V120_PARAMS;
+    modelInfo = modelInfo || SPM_V120_MODEL;
+    if (typeof SPMExtHandRole === 'undefined' || typeof SPMExtGeometry === 'undefined') {
+        throw new Error('v1.2.0 extension modules are not loaded');
+    }
+    let nt = parseOsu(osuContent, speedRate);
     if (!nt || nt.nNotes < 2) return { error: "not a valid mania chart" };
-    const b = buildBatch(nt);
-    if (!b) return { error: "too few notes" };
-    const s = buildStruct(b, p);
+    nt = SPMExtHandRole.roleCanonical(nt);
+    if (nt.nNotes < 2) return { error: "too few notes" };
+    let notes = nt, other = mirrorNotes(nt);
+    if (cmpRawBytes(other.col, notes.col) < 0 ||
+        (cmpRawBytes(other.col, notes.col) === 0 && cmpRawBytes(other.lnEnd, notes.lnEnd) < 0)) {
+        notes = other; other = nt;
+    }
+    const sources = [];
+    let reference = null, extra = null;
+    for (const view of [notes, other]) {
+        const local = Object.assign({}, p, { x_jump_w: 0.0 });
+        const b = buildBatch(view);
+        if (!b) return { error: "too few notes" };
+        const s = buildStruct(b, local);
+        let cur = computeCurves(b, s, Object.assign({}, local, { d_rec: 0 }));
+        const rec = SPMExtGeometry.recoveryCurve(view.time, s.t, local.recov_w, local.recov_wl);
+        cur = Object.assign({}, cur, { Recov: rec });
+        const data = SPMExtHandRole.handExtract(view, 30.0);
+        const rates = SPMExtHandRole.handField(data, s.t, local.w_jm);
+        const unit = SPMExtHandRole.handCostPrice(SPMExtHandRole.handCostState(rates), s.x, p);
+        if (reference === null) {
+            reference = s;
+            extra = SPMExtHandRole.roleField(nt, p, s.t);
+            for (let r = 0; r < extra.length; r++) extra[r] *= modelInfo.role_price;
+        }
+        sources.push({ b, s, cur, unit });
+    }
+    const n = reference.n;
+    const release = new Float64Array(n);
+    for (let r = 0; r < n; r++) release[r] = 0.5 * (sources[0].cur.Rbar[r] + sources[1].cur.Rbar[r]);
+    function combineWith(src, addExtra) {
+        const cur = Object.assign({}, src.cur, {
+            Rbar: release,
+            Jm_context: src.cur.Jm,
+            Jm: new Float64Array(n),
+        });
+        for (let r = 0; r < n; r++) cur.Jm[r] = src.cur.Jm[r] + src.unit[r] + (addExtra ? extra[r] : 0.0);
+        return combine(src.b, src.s, cur, p);
+    }
+    const parts = [combineWith(sources[0], true), combineWith(sources[1], true)];
+    const field = new Float64Array(n);
+    for (let r = 0; r < n; r++) field[r] = 0.5 * (parts[0][r] + parts[1][r]);
+    const rawAgg = aggregateSR(reference.b, reference, field, p, true);
+    const starRaw = postprocess(reference.b, reference, rawAgg, p);
 
-    // ---- spm difficulty
-    const cur = computeCurves(b, s, p);
-    const D = combine(b, s, cur, p);
-    const wHold = aggregateWeights(b, s, p, true);
-    const [srRaw] = aggregatePow(b, s, D, wHold, p);
-    const star = postprocess(b, s, srRaw, p);
+    // ---- LN difficulty
+    const g = presenceWeights(notes, reference, 700.0, 0.5);
+    const lnPair = lnAggregate(reference, field, g, p);
+    const starLnRaw = lnPair[0];
+    const lnCov = lnPair[1];
 
     // ---- RC difficulty (de-LN chart)
-    const curRc = computeCurvesRC(b, s, p, cur);
-    const DRc = combine(b, s, curRc, p);
-    const wNo = aggregateWeights(b, s, p, false);
-    const [srRcRaw] = aggregatePow(b, s, DRc, wNo, p);
-    const starRc = postprocess(b, s, srRcRaw, p);
-
-    // ---- LN difficulty (presence-weighted aggregation on D)
-    const g = lnPresence(b, s, p);
-    const [srLnRaw, cov] = aggregateLN(b, s, D, g, p);
-    const starLn = postprocessLN(b, s, srLnRaw, cov, p);
+    let starRcRaw = starRaw, Drc = null, rcAggRaw = rawAgg;
+    const hasLn = (function () { for (let i = 0; i < notes.nNotes; i++) if (notes.isLn[i]) return true; return false; })();
+    if (hasLn) {
+        const rices = [];
+        for (let vi = 0; vi < 2; vi++) {
+            const ntap = tapNotes(vi === 0 ? notes : other);
+            const b = buildBatch(ntap);
+            const s = buildStruct(b, Object.assign({}, p, { x_jump_w: 0.0 }));
+            let cur = computeCurves(b, s, Object.assign({}, p, { x_jump_w: 0.0, d_rec: 0 }));
+            cur = Object.assign({}, cur, { Recov: sources[vi].cur.Recov });
+            // rice unit uses the full-chart hand cost (rcln _native)
+            rices.push({ b, s, cur, unit: sources[vi].unit });
+        }
+        function combineRice(src) {
+            // rcln _native: the rice view uses its OWN Rbar (all zeros), not the
+            // full chart's shared release field.
+            const cur = Object.assign({}, src.cur, { Rbar: src.cur.Rbar, Jm_context: src.cur.Jm, Jm: new Float64Array(n) });
+            for (let r = 0; r < n; r++) cur.Jm[r] = src.cur.Jm[r] + src.unit[r];
+            return combine(src.b, src.s, cur, p);
+        }
+        const rparts = [combineRice(rices[0]), combineRice(rices[1])];
+        Drc = new Float64Array(n);
+        for (let r = 0; r < n; r++) Drc[r] = 0.5 * (rparts[0][r] + rparts[1][r]);
+        const headAgg = aggregateSR(rices[0].b, rices[0].s, Drc, p, true);
+        rcAggRaw = headAgg;
+        const headScore = postprocess(rices[0].b, rices[0].s, headAgg, p);
+        const rcAgg = rcAggregate(reference, rices[0].s, field, Drc, g, starLnRaw, headScore, p);
+        starRcRaw = postprocess(reference.b, reference, rcAgg, p);
+    }
 
     return {
-        star, starRc, starLn, lnCov: cov,
-        nNotes: nt.nNotes, keyCount: nt.keyCount, od: nt.od,
-        nRows: b.n, duration: b.duration / 1000.0,
-        D, Drc: DRc, g,
-        // curve for display (calibrated like postprocess shape over rows)
-        b, s,
+        starRaw, starRcRaw, starLnRaw, lnCov, rcAggRaw,
+        // star fields keep the raw model scale (compat with v1.0.x tooling);
+        // the aligned reference scale the overlay displays is in *Aligned.
+        star: starRaw,
+        starRc: starRcRaw,
+        starLn: hasLn ? starLnRaw : 0.0,
+        starAligned: alignScore(starRaw, notes.keyCount, modelInfo),
+        starRcAligned: alignScore(starRcRaw, notes.keyCount, modelInfo),
+        starLnAligned: hasLn ? alignScore(starLnRaw, notes.keyCount, modelInfo) : 0.0,
+        rawAgg, hasLn,
+        nNotes: notes.nNotes, keyCount: notes.keyCount, od: notes.od,
+        nRows: reference.n, duration: reference.duration / 1000.0,
+        D: field, Drc, g,
+        b: reference.b, s: reference,
+        modelInfo,
     };
 }
 
-// display curve: per-row D with pp_n0-style note-count scaling omitted —
-// the v0.5 overlay displayed the calibrated D array; we expose the raw D
-// rescaled to the star's range via affine pp mapping (no per-chart scalar).
 function displayCurves(res) {
     const n = res.nRows;
-    const star = res.star;
-    // match aggregate level: weighted power-mean of D ≈ sr_raw; derive affine
-    // by rescaling D so its weighted mean equals the pre-postprocess value.
-    const p = SPM_V1_PARAMS;
-    const Dv = res.D;
-    const w = aggregateWeights(res.b, res.s, p, true);
-    const pw = Math.max(p.agg_k, 0.05);
-    let acc = 0, sw = 0;
-    for (let r = 0; r < n; r++) { acc += w[r] * Math.pow(Math.max(Dv[r], 0), pw); sw += w[r]; }
-    const mean = Math.pow(acc / Math.max(sw, EPS), 1.0 / pw);
-    const scale = mean > 1e-9 ? (star - p.calib_b) / (p.pp_scale * p.calib_a) / mean : 0;
+    const rawAgg = res.rawAgg || 0.0;
+    const star = res.starAligned !== undefined ? res.starAligned : res.star;
+    const k = rawAgg > 1e-9 ? star / rawAgg : 0.0;
     const out = new Float64Array(n);
-    for (let r = 0; r < n; r++) out[r] = Math.max(Dv[r] * scale, 0);
+    for (let r = 0; r < n; r++) out[r] = Math.max(res.D[r] * k, 0.0);
     return out;
 }
 
-/** RC display curve on the same calibrated star scale as displayCurves():
- *  rescale raw Drc with the RC rating's own affine mapping, so the RC line
- *  and the (total-calibrated) LN line share one scale when drawn together.
- *  v1.0.0 drew the raw Drc here — fine while each line was renormalised on
- *  its own, wrong once absolute segment values are read from the curves. */
+/** RC display curve on the same calibrated star scale as displayCurves(). */
 function displayCurvesRC(res) {
     const n = res.nRows;
-    const star = res.starRc;
-    const p = SPM_V1_PARAMS;
-    const Dv = res.Drc;
-    const w = aggregateWeights(res.b, res.s, p, false);
-    const pw = Math.max(p.agg_k, 0.05);
-    let acc = 0, sw = 0;
-    for (let r = 0; r < n; r++) { acc += w[r] * Math.pow(Math.max(Dv[r], 0), pw); sw += w[r]; }
-    const mean = Math.pow(acc / Math.max(sw, EPS), 1.0 / pw);
-    const scale = mean > 1e-9 ? (star - p.calib_b) / (p.pp_scale * p.calib_a) / mean : 0;
+    if (!res.Drc) return zeros(n);
+    const rawAgg = res.rcAggRaw || 0.0;
+    const starRc = res.starRcAligned !== undefined ? res.starRcAligned : res.starRc;
+    const k = rawAgg > 1e-9 ? starRc / rawAgg : 0.0;
     const out = new Float64Array(n);
-    for (let r = 0; r < n; r++) out[r] = Math.max(Dv[r] * scale, 0);
+    for (let r = 0; r < n; r++) out[r] = Math.max(res.Drc[r] * k, 0.0);
     return out;
 }
 
@@ -2557,7 +3093,7 @@ function danNameForLevel(dan, keyCount, kind) {
 // Generated by tools/generate_dan_constants.py from spm v1.0.0 + rc-ln
 // ratings of the dan course packs / dataset dan subset.
 // ============================================================
-const DAN_NODES_DEFAULT = {"_note":"SPM Rating v1.0.0 + rc-ln-0.1.0 dan nodes. RC/LN star nodes measured on dan course packs (4K/6K) and the 7K dan dataset subset; interpolation maps star -> continuous dan level.","dan_names":["0th","1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th","Gamma","Azimuth","Zenith","Stellium"],"modes":{"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.0208},{"dan":2.0,"sr":4.6648},{"dan":3.0,"sr":4.6648},{"dan":4.0,"sr":5.8555},{"dan":5.0,"sr":6.5143},{"dan":6.0,"sr":7.1491},{"dan":7.0,"sr":7.6171},{"dan":8.0,"sr":8.5556},{"dan":9.0,"sr":8.7292},{"dan":10.0,"sr":9.4459},{"dan":11.0,"sr":9.6211},{"dan":12.0,"sr":9.9713},{"dan":13.0,"sr":10.7001},{"dan":14.0,"sr":11.6387},{"dan":15.0,"sr":13.5081}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":4.8726},{"dan":2.0,"sr":5.6284},{"dan":3.0,"sr":6.2091},{"dan":4.0,"sr":6.2091},{"dan":5.0,"sr":6.4},{"dan":6.0,"sr":6.9771},{"dan":7.0,"sr":7.6831},{"dan":8.0,"sr":8.0826},{"dan":9.0,"sr":8.6711},{"dan":10.0,"sr":9.2017},{"dan":11.0,"sr":9.8331},{"dan":12.0,"sr":10.2015},{"dan":13.0,"sr":11.1757},{"dan":14.0,"sr":11.8675},{"dan":15.0,"sr":12.6583}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":3.6317},{"dan":1.0,"sr":4.1375},{"dan":2.0,"sr":4.8006},{"dan":3.0,"sr":5.5732},{"dan":4.0,"sr":6.0613},{"dan":5.0,"sr":6.6976},{"dan":6.0,"sr":7.1534},{"dan":7.0,"sr":7.5146},{"dan":8.0,"sr":7.9989},{"dan":9.0,"sr":8.6019}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":4.0363},{"dan":1.0,"sr":4.9384},{"dan":2.0,"sr":5.1079},{"dan":3.0,"sr":5.6718},{"dan":4.0,"sr":6.4445},{"dan":5.0,"sr":6.4512},{"dan":6.0,"sr":7.0152},{"dan":7.0,"sr":7.3947},{"dan":8.0,"sr":7.949},{"dan":9.0,"sr":7.9944},{"dan":10.0,"sr":8.5633},{"dan":11.0,"sr":8.8391},{"dan":12.0,"sr":9.4934},{"dan":13.0,"sr":9.8917},{"dan":14.0,"sr":10.8678}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":3.7546},{"dan":1.0,"sr":4.1656},{"dan":2.0,"sr":4.7922},{"dan":3.0,"sr":5.2249},{"dan":4.0,"sr":5.4118},{"dan":5.0,"sr":5.7669},{"dan":6.0,"sr":6.3758},{"dan":7.0,"sr":6.8118},{"dan":8.0,"sr":7.1672},{"dan":9.0,"sr":7.7366},{"dan":10.0,"sr":8.242},{"dan":11.0,"sr":8.8514},{"dan":12.0,"sr":9.3732},{"dan":13.0,"sr":10.1529},{"dan":14.0,"sr":10.6116}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"},"LN":{"nodes":[{"dan":0.0,"sr":4.4554},{"dan":1.0,"sr":4.644},{"dan":2.0,"sr":4.6577},{"dan":3.0,"sr":5.2726},{"dan":4.0,"sr":5.8952},{"dan":5.0,"sr":6.0215},{"dan":6.0,"sr":6.5725},{"dan":7.0,"sr":6.7175},{"dan":8.0,"sr":7.405},{"dan":9.0,"sr":7.5857},{"dan":10.0,"sr":8.3702},{"dan":11.0,"sr":8.8079},{"dan":12.0,"sr":9.3984},{"dan":13.0,"sr":10.2228},{"dan":14.0,"sr":11.3869}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"}}},"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.0208},{"dan":2.0,"sr":4.6648},{"dan":3.0,"sr":4.6648},{"dan":4.0,"sr":5.8555},{"dan":5.0,"sr":6.5143},{"dan":6.0,"sr":7.1491},{"dan":7.0,"sr":7.6171},{"dan":8.0,"sr":8.5556},{"dan":9.0,"sr":8.7292},{"dan":10.0,"sr":9.4459},{"dan":11.0,"sr":9.6211},{"dan":12.0,"sr":9.9713},{"dan":13.0,"sr":10.7001},{"dan":14.0,"sr":11.6387},{"dan":15.0,"sr":13.5081}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":4.8726},{"dan":2.0,"sr":5.6284},{"dan":3.0,"sr":6.2091},{"dan":4.0,"sr":6.2091},{"dan":5.0,"sr":6.4},{"dan":6.0,"sr":6.9771},{"dan":7.0,"sr":7.6831},{"dan":8.0,"sr":8.0826},{"dan":9.0,"sr":8.6711},{"dan":10.0,"sr":9.2017},{"dan":11.0,"sr":9.8331},{"dan":12.0,"sr":10.2015},{"dan":13.0,"sr":11.1757},{"dan":14.0,"sr":11.8675},{"dan":15.0,"sr":12.6583}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":3.6317},{"dan":1.0,"sr":4.1375},{"dan":2.0,"sr":4.8006},{"dan":3.0,"sr":5.5732},{"dan":4.0,"sr":6.0613},{"dan":5.0,"sr":6.6976},{"dan":6.0,"sr":7.1534},{"dan":7.0,"sr":7.5146},{"dan":8.0,"sr":7.9989},{"dan":9.0,"sr":8.6019}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":4.0363},{"dan":1.0,"sr":4.9384},{"dan":2.0,"sr":5.1079},{"dan":3.0,"sr":5.6718},{"dan":4.0,"sr":6.4445},{"dan":5.0,"sr":6.4512},{"dan":6.0,"sr":7.0152},{"dan":7.0,"sr":7.3947},{"dan":8.0,"sr":7.949},{"dan":9.0,"sr":7.9944},{"dan":10.0,"sr":8.5633},{"dan":11.0,"sr":8.8391},{"dan":12.0,"sr":9.4934},{"dan":13.0,"sr":9.8917},{"dan":14.0,"sr":10.8678}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":3.7546},{"dan":1.0,"sr":4.1656},{"dan":2.0,"sr":4.7922},{"dan":3.0,"sr":5.2249},{"dan":4.0,"sr":5.4118},{"dan":5.0,"sr":5.7669},{"dan":6.0,"sr":6.3758},{"dan":7.0,"sr":6.8118},{"dan":8.0,"sr":7.1672},{"dan":9.0,"sr":7.7366},{"dan":10.0,"sr":8.242},{"dan":11.0,"sr":8.8514},{"dan":12.0,"sr":9.3732},{"dan":13.0,"sr":10.1529},{"dan":14.0,"sr":10.6116}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"},"LN":{"nodes":[{"dan":0.0,"sr":4.4554},{"dan":1.0,"sr":4.644},{"dan":2.0,"sr":4.6577},{"dan":3.0,"sr":5.2726},{"dan":4.0,"sr":5.8952},{"dan":5.0,"sr":6.0215},{"dan":6.0,"sr":6.5725},{"dan":7.0,"sr":6.7175},{"dan":8.0,"sr":7.405},{"dan":9.0,"sr":7.5857},{"dan":10.0,"sr":8.3702},{"dan":11.0,"sr":8.8079},{"dan":12.0,"sr":9.3984},{"dan":13.0,"sr":10.2228},{"dan":14.0,"sr":11.3869}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses"}}};
+const DAN_NODES_DEFAULT = {"_note":"SPM Rating v1.2.0-rc3 + SPMSubmodel dan nodes (RC/LN sub-scores, detail model, reference scale). RC/LN star nodes measured on dan course packs (4K/6K), the 7K dan dataset subset (RegularDan/LNDan) and maps/ 7K Dan Phase IV; interpolation maps reference-scale star -> continuous dan level.","dan_names":["0th","1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th","Gamma","Azimuth","Zenith","Stellium"],"modes":{"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.6556},{"dan":2.0,"sr":5.347},{"dan":3.0,"sr":5.3995},{"dan":4.0,"sr":6.7533},{"dan":5.0,"sr":7.696},{"dan":6.0,"sr":8.3991},{"dan":7.0,"sr":8.7255},{"dan":8.0,"sr":9.7935},{"dan":9.0,"sr":9.9882},{"dan":10.0,"sr":10.7212},{"dan":11.0,"sr":11.054},{"dan":12.0,"sr":11.5315},{"dan":13.0,"sr":12.2255},{"dan":14.0,"sr":13.5668},{"dan":15.0,"sr":15.5746}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":5.5368},{"dan":2.0,"sr":6.1346},{"dan":3.0,"sr":6.9287},{"dan":4.0,"sr":6.9792},{"dan":5.0,"sr":6.9792},{"dan":6.0,"sr":8.2211},{"dan":7.0,"sr":8.7164},{"dan":8.0,"sr":9.5209},{"dan":9.0,"sr":9.8842},{"dan":10.0,"sr":10.3141},{"dan":11.0,"sr":11.1637},{"dan":12.0,"sr":11.6612},{"dan":13.0,"sr":12.8113},{"dan":14.0,"sr":13.894},{"dan":15.0,"sr":14.8314}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":9.4878},{"dan":1.0,"sr":10.5528},{"dan":2.0,"sr":11.7668},{"dan":3.0,"sr":13.4361},{"dan":4.0,"sr":14.7429},{"dan":5.0,"sr":15.721},{"dan":6.0,"sr":16.7984},{"dan":7.0,"sr":17.6559},{"dan":8.0,"sr":18.8055},{"dan":9.0,"sr":19.4198}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":10.2789},{"dan":1.0,"sr":12.3354},{"dan":2.0,"sr":12.3354},{"dan":3.0,"sr":13.6329},{"dan":4.0,"sr":14.6836},{"dan":5.0,"sr":15.4653},{"dan":6.0,"sr":16.3039},{"dan":7.0,"sr":17.0037},{"dan":8.0,"sr":17.9574},{"dan":9.0,"sr":18.3819},{"dan":10.0,"sr":19.1158},{"dan":11.0,"sr":19.7814},{"dan":12.0,"sr":21.0617},{"dan":13.0,"sr":21.9637},{"dan":14.0,"sr":23.9365}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":4.0528},{"dan":1.0,"sr":4.3473},{"dan":2.0,"sr":5.0025},{"dan":3.0,"sr":5.3208},{"dan":4.0,"sr":5.6059},{"dan":5.0,"sr":5.9788},{"dan":6.0,"sr":6.5844},{"dan":7.0,"sr":6.8362},{"dan":8.0,"sr":7.1808},{"dan":9.0,"sr":7.6748},{"dan":10.0,"sr":8.114},{"dan":11.0,"sr":8.7107},{"dan":12.0,"sr":9.3202},{"dan":13.0,"sr":10.1334},{"dan":14.0,"sr":10.9225}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses + maps/ 7K Dan Phase IV"},"LN":{"nodes":[{"dan":0.0,"sr":4.5344},{"dan":1.0,"sr":4.6982},{"dan":2.0,"sr":4.7009},{"dan":3.0,"sr":5.1115},{"dan":4.0,"sr":5.7},{"dan":5.0,"sr":6.2495},{"dan":6.0,"sr":6.5816},{"dan":7.0,"sr":6.9089},{"dan":8.0,"sr":7.3104},{"dan":9.0,"sr":7.5203},{"dan":10.0,"sr":8.2857},{"dan":11.0,"sr":8.6285},{"dan":12.0,"sr":9.3244},{"dan":13.0,"sr":10.0899},{"dan":14.0,"sr":11.3629}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses + maps/ 7K Dan Phase IV"}}},"4K":{"RC":{"nodes":[{"dan":1.0,"sr":4.6556},{"dan":2.0,"sr":5.347},{"dan":3.0,"sr":5.3995},{"dan":4.0,"sr":6.7533},{"dan":5.0,"sr":7.696},{"dan":6.0,"sr":8.3991},{"dan":7.0,"sr":8.7255},{"dan":8.0,"sr":9.7935},{"dan":9.0,"sr":9.9882},{"dan":10.0,"sr":10.7212},{"dan":11.0,"sr":11.054},{"dan":12.0,"sr":11.5315},{"dan":13.0,"sr":12.2255},{"dan":14.0,"sr":13.5668},{"dan":15.0,"sr":15.5746}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":1.0,"sr":5.5368},{"dan":2.0,"sr":6.1346},{"dan":3.0,"sr":6.9287},{"dan":4.0,"sr":6.9792},{"dan":5.0,"sr":6.9792},{"dan":6.0,"sr":8.2211},{"dan":7.0,"sr":8.7164},{"dan":8.0,"sr":9.5209},{"dan":9.0,"sr":9.8842},{"dan":10.0,"sr":10.3141},{"dan":11.0,"sr":11.1637},{"dan":12.0,"sr":11.6612},{"dan":13.0,"sr":12.8113},{"dan":14.0,"sr":13.894},{"dan":15.0,"sr":14.8314}],"source":"maps/ dan packs"}},"6K":{"RC":{"nodes":[{"dan":0.0,"sr":9.4878},{"dan":1.0,"sr":10.5528},{"dan":2.0,"sr":11.7668},{"dan":3.0,"sr":13.4361},{"dan":4.0,"sr":14.7429},{"dan":5.0,"sr":15.721},{"dan":6.0,"sr":16.7984},{"dan":7.0,"sr":17.6559},{"dan":8.0,"sr":18.8055},{"dan":9.0,"sr":19.4198}],"source":"maps/ dan packs"},"LN":{"nodes":[{"dan":0.0,"sr":10.2789},{"dan":1.0,"sr":12.3354},{"dan":2.0,"sr":12.3354},{"dan":3.0,"sr":13.6329},{"dan":4.0,"sr":14.6836},{"dan":5.0,"sr":15.4653},{"dan":6.0,"sr":16.3039},{"dan":7.0,"sr":17.0037},{"dan":8.0,"sr":17.9574},{"dan":9.0,"sr":18.3819},{"dan":10.0,"sr":19.1158},{"dan":11.0,"sr":19.7814},{"dan":12.0,"sr":21.0617},{"dan":13.0,"sr":21.9637},{"dan":14.0,"sr":23.9365}],"source":"maps/ dan packs"}},"7K":{"RC":{"nodes":[{"dan":0.0,"sr":4.0528},{"dan":1.0,"sr":4.3473},{"dan":2.0,"sr":5.0025},{"dan":3.0,"sr":5.3208},{"dan":4.0,"sr":5.6059},{"dan":5.0,"sr":5.9788},{"dan":6.0,"sr":6.5844},{"dan":7.0,"sr":6.8362},{"dan":8.0,"sr":7.1808},{"dan":9.0,"sr":7.6748},{"dan":10.0,"sr":8.114},{"dan":11.0,"sr":8.7107},{"dan":12.0,"sr":9.3202},{"dan":13.0,"sr":10.1334},{"dan":14.0,"sr":10.9225}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses + maps/ 7K Dan Phase IV"},"LN":{"nodes":[{"dan":0.0,"sr":4.5344},{"dan":1.0,"sr":4.6982},{"dan":2.0,"sr":4.7009},{"dan":3.0,"sr":5.1115},{"dan":4.0,"sr":5.7},{"dan":5.0,"sr":6.2495},{"dan":6.0,"sr":6.5816},{"dan":7.0,"sr":6.9089},{"dan":8.0,"sr":7.3104},{"dan":9.0,"sr":7.5203},{"dan":10.0,"sr":8.2857},{"dan":11.0,"sr":8.6285},{"dan":12.0,"sr":9.3244},{"dan":13.0,"sr":10.0899},{"dan":14.0,"sr":11.3629}],"source":"spm_dataset-0.4.0 RegularDan/LNDan dan courses + maps/ 7K Dan Phase IV"}}};
 
 let DAN_CONSTANTS = DAN_NODES_DEFAULT;
 
@@ -2617,8 +3153,11 @@ function danLevelToLabel(level, keyCount, kind, style) {
         ? tbl.nodes[tbl.nodes.length - 1].dan : 14;
     const top = Math.round(topDan);
     if (style === "number") {
+        // v1.2.0: number mode is shifted by +0.5 so that the displayed number
+        // is the dan value mania players quote: 8.5 = 8dan exactly, 11.5 = Gamma
+        // (7K). Display-only: ratings and dan levels are unchanged.
         if (!Number.isFinite(level)) return "-";
-        return Math.max(level, 0).toFixed(2);
+        return (Math.max(level, 0) + 0.5).toFixed(2);
     }
     if (!Number.isFinite(level)) return "-";
     // below the lowest dan (level < 0) or above the highest measured dan:
@@ -2651,7 +3190,10 @@ function processMap(osuContent, mode, speedRate, options) {
     const res = evaluateChart(osuContent, speedRate, SPM_V1_PARAMS);
     if (res.error) return null;
 
-    const { star, starRc, starLn, lnCov, keyCount } = res;
+    const star = res.starAligned !== undefined ? res.starAligned : res.star;
+    const starRc = res.starRcAligned !== undefined ? res.starRcAligned : res.starRc;
+    const starLn = res.starLnAligned !== undefined ? res.starLnAligned : res.starLn;
+    const lnCov = res.lnCov, keyCount = res.keyCount;
     const b = res.b;
 
     // map type from ln coverage (replaces the tag classifier branch):
@@ -2713,10 +3255,1815 @@ function processMap(osuContent, mode, speedRate, options) {
 }
 
 // ============================================================
+// v1.2.0 EXTENSION MODULES (hand/role, geometry/recovery)
+// ============================================================
+/* _dev/port/hand_role.js
+ *
+ * Plain browser + Node script (no import/export/require, ES2019 syntax).
+ * Faithful JavaScript port of SPMRating v1.2.0-rc3:
+ *   spm_rating/hand.py       -> roleCanonical (role.canonical), handExtract (hand.extract),
+ *                               handField (hand.field), plus handCostState/handCostPrice (hand_cost.py)
+ *   spm_rating/role.py       -> roleField (role.field), roleEpisodes, roleIntervalMean, rolePulseMax
+ *   spm_rating/actions.py    -> internal A.field / A.mass (via geometry.cumulative)
+ *   spm_rating/geometry.py   -> internal geometry.cumulative
+ *   spm_rating/hand.py @njit -> _raw_eligibility / maximum_envelope / moments ports
+ *
+ * Exposes global SPMExtHandRole = { roleCanonical, handExtract, handField,
+ *                                   handCostState, handCostPrice, roleField,
+ *                                   roleEpisodes, roleIntervalMean, rolePulseMax }
+ *
+ * Units: note/query times are milliseconds, hand rates are per second.
+ * Arrays are Float64Array unless stated; inputs are never mutated.
+ */
+(function () {
+  'use strict';
+
+  var root = (typeof globalThis !== 'undefined') ? globalThis :
+             (typeof self !== 'undefined') ? self :
+             (typeof window !== 'undefined') ? window : {};
+
+  /* ------------------------------------------------------------------ *
+   * Generic helpers                                                     *
+   * ------------------------------------------------------------------ */
+
+  function toF64(a) {
+    if (a instanceof Float64Array) return a;
+    var n = a.length, out = new Float64Array(n);
+    for (var i = 0; i < n; i++) out[i] = +a[i];
+    return out;
+  }
+
+  function toI32(a) {
+    if (a instanceof Int32Array) return a;
+    var n = a.length, out = new Int32Array(n);
+    for (var i = 0; i < n; i++) out[i] = a[i] | 0;
+    return out;
+  }
+
+  function toU8(a) {
+    if (a instanceof Uint8Array) return a;
+    var n = a.length, out = new Uint8Array(n);
+    for (var i = 0; i < n; i++) out[i] = a[i] ? 1 : 0;
+    return out;
+  }
+
+  // Read a property that may be spelled camelCase (JS layer) or snake_case (Python layer).
+  function prop(obj, camel, snake) {
+    var v = obj[camel];
+    if (v === undefined || v === null) v = obj[snake];
+    return v;
+  }
+
+  function lowerBound(a, x) { // np.searchsorted(a, x, side='left')
+    var lo = 0, hi = a.length, mid;
+    while (lo < hi) {
+      mid = (lo + hi) >> 1;
+      if (a[mid] < x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  }
+
+  function upperBound(a, x) { // np.searchsorted(a, x, side='right')
+    var lo = 0, hi = a.length, mid;
+    while (lo < hi) {
+      mid = (lo + hi) >> 1;
+      if (a[mid] <= x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  }
+
+  function arrayEqualF64(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  function arrayEqualI32(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  function pickF64(src, take) {
+    var n = take.length, out = new Float64Array(n);
+    for (var i = 0; i < n; i++) out[i] = src[take[i]];
+    return out;
+  }
+
+  // Indices i with values[i] === value, ascending (np.flatnonzero(values == value)).
+  function indicesEqual(values, value) {
+    var out = [];
+    for (var i = 0; i < values.length; i++) if (values[i] === value) out.push(i);
+    return out;
+  }
+
+  // Unique values of int array, ascending (np.unique).
+  function uniqueInts(values) {
+    var arr = [];
+    for (var i = 0; i < values.length; i++) arr.push(values[i]);
+    arr.sort(function (x, y) { return x - y; });
+    var out = [];
+    for (var j = 0; j < arr.length; j++) if (j === 0 || arr[j] !== arr[j - 1]) out.push(arr[j]);
+    return out;
+  }
+
+  function indicesWhereArr(values, value) {
+    return indicesEqual(values, value);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * hand.py @njit kernels                                               *
+   * ------------------------------------------------------------------ */
+
+  // smoothstep on the clamped unit interval: u^3 (10 - 15u + 6u^2)
+  function smooth(x) {
+    var u = x < 0.0 ? 0.0 : (x > 1.0 ? 1.0 : x);
+    return u * u * u * (10.0 - 15.0 * u + 6.0 * u * u);
+  }
+
+  // hand._raw_eligibility(time, col, hands, scale) -> {lane, eligible, visits}
+  function rawEligibility(time, col, hands, scale) {
+    var n = time.length;
+    var last = new Int32Array(7);
+    for (var i = 0; i < 7; i++) last[i] = -1;
+    var lane = new Float64Array(n);
+    var e = new Float64Array(n);
+    var visits = 0;
+
+    for (var j = 0; j < n; j++) {
+      var k = col[j];
+      var prev = last[k];
+      if (prev >= 0) {
+        lane[j] = smooth((time[j] - time[prev]) / scale);
+        var count = 0.0;
+        var a = upperBound(time, time[prev]);
+        var b = lowerBound(time, time[j]);
+        for (var m = a; m < b; m++) {
+          visits += 1;
+          if (hands[m] === hands[j]) {
+            count += smooth((time[m] - time[prev]) / scale) * smooth((time[j] - time[m]) / scale);
+            if (count >= 1.0) break;
+          }
+        }
+        e[j] = lane[j] * (1.0 - smooth(count));
+      }
+      last[k] = j;
+    }
+    return { lane: lane, eligible: e, visits: visits };
+  }
+
+  // hand.maximum_envelope(time, weight, query, scale) -> Float64Array(query.length)
+  function maximumEnvelope(time, weight, query, scale) {
+    var n = time.length;
+    var centers = new Float64Array(n);
+    var weights = new Float64Array(n);
+    var starts = new Float64Array(n);
+    var size = 0;
+    var a = Math.PI / (2.0 * scale);
+
+    for (var j = 0; j < n; j++) {
+      if (weight[j] <= 0.0) continue;
+      var t = time[j];
+      var w = weight[j];
+      if (size > 0 && t === centers[size - 1]) {
+        if (w <= weights[size - 1]) continue;
+        size -= 1;
+      }
+      var crossing = t - scale;
+      while (size > 0) {
+        var old = centers[size - 1];
+        var distance = (t - old) * a;
+        if (distance >= Math.PI) {
+          crossing = t - scale;
+        } else {
+          var ra = Math.sqrt(weights[size - 1]);
+          var rb = Math.sqrt(w);
+          var sn = Math.sin(distance / 2.0);
+          var numerator = ra - rb + 2.0 * rb * sn * sn;
+          crossing = old + Math.atan2(numerator, rb * Math.sin(distance)) / a;
+          crossing = Math.min(Math.max(crossing, t - scale), old + scale);
+        }
+        if (crossing <= starts[size - 1]) {
+          size -= 1;
+        } else {
+          break;
+        }
+      }
+      if (size === 0) crossing = t - scale;
+      centers[size] = t;
+      weights[size] = w;
+      starts[size] = crossing;
+      size += 1;
+    }
+
+    var out = new Float64Array(query.length);
+    var cursor = 0;
+    for (var i = 0; i < query.length; i++) {
+      if (i > 0 && query[i] < query[i - 1]) {
+        throw new Error('Sorted envelope queries required.');
+      }
+      if (size === 0) continue;
+      while (cursor + 1 < size && starts[cursor + 1] <= query[i]) cursor += 1;
+      var delta = query[i] - centers[cursor];
+      if (Math.abs(delta) < scale) {
+        var c = Math.cos(a * delta);
+        out[i] = weights[cursor] * c * c;
+      }
+    }
+    return out;
+  }
+
+  // hand.moments(time, col, e0, e1, scale) -> {mass:[Float64Array,Float64Array],
+  //                                            coactive:[Float64Array,Float64Array]}
+  var HAND_MAP0 = [0, 0, 0, 0, 1, 1, 1];
+  var HAND_MAP1 = [0, 0, 0, 1, 1, 1, 1];
+
+  function moments(time, col, e0, e1, scale) {
+    var n = time.length;
+    var mass = [new Float64Array(n), new Float64Array(n)];
+    var coactive = [new Float64Array(n), new Float64Array(n)];
+    if (n === 0) return { mass: mass, coactive: coactive };
+
+    var evs = [e0, e1];
+    var maps = [HAND_MAP0, HAND_MAP1];
+    var maximum = [new Float64Array(n), new Float64Array(n)];
+
+    for (var profile = 0; profile < 2; profile++) {
+      var ev = evs[profile];
+      var mp = maps[profile];
+      for (var hand = 0; hand < 2; hand++) {
+        var idx = [];
+        for (var jj = 0; jj < n; jj++) if (mp[col[jj]] === hand) idx.push(jj);
+        var count = idx.length;
+        var tsub = new Float64Array(count);
+        var wsub = new Float64Array(count);
+        for (var q = 0; q < count; q++) {
+          tsub[q] = time[idx[q]];
+          wsub[q] = ev[idx[q]];
+        }
+        var env = maximumEnvelope(tsub, wsub, tsub, scale);
+        for (var q2 = 0; q2 < count; q2++) maximum[profile][idx[q2]] = env[q2];
+      }
+    }
+
+    var cs = new Float64Array(n);
+    var sn = new Float64Array(n);
+    var omega = Math.PI / scale;
+    for (var i2 = 0; i2 < n; i2++) {
+      var phase = (time[i2] - time[0]) * omega;
+      cs[i2] = Math.cos(phase);
+      sn[i2] = Math.sin(phase);
+    }
+
+    var total = new Float64Array(7 * 9);
+    var correction = new Float64Array(7 * 9);
+    var left = 0;
+    var right = 0;
+
+    function update(index, sign) {
+      var k = col[index];
+      var base = k * 9;
+      var e0i = e0[index];
+      var e1i = e1[index];
+      var csi = cs[index];
+      var sni = sn[index];
+      for (var channel = 0; channel < 3; channel++) {
+        var weight = channel === 0 ? 1.0 : (channel === 1 ? e0i : e1i);
+        var off = base + channel * 3;
+        for (var power = 0; power < 3; power++) {
+          var trig = power === 0 ? 1.0 : (power === 1 ? csi : sni);
+          var value = sign * weight * trig;
+          var pos = off + power;
+          var y = value - correction[pos];
+          var t = total[pos] + y;
+          correction[pos] = t - total[pos] - y;
+          total[pos] = t;
+        }
+      }
+    }
+
+    for (var j = 0; j < n; j++) {
+      while (right < n && time[right] <= time[j] + scale) {
+        update(right, 1.0);
+        right += 1;
+      }
+      while (left < right && time[left] < time[j] - scale) {
+        update(left, -1.0);
+        left += 1;
+      }
+      for (var p2 = 0; p2 < 2; p2++) {
+        var ev2 = evs[p2];
+        var hand2 = maps[p2][col[j]];
+        var u = 0.0;
+        var denominator = 0.0;
+        for (var k2 = 0; k2 < 7; k2++) {
+          if (maps[p2][k2] === hand2) {
+            var b0 = k2 * 9;
+            var den = 0.5 * (total[b0] + cs[j] * total[b0 + 1] + sn[j] * total[b0 + 2]);
+            if (den < 0.0) den = 0.0;
+            var o2 = b0 + (p2 + 1) * 3;
+            var num = 0.5 * (total[o2] + cs[j] * total[o2 + 1] + sn[j] * total[o2 + 2]);
+            if (num < 0.0) num = 0.0;
+            u += den < 1.0 ? den : 1.0;
+            denominator += num;
+          }
+        }
+        if (denominator < ev2[j]) denominator = ev2[j];
+        var z = u - 1.0;
+        if (z < 0.0) z = 0.0; else if (z > 1.0) z = 1.0;
+        var gate = smooth(z);
+        coactive[p2][j] = u;
+        if (denominator > 0.0) {
+          var envv = maximum[p2][j];
+          mass[p2][j] = ev2[j] * ((envv < denominator ? envv : denominator) / denominator) * gate;
+        }
+      }
+    }
+    return { mass: mass, coactive: coactive };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * role.canonical / role.episodes / role.interval_mean / role.pulse_max *
+   * ------------------------------------------------------------------ */
+
+  function sortedPairsOrder(time, col) {
+    var n = time.length;
+    var order = new Array(n);
+    for (var i = 0; i < n; i++) order[i] = i;
+    order.sort(function (a, b) {
+      var d = time[a] - time[b];
+      if (d !== 0) return d;
+      var c = col[a] - col[b];
+      if (c !== 0) return c;
+      return a - b;
+    });
+    return order;
+  }
+
+  // role.canonical(notes): merge exact-duplicate (time, col) objects, re-sort by (time, col).
+  function roleCanonical(notes) {
+    var time = toF64(notes.time);
+    var col = toI32(notes.col);
+    var lnEnd = toF64(prop(notes, 'lnEnd', 'ln_end'));
+    var isLn = toU8(prop(notes, 'isLn', 'is_ln'));
+    var n = time.length;
+    var order = sortedPairsOrder(time, col);
+
+    var keep = [];
+    for (var k = 0; k < n; k++) {
+      var cur = order[k];
+      if (k > 0) {
+        var prev = order[k - 1];
+        if (time[cur] === time[prev] && col[cur] === col[prev]) {
+          if (lnEnd[cur] !== lnEnd[prev]) {
+            throw new Error('Conflicting simultaneous objects on one physical key.');
+          }
+          continue;
+        }
+      }
+      keep.push(cur);
+    }
+
+    var m = keep.length;
+    var outTime = new Float64Array(m);
+    var outCol = new Int32Array(m);
+    var outEnd = new Float64Array(m);
+    var outIsLn = new Uint8Array(m);
+    for (var i = 0; i < m; i++) {
+      var src = keep[i];
+      outTime[i] = time[src];
+      outCol[i] = col[src];
+      outEnd[i] = lnEnd[src];
+      outIsLn[i] = isLn[src];
+    }
+
+    var out = {};
+    for (var key in notes) {
+      if (Object.prototype.hasOwnProperty.call(notes, key)) out[key] = notes[key];
+    }
+    out.time = outTime;
+    out.col = outCol;
+    out.lnEnd = outEnd;
+    out.isLn = outIsLn;
+    out.nNotes = m;
+    // Python-layer aliases (kept so the object works with either convention).
+    out.ln_end = outEnd;
+    out.is_ln = outIsLn;
+    out.n_notes = m;
+    var colIdx = new Array(7);
+    for (var lane = 0; lane < 7; lane++) {
+      var list = [];
+      for (var r = 0; r < m; r++) if (outCol[r] === lane) list.push(r);
+      var arr = new Int32Array(list.length);
+      for (var t = 0; t < list.length; t++) arr[t] = list[t];
+      colIdx[lane] = arr;
+    }
+    out.colIdx = colIdx;
+    out.col_idx = colIdx;
+    return out;
+  }
+
+  // role.episodes(notes) -> array of [lane, start, end] (LN spans, lane-major).
+  function roleEpisodes(notes) {
+    var time = toF64(notes.time);
+    var col = toI32(notes.col);
+    var lnEnd = toF64(prop(notes, 'lnEnd', 'ln_end'));
+    var isLn = toU8(prop(notes, 'isLn', 'is_ln'));
+    var n = time.length;
+    var result = [];
+    for (var lane = 0; lane < 7; lane++) {
+      var take = [];
+      for (var i = 0; i < n; i++) if (isLn[i] && col[i] === lane) take.push(i);
+      take.sort(function (a, b) {
+        var d = time[a] - time[b];
+        if (d !== 0) return d;
+        return a - b;
+      });
+      var spans = [];
+      for (var k = 0; k < take.length; k++) {
+        var idx = take[k];
+        var h = time[idx];
+        var e = lnEnd[idx];
+        if (e <= h) continue;
+        if (spans.length > 0 && h < spans[spans.length - 1][1]) {
+          var last = spans[spans.length - 1];
+          if (e > last[1]) last[1] = e;
+        } else {
+          spans.push([h, e]);
+        }
+      }
+      for (var s = 0; s < spans.length; s++) result.push([lane, spans[s][0], spans[s][1]]);
+    }
+    return result;
+  }
+
+  // role.interval_mean(times, values, query, width); times strictly increasing,
+  // values.length === times.length - 1 (piecewise-constant levels).
+  function roleIntervalMean(times, values, query, width) {
+    var t = toF64(times);
+    var v = toF64(values);
+    var q = toF64(query);
+    var out = new Float64Array(q.length);
+    var n = t.length;
+    if (n < 2) return out;
+    var cumulative = new Float64Array(n);
+    var acc = 0.0;
+    for (var i = 1; i < n; i++) {
+      acc += v[i - 1] * (t[i] - t[i - 1]);
+      cumulative[i] = acc;
+    }
+    var t0 = t[0];
+    var tlast = t[n - 1];
+    var total = cumulative[n - 1];
+    var half = width / 2.0;
+    for (var j = 0; j < q.length; j++) {
+      var lo = q[j] - half;
+      var hi = q[j] + half;
+      var iLo, iHi, a, b;
+      if (lo <= t0) a = 0.0;
+      else if (lo >= tlast) a = total;
+      else {
+        iLo = upperBound(t, lo) - 1;
+        if (iLo < 0) iLo = 0; else if (iLo > n - 2) iLo = n - 2;
+        a = cumulative[iLo] + v[iLo] * (lo - t[iLo]);
+      }
+      if (hi <= t0) b = 0.0;
+      else if (hi >= tlast) b = total;
+      else {
+        iHi = upperBound(t, hi) - 1;
+        if (iHi < 0) iHi = 0; else if (iHi > n - 2) iHi = n - 2;
+        b = cumulative[iHi] + v[iHi] * (hi - t[iHi]);
+      }
+      var r = (b - a) / width;
+      out[j] = r > 0.0 ? r : 0.0;
+    }
+    return out;
+  }
+
+  // role.pulse_max(time, col, weight, query, radius) -> Float64Array(query.length)
+  function rolePulseMax(time, col, weight, query, radius) {
+    var t = toF64(time);
+    var c = toI32(col);
+    var w = toF64(weight);
+    var q = toF64(query);
+    var n = t.length;
+    var out = new Float64Array(q.length);
+    var acc = new Float64Array(7);
+    var factorScale = 1000.0 / radius;
+    for (var i = 0; i < q.length; i++) {
+      for (var z = 0; z < 7; z++) acc[z] = 0.0;
+      var qi = q[i];
+      var lo = lowerBound(t, qi - radius);
+      var hi = upperBound(t, qi + radius);
+      for (var j = lo; j < hi; j++) {
+        var delta = qi - t[j];
+        if (Math.abs(delta) < radius) {
+          var cs = Math.cos(Math.PI * delta / (2.0 * radius));
+          acc[c[j]] += w[j] * factorScale * cs * cs;
+        }
+      }
+      var mx = acc[0];
+      for (var k = 1; k < 7; k++) if (acc[k] > mx) mx = acc[k];
+      out[i] = mx;
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * actions.field (geometry.cumulative CDF of raised-cosine density)    *
+   * ------------------------------------------------------------------ */
+
+  // geometry.cumulative(t, budget, query, radius) -> Float64Array(query.length)
+  function cumulative(t, budget, query, radius) {
+    var n = t.length;
+    var out = new Float64Array(query.length);
+    if (n === 0) return out;
+    var prefix = new Float64Array((n + 1) * 4);
+    var origin = t[0];
+    var omega = Math.PI / radius;
+    for (var i = 0; i < n; i++) {
+      var x = t[i] - origin;
+      var phase = omega * x;
+      var b0 = i * 4;
+      var b1 = b0 + 4;
+      var bi = budget[i];
+      prefix[b1] = prefix[b0] + bi;
+      prefix[b1 + 1] = prefix[b0 + 1] + bi * x;
+      prefix[b1 + 2] = prefix[b0 + 2] + bi * Math.cos(phase);
+      prefix[b1 + 3] = prefix[b0 + 3] + bi * Math.sin(phase);
+    }
+    var twoPi = 2.0 * Math.PI;
+    var twoR = 2.0 * radius;
+    for (var j = 0; j < query.length; j++) {
+      var q = query[j];
+      var lo = lowerBound(t, q - radius) * 4;
+      var hi = upperBound(t, q + radius) * 4;
+      var amount = prefix[hi] - prefix[lo];
+      var first = prefix[hi + 1] - prefix[lo + 1];
+      var co = prefix[hi + 2] - prefix[lo + 2];
+      var si = prefix[hi + 3] - prefix[lo + 3];
+      var ph = omega * (q - origin);
+      out[j] = prefix[lo] + 0.5 * amount + ((q - origin) * amount - first) / twoR +
+               (Math.sin(ph) * co - Math.cos(ph) * si) / twoPi;
+    }
+    return out;
+  }
+
+  // actions.mass(time, cost, start, end, radius) with (start, end) elementwise.
+  function actionMass(time, cost, start, end, radius) {
+    var m = start.length;
+    var out = new Float64Array(m);
+    if (time.length === 0) return out;
+    var left = cumulative(time, cost, start, radius);
+    var right = cumulative(time, cost, end, radius);
+    for (var i = 0; i < m; i++) {
+      var v = right[i] - left[i];
+      out[i] = v > 0.0 ? v : 0.0;
+    }
+    return out;
+  }
+
+  // actions.field(time, cost, query, width, radius) — rate per second.
+  function actionField(time, cost, query, width, radius) {
+    if (!isFinite(width) || width <= 0) {
+      throw new Error('Positive finite time window required.');
+    }
+    var m = query.length;
+    var out = new Float64Array(m);
+    if (time.length === 0) return out;
+    var lo = new Float64Array(m);
+    var hi = new Float64Array(m);
+    var half = width / 2.0;
+    for (var i = 0; i < m; i++) {
+      lo[i] = query[i] - half;
+      hi[i] = query[i] + half;
+    }
+    var mass = actionMass(time, cost, lo, hi, radius);
+    var denom = width / 1000.0;
+    for (var j = 0; j < m; j++) out[j] = mass[j] / denom;
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * hand.extract                                                        *
+   * ------------------------------------------------------------------ */
+
+  function extract(notes, scale) {
+    if (scale === undefined) scale = 30.0;
+    scale = +scale;
+    if (!isFinite(scale) || scale <= 0.0) {
+      throw new Error('Positive existing synchronization scale required.');
+    }
+    var time0 = toF64(notes.time);
+    var col0 = toI32(notes.col);
+    var n0 = time0.length;
+
+    // np.unique(np.column_stack([time, col]), axis=0): lexicographic (time, col).
+    var order = sortedPairsOrder(time0, col0);
+    var timeTmp = new Float64Array(n0);
+    var colTmp = new Int32Array(n0);
+    var m = 0;
+    for (var k = 0; k < n0; k++) {
+      var cur = order[k];
+      if (k > 0) {
+        var prev = order[k - 1];
+        if (time0[cur] === time0[prev] && col0[cur] === col0[prev]) continue;
+      }
+      timeTmp[m] = time0[cur];
+      colTmp[m] = col0[cur];
+      m += 1;
+    }
+    var time = timeTmp.slice(0, m);
+    var col = colTmp.slice(0, m);
+
+    var maps = [HAND_MAP0, HAND_MAP1];
+    var profiles = [];
+    for (var pi = 0; pi < 2; pi++) {
+      var mp = maps[pi];
+      var hands = new Int32Array(m);
+      for (var i = 0; i < m; i++) hands[i] = mp[col[i]];
+      var raw = rawEligibility(time, col, hands, scale);
+      // hand.eligibility: clip lane to [0,1], eligible to [0, lane].
+      var lane = raw.lane;
+      var elig = raw.eligible;
+      for (var i2 = 0; i2 < m; i2++) {
+        var lv = lane[i2];
+        if (lv < 0.0) lv = 0.0; else if (lv > 1.0) lv = 1.0;
+        lane[i2] = lv;
+        var ev = elig[i2];
+        if (ev < 0.0) ev = 0.0; else if (ev > lv) ev = lv;
+        elig[i2] = ev;
+      }
+      profiles.push({
+        hand: hands,
+        lane_mass: lane,
+        eligible: elig,
+        interval_visits: raw.visits
+      });
+    }
+
+    var mom = moments(time, col, profiles[0].eligible, profiles[1].eligible, scale);
+    for (var pj = 0; pj < 2; pj++) {
+      var pr = profiles[pj];
+      var mass = mom.mass[pj];
+      var elig2 = pr.eligible;
+      var hm = new Float64Array(m);
+      for (var r = 0; r < m; r++) {
+        var v = mass[r];
+        if (v < 0.0) v = 0.0; else if (v > elig2[r]) v = elig2[r];
+        hm[r] = v;
+      }
+      pr.hand_mass = hm;
+      pr.coactive = mom.coactive[pj];
+    }
+
+    return {
+      time: time,
+      column: col,
+      profiles: profiles,
+      scale: scale,
+      physical_heads: m,
+      model: 'Fused normalized per-finger hand transfer; same bounded detector semantics.'
+    };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * hand.field (fast path + general fallback)                           *
+   * ------------------------------------------------------------------ */
+
+  var SCOPE_FAST = 'Bitwise-identical reused physical-finger/profile projection; same detector prior and limitations.';
+  var SCOPE_GENERAL = 'Additional rate of coherent repeated hand contacts above independent-finger repeats. Not wrist speed, difficulty/SR, or generic superset monotonicity.';
+
+  function maxReduce(arrays, n) {
+    if (arrays.length === 0) return new Float64Array(n);
+    if (arrays.length === 1) {
+      // np.maximum.reduce([x]) is the array itself; callers only read it.
+      return arrays[0];
+    }
+    var out = new Float64Array(n);
+    for (var i = 0; i < n; i++) {
+      var mx = arrays[0][i];
+      for (var a = 1; a < arrays.length; a++) if (arrays[a][i] > mx) mx = arrays[a][i];
+      out[i] = mx;
+    }
+    return out;
+  }
+
+  function subClip(a, b) { // np.maximum(a-b, 0)
+    var n = a.length;
+    var out = new Float64Array(n);
+    for (var i = 0; i < n; i++) {
+      var v = a[i] - b[i];
+      out[i] = v > 0.0 ? v : 0.0;
+    }
+    return out;
+  }
+
+  function maxPair(a, b) { // np.maximum(a, b)
+    var n = a.length;
+    var out = new Float64Array(n);
+    for (var i = 0; i < n; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
+    return out;
+  }
+
+  function rmsOverProfiles(outputs, n) { // np.sqrt(np.mean(np.square(outputs), axis=0))
+    var count = outputs.length;
+    var out = new Float64Array(n);
+    for (var i = 0; i < n; i++) {
+      var s = 0.0;
+      for (var p = 0; p < count; p++) s += outputs[p][i] * outputs[p][i];
+      out[i] = Math.sqrt(s / count);
+    }
+    return out;
+  }
+
+  function generalField(data, query, width) {
+    var t = data.time;
+    var col = data.column;
+    var scale = data.scale;
+    var profiles = data.profiles;
+    var outputs = [];
+    var details = [];
+    for (var pi = 0; pi < profiles.length; pi++) {
+      var pr = profiles[pi];
+      var extra = [];
+      var states = [];
+      for (var hand = 0; hand < 2; hand++) {
+        var take = indicesEqual(pr.hand, hand);
+        var h = actionField(pickF64(t, take), pickF64(pr.hand_mass, take), query, width, scale);
+        var colsTake = uniqueInts(take.map(function (i) { return col[i]; }));
+        var independent = [];
+        for (var k = 0; k < colsTake.length; k++) {
+          var laneIdx = indicesEqual(col, colsTake[k]);
+          independent.push(actionField(pickF64(t, laneIdx), pickF64(pr.lane_mass, laneIdx), query, width, scale));
+        }
+        var own = maxReduce(independent, query.length);
+        var increment = subClip(h, own);
+        extra.push(increment);
+        states.push({ hand_rate: h, independent_max: own, extra: increment });
+      }
+      outputs.push(maxPair(extra[0], extra[1]));
+      details.push(states);
+    }
+    return { extra: rmsOverProfiles(outputs, query.length), profiles: details, scope: SCOPE_GENERAL };
+  }
+
+  function handField(data, query, width) {
+    if (width === undefined) width = 1000.0;
+    width = +width;
+    var q = toF64(query);
+    var t = data.time;
+    var col = data.column;
+    var scale = data.scale;
+    var profiles = data.profiles;
+    if (profiles.length === 0) {
+      return { extra: new Float64Array(q.length), profiles: [], scope: SCOPE_FAST };
+    }
+    // Python fast path only when every profile shares profile[0].lane_mass.
+    var fast = true;
+    for (var pc = 1; pc < profiles.length; pc++) {
+      if (!arrayEqualF64(profiles[pc].lane_mass, profiles[0].lane_mass)) { fast = false; break; }
+    }
+    if (!fast) return generalField(data, q, width);
+
+    var uniqCols = uniqueInts(col);
+    var lanes = {};
+    for (var c = 0; c < uniqCols.length; c++) {
+      var laneIdx = indicesEqual(col, uniqCols[c]);
+      lanes[uniqCols[c]] = actionField(pickF64(t, laneIdx), pickF64(profiles[0].lane_mass, laneIdx), q, width, scale);
+    }
+
+    var previous = []; // [{profile, hands}]
+    var outputs = [];
+    var details = [];
+    for (var pi = 0; pi < profiles.length; pi++) {
+      var pr = profiles[pi];
+      var reuse = null;
+      for (var oi = 0; oi < previous.length; oi++) {
+        var old = previous[oi];
+        if (arrayEqualI32(pr.hand, old.profile.hand) &&
+            arrayEqualF64(pr.hand_mass, old.profile.hand_mass)) {
+          reuse = old.hands;
+          break;
+        }
+      }
+      var extra = [];
+      var states = [];
+      var hands = [];
+      for (var hand = 0; hand < 2; hand++) {
+        var take = indicesEqual(pr.hand, hand);
+        var h = (reuse !== null) ? reuse[hand]
+              : actionField(pickF64(t, take), pickF64(pr.hand_mass, take), q, width, scale);
+        hands.push(h);
+        var handCols = uniqueInts(take.map(function (i) { return col[i]; }));
+        var independent = [];
+        for (var hc = 0; hc < handCols.length; hc++) independent.push(lanes[handCols[hc]]);
+        var own = maxReduce(independent, q.length);
+        var increment = subClip(h, own);
+        extra.push(increment);
+        states.push({ hand_rate: h, independent_max: own, extra: increment });
+      }
+      previous.push({ profile: pr, hands: hands });
+      outputs.push(maxPair(extra[0], extra[1]));
+      details.push(states);
+    }
+    return { extra: rmsOverProfiles(outputs, q.length), profiles: details, scope: SCOPE_FAST };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * hand_cost.state / hand_cost.price                                    *
+   * ------------------------------------------------------------------ */
+
+  // hand_cost.state(rates) -> {finger_rate: [[p0h0,p0h1],[p1h0,p1h1]],
+  //                            hand_rate:  [[p0h0,p0h1],[p1h0,p1h1]]}
+  function handCostState(rates) {
+    var profiles = rates.profiles;
+    var finger = [];
+    var hand = [];
+    for (var pi = 0; pi < profiles.length; pi++) {
+      var f = [];
+      var h = [];
+      for (var hi = 0; hi < profiles[pi].length; hi++) {
+        f.push(profiles[pi][hi].independent_max);
+        h.push(profiles[pi][hi].hand_rate);
+      }
+      finger.push(f);
+      hand.push(h);
+    }
+    return { finger_rate: finger, hand_rate: hand };
+  }
+
+  // hand_cost.price(state, x, p, mode='extra_task') -> Float64Array(rows)
+  function handCostPrice(state, x, p, mode) {
+    if (mode === undefined || mode === null) mode = 'extra_task';
+    if (mode !== 'extra_task' && mode !== 'marginal_total') {
+      throw new Error('Choose extra_task or marginal_total.');
+    }
+    var xv;
+    if (typeof x === 'number') xv = x;
+    else if (x != null && typeof x.length === 'number') xv = +x[0];
+    else xv = +x;
+    var jc1 = p.j_c1, odm = p.od_mult_jm;
+    if (!isFinite(xv) || !isFinite(+jc1) || !isFinite(+odm)) {
+      throw new Error('handCostPrice requires finite x, p.j_c1 and p.od_mult_jm.');
+    }
+    var k = +jc1 * Math.pow(Math.max(Math.pow(xv, +odm), 1e-6), 0.25);
+    var finger = state.finger_rate;
+    var hand = state.hand_rate;
+    var nprof = finger.length;
+    var nrows = (nprof > 0 && finger[0].length > 0) ? finger[0][0].length : 0;
+    var costs = [];
+    for (var pi = 0; pi < nprof; pi++) {
+      var per = new Float64Array(nrows);
+      for (var r = 0; r < nrows; r++) {
+        var c0, c1;
+        if (mode === 'extra_task') {
+          var d0 = hand[pi][0][r] - finger[pi][0][r];
+          if (d0 < 0.0) d0 = 0.0;
+          var d1 = hand[pi][1][r] - finger[pi][1][r];
+          if (d1 < 0.0) d1 = 0.0;
+          c0 = d0 * d0 / (1.0 + k * d0);
+          c1 = d1 * d1 / (1.0 + k * d1);
+        } else {
+          var h0 = hand[pi][0][r], f0 = finger[pi][0][r];
+          var h1 = hand[pi][1][r], f1 = finger[pi][1][r];
+          c0 = h0 * h0 / (1.0 + k * h0) - f0 * f0 / (1.0 + k * f0);
+          if (c0 < 0.0) c0 = 0.0;
+          c1 = h1 * h1 / (1.0 + k * h1) - f1 * f1 / (1.0 + k * f1);
+          if (c1 < 0.0) c1 = 0.0;
+        }
+        per[r] = c0 > c1 ? c0 : c1;
+      }
+      costs.push(per);
+    }
+    var out = new Float64Array(nrows);
+    for (var row = 0; row < nrows; row++) {
+      var s = 0.0;
+      for (var pj = 0; pj < nprof; pj++) s += costs[pj][row] * costs[pj][row];
+      out[row] = Math.sqrt(s / nprof);
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * role.field                                                          *
+   * ------------------------------------------------------------------ */
+
+  function roleField(notes, p, query) {
+    var q = toF64(query);
+    var rawIsLn = toU8(prop(notes, 'isLn', 'is_ln'));
+    var anyLn = false;
+    for (var z = 0; z < rawIsLn.length; z++) if (rawIsLn[z]) { anyLn = true; break; }
+    if (!anyLn) return new Float64Array(q.length);
+
+    var nt = roleCanonical(notes);
+    var time = nt.time;
+    var col = nt.col;
+    var width = +p.w_jm;
+    if (!isFinite(width) || width <= 0.0) {
+      throw new Error('roleField requires a positive finite p.w_jm.');
+    }
+    var n = time.length;
+    var spans = roleEpisodes(nt);
+    var duty = new Float64Array(n); // zeros
+
+    for (var lane = 0; lane < 7; lane++) {
+      var own = [];
+      for (var s = 0; s < spans.length; s++) if (spans[s][0] === lane) own.push(spans[s]);
+      if (own.length === 0) continue;
+      var nh = own.length;
+      var events = new Float64Array(2 * nh);
+      var changes = new Float64Array(2 * nh);
+      for (var a = 0; a < nh; a++) {
+        events[a] = own[a][1];
+        changes[a] = 1.0;
+        events[nh + a] = own[a][2];
+        changes[nh + a] = -1.0;
+      }
+      // np.argsort(events, kind='stable')
+      var ord = new Array(2 * nh);
+      for (var i = 0; i < 2 * nh; i++) ord[i] = i;
+      ord.sort(function (x, y) {
+        var d = events[x] - events[y];
+        if (d !== 0) return d;
+        return x - y;
+      });
+      var evSorted = new Float64Array(2 * nh);
+      var chSorted = new Float64Array(2 * nh);
+      for (var o = 0; o < 2 * nh; o++) {
+        evSorted[o] = events[ord[o]];
+        chSorted[o] = changes[ord[o]];
+      }
+      // np.unique(events, return_index=True) on the sorted sequence.
+      var starts = [];
+      var ix = [];
+      for (var u = 0; u < 2 * nh; u++) {
+        if (u === 0 || evSorted[u] !== evSorted[u - 1]) {
+          starts.push(evSorted[u]);
+          ix.push(u);
+        }
+      }
+      // values = np.cumsum(np.add.reduceat(changes, ix))[:-1]
+      var nStarts = starts.length;
+      var values = new Float64Array(nStarts > 1 ? nStarts - 1 : 0);
+      var acc = 0.0;
+      for (var u2 = 0; u2 < nStarts; u2++) {
+        var end = (u2 + 1 < nStarts) ? ix[u2 + 1] : chSorted.length;
+        var sum = 0.0;
+        for (var m = ix[u2]; m < end; m++) sum += chSorted[m];
+        acc += sum;
+        if (u2 < nStarts - 1) values[u2] = acc;
+      }
+      var startsArr = new Float64Array(nStarts);
+      for (var st = 0; st < nStarts; st++) startsArr[st] = starts[st];
+      var take = indicesEqual(col, lane);
+      var tTake = pickF64(time, take);
+      var qTake = new Float64Array(take.length);
+      for (var tk = 0; tk < take.length; tk++) qTake[tk] = tTake[tk] - width / 2.0;
+      var dutyTake = roleIntervalMean(startsArr, values, qTake, width);
+      for (var d = 0; d < take.length; d++) duty[take[d]] = dutyTake[d];
+    }
+
+    for (var dd = 0; dd < n; dd++) {
+      var dv = duty[dd];
+      if (dv < 0.0) dv = 0.0; else if (dv > 1.0) dv = 1.0;
+      duty[dd] = dv;
+    }
+
+    var defaultGap = width / 1000.0;
+    var gap = new Float64Array(n);
+    for (var g = 0; g < n; g++) gap[g] = defaultGap;
+    for (var lane2 = 0; lane2 < 7; lane2++) {
+      var idx2 = indicesEqual(col, lane2);
+      var count2 = idx2.length;
+      if (count2 < 2) continue;
+      var garr = new Float64Array(count2 - 1);
+      for (var gg = 0; gg < count2 - 1; gg++) {
+        var dt = (time[idx2[gg + 1]] - time[idx2[gg]]) / 1000.0;
+        garr[gg] = dt > 0.0001 ? dt : 0.0001;
+      }
+      for (var g2 = 0; g2 < count2 - 1; g2++) {
+        var rowA = idx2[g2];
+        var rowB = idx2[g2 + 1];
+        var gv = garr[g2];
+        if (gv < gap[rowA]) gap[rowA] = gv;
+        if (gv < gap[rowB]) gap[rowB] = gv;
+      }
+    }
+
+    var od = +nt.od;
+    if (!isFinite(od)) throw new Error('roleField requires a finite notes.od (effective OD).');
+    var qv = (64.5 - Math.ceil(3.0 * od)) / 500.0;
+    var x = 0.3 * Math.sqrt(qv > 1e-6 ? qv : 1e-6);
+    var precision = Math.min(x, 0.6 * (x - 0.09) + 0.09);
+    if (!isFinite(+p.j_c1) || !isFinite(+p.od_mult_jm)) {
+      throw new Error('roleField requires finite p.j_c1 and p.od_mult_jm.');
+    }
+    var k = +p.j_c1 * Math.pow(Math.max(Math.pow(precision, +p.od_mult_jm), 1e-6), 0.25);
+
+    var weight = new Float64Array(n);
+    for (var wr = 0; wr < n; wr++) {
+      var dv2 = duty[wr];
+      weight[wr] = (1.0 / (gap[wr] + k)) * dv2 * dv2;
+    }
+    return rolePulseMax(time, col, weight, q, width / 2.0);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Export                                                              *
+   * ------------------------------------------------------------------ */
+
+  root.SPMExtHandRole = {
+    roleCanonical: roleCanonical,
+    handExtract: extract,
+    handField: handField,
+    handCostState: handCostState,
+    handCostPrice: handCostPrice,
+    roleField: roleField,
+    roleEpisodes: roleEpisodes,
+    roleIntervalMean: roleIntervalMean,
+    rolePulseMax: rolePulseMax
+  };
+})();
+
+/* geometry_recovery.js  --  SPM Rating v1.2.0-rc3 port (browser + Node, plain script)
+ *
+ * Faithful JS port of:
+ *   SPMRating/spm_rating/geometry.py    (weights / atoms / cumulative / linear_wmean / window_curve)
+ *   SPMRating/spm_rating/recovery.py    (mean_rate / ratio_area / roots / prepare / interval_mass / curve)
+ *   SPMRating/spm_rating/coordinates.py (coordinate, optional)
+ * plus the model helpers those modules need from _core/model.py
+ *   _wmean_index      -> helpers.wmeanIndex      (provided by the core)
+ *   _tri_window_count -> helpers.triWindowCount  (provided by the core)
+ * and _core/batch.seg_cumsum -> helpers.segCumsum (provided by the core)
+ *
+ * No import/export/require.  Defines globalThis.SPMExtGeometry.
+ *
+ * Conventions
+ * -----------
+ * A single-chart JS struct s (see _dev/port/CONTRACT.md):
+ *   s.t Float64Array(n)     row times, ms (sorted)
+ *   s.chart Int32Array(n)   all zeros in the single-chart case
+ *   s.mask Int32Array(n)    7-bit per-row key mask
+ *   s.size Int32Array(n)
+ *   s.starts Int32Array([0, n])
+ *   s.n number
+ *   s.dtDiff Float64Array(n) ms gap to the next row (0 on the last row)
+ *   s.b object               flat batch (accepted but unused here)
+ * Optional, only used by coordinate(): s.tg (global ms; tg === t for chart 0),
+ *   s.colPos[7] (per-column row positions as produced by buildBatch) or
+ *   s.col_chain[7] ({pos}) or s.b.colPos.
+ *
+ * helpers = { wmean(s,val,W), wmeanIndex(s,W), triWindowCount(s,val,tau),
+ *             segCumsum(x,starts), EPS }
+ *   wmeanIndex must return the Python tuple (jhi, dhi, jlo, dlo): either a
+ *   length-4 array/typed array or an object with those four keys.  jhi/jlo are
+ *   row indices, dhi/dlo are ms offsets from that row's time.
+ *   triWindowCount returns a length-n array of triangular-window counts.
+ *   segCumsum returns the segment-restarted cumulative sum of x.
+ *   Only wmeanIndex / segCumsum / triWindowCount are used here (wmean is not).
+ *
+ * Numeric policy: every expression mirrors the Python operand order, so results
+ * are bit-identical to (or within a few ULP of) the float64 reference.
+ */
+(function (global) {
+  'use strict';
+
+  /* ---------------------------------------------------------------- constants */
+  var SYNC = 30.0;      /* geometry.SYNC   ms */
+  var MEMORY = 180.0;   /* geometry.MEMORY ms */
+  var NULL_ATOM = 0.1;  /* geometry.NULL  */
+  var RADIUS = 500.0;   /* geometry.RADIUS ms */
+
+  /* ------------------------------------------------------------ small helpers */
+  function zeros(n) {
+    return new Float64Array(n);
+  }
+
+  function toF64(x) {
+    var out = new Float64Array(x.length);
+    for (var i = 0; i < x.length; i++) out[i] = x[i];
+    return out;
+  }
+
+  function concatF64(chunks) {
+    var total = 0, i, j;
+    for (i = 0; i < chunks.length; i++) total += chunks[i].length;
+    var out = new Float64Array(total);
+    var at = 0;
+    for (i = 0; i < chunks.length; i++) {
+      var c = chunks[i];
+      for (j = 0; j < c.length; j++) out[at + j] = c[j];
+      at += c.length;
+    }
+    return out;
+  }
+
+  function sortedCopy(a) {
+    var out = toF64(a);
+    out.sort();               /* TypedArray sort is numeric ascending; NaN last */
+    return out;
+  }
+
+  /* numpy.unique for a float array: sort then drop equal neighbours. */
+  function uniqueSorted(a) {
+    var s = sortedCopy(a);
+    if (s.length === 0) return s;
+    var out = new Float64Array(s.length);
+    var m = 0;
+    out[m++] = s[0];
+    for (var i = 1; i < s.length; i++) {
+      if (s[i] !== out[m - 1]) out[m++] = s[i];   /* NaN !== NaN, -0 === 0 : numpy match */
+    }
+    return out.subarray(0, m);
+  }
+
+  /* np.searchsorted(a, v, side='left'): first index with a[i] >= v. */
+  function lowerBound(a, v) {
+    var lo = 0, hi = a.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (a[mid] < v) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  }
+
+  /* np.searchsorted(a, v, side='right'): first index with a[i] > v. */
+  function upperBound(a, v) {
+    var lo = 0, hi = a.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (a[mid] <= v) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  }
+
+  function getDtDiff(s) {
+    var d = s.dtDiff !== undefined && s.dtDiff !== null ? s.dtDiff : s.dt_diff;
+    if (d === undefined || d === null) throw new Error('SPMExtGeometry: struct has no dtDiff.');
+    return d;
+  }
+
+  function getStarts(s) {
+    if (s.starts !== undefined && s.starts !== null) return s.starts;
+    return Int32Array.from([0, s.n]);
+  }
+
+  function getN(s) {
+    if (s.n !== undefined && s.n !== null) return s.n | 0;
+    return s.t.length;
+  }
+
+  function getT(s) {
+    return s.t;
+  }
+
+  function wmeanOperator(helpers, s, width) {
+    var op = helpers.wmeanIndex(s, width);
+    if (op === null || op === undefined) throw new Error('SPMExtGeometry: helpers.wmeanIndex returned null.');
+    if (typeof op.length === 'number' && op.length >= 4) {
+      return { jhi: op[0], dhi: op[1], jlo: op[2], dlo: op[3] };
+    }
+    if (op.jhi !== undefined) {
+      return { jhi: op.jhi, dhi: op.dhi, jlo: op.jlo, dlo: op.dlo };
+    }
+    throw new Error("SPMExtGeometry: unrecognised helpers.wmeanIndex result (expected [jhi,dhi,jlo,dlo] or {jhi,dhi,jlo,dlo}).");
+  }
+
+  function sumRange(a, lo, hi) {
+    var acc = 0.0;
+    for (var i = lo; i < hi; i++) acc += a[i];
+    return acc;
+  }
+
+  /* ========================================================================
+   * geometry.weights  ->  (7,7) row-major, value = w - 1
+   * ===================================================================== */
+  var HAND = [0, 0, 0, 1, 2, 2, 2];
+
+  function geometryWeights(p) {
+    var xjdP = p.x_jd_p, xjdE = p.x_jd_e;
+    var xjhP = p.x_jh_p, xjhE = p.x_jh_e;
+    var xjt = p.x_jt, dirIn = p.x_dir_in, dirOut = p.x_dir_out;
+    var w = new Float64Array(49);
+    for (var i = 0; i < 7; i++) {           /* origin */
+      for (var j = 0; j < 7; j++) {         /* target */
+        var d = Math.abs(i - j);
+        var hi = HAND[i], hj = HAND[j];
+        var same = (hi === hj) && (hi !== 1);
+        var thumb = (hi === 1) || (hj === 1);
+        var cross = (hi !== hj) && !thumb;
+        var v = 1.0 + xjdP * Math.pow(Math.max(d, 1e-9), xjdE);
+        if (same && d > 0) {
+          v = 1.0 + xjhP * Math.pow(Math.max(d, 1e-9), -xjhE);
+        }
+        if (thumb) {
+          v = 1.0 - xjt / Math.max(d, 1.0);
+        }
+        if (cross) {
+          v = 1.0 - xjhP * Math.min(d / 7.0, 1.0);
+        }
+        var inward = Math.abs(j - 3) < Math.abs(i - 3) ? 1.0 : 0.0;
+        v *= 1.0 + dirIn * inward + dirOut * (1.0 - inward);
+        w[i * 7 + j] = v - 1.0;
+      }
+    }
+    return w;
+  }
+
+  /* ========================================================================
+   * geometry.atoms  ->  (n, 49) signed adjacency budgets
+   * b is accepted for interface symmetry (Python caches on the batch); this
+   * port neither mutates b nor caches.
+   * ===================================================================== */
+  function geometryBudgets(b, s, helpers) {
+    var n = getN(s);
+    var t = getT(s);
+    var chart = s.chart;
+    var mask = s.mask;
+    var out = new Float64Array(n * 49);
+    if (n === 0) return out;
+
+    /* coactivation[row*7+k] = tri_window_count(mask bit k, SYNC) */
+    var co = new Float64Array(n * 7);
+    var bits = new Float64Array(n);
+    var r, k, i;
+    for (k = 0; k < 7; k++) {
+      for (r = 0; r < n; r++) bits[r] = (mask[r] >> k) & 1;
+      var col = helpers.triWindowCount(s, bits, SYNC);
+      for (r = 0; r < n; r++) co[r * 7 + k] = col[r];
+    }
+
+    var a = new Float64Array(14);      /* [channel*7 + key] */
+    var bAcc = new Float64Array(14);
+    var c = new Float64Array(14);
+    var source = new Float64Array(14);
+    var occupancy = new Float64Array(7);
+    var low = new Float64Array(7);
+    var high = new Float64Array(7);
+
+    for (var row = 0; row < n; row++) {
+      var dt;
+      if (row === 0 || chart[row] !== chart[row - 1]) {
+        for (i = 0; i < 14; i++) { a[i] = 0.0; bAcc[i] = 0.0; c[i] = 0.0; }
+        dt = 0.0;
+      } else {
+        dt = t[row] - t[row - 1];
+      }
+      var decA = Math.exp(-2 * dt / MEMORY);
+      var decB = Math.exp(-dt * (1 / MEMORY + 1 / SYNC));
+      var decC = Math.exp(-2 * dt / SYNC);
+      for (i = 0; i < 14; i++) {
+        a[i] *= decA;
+        bAcc[i] *= decB;
+        c[i] *= decC;
+      }
+      for (i = 0; i < 14; i++) {
+        var sv = a[i] - 2 * bAcc[i] + c[i];
+        source[i] = sv > 0.0 ? sv : 0.0;      /* np.maximum(..., 0) */
+      }
+      var norm0 = NULL_ATOM + sumRange(source, 0, 7);
+      var norm1 = NULL_ATOM + sumRange(source, 7, 14);
+
+      var coBase = row * 7;
+      for (k = 0; k < 7; k++) {
+        var cv = co[coBase + k];
+        occupancy[k] = cv > 0.0 ? (cv > 1.0 ? 1.0 : cv) : 0.0;  /* clip(occ, 0, 1) */
+      }
+      var supportSum = sumRange(co, coBase, coBase + 7);
+      var support = supportSum > 1.0 ? supportSum : 1.0;
+
+      low[0] = 1.0;
+      for (k = 1; k < 7; k++) low[k] = low[k - 1] * (1.0 - occupancy[k - 1]);
+      high[6] = 1.0;
+      for (k = 5; k >= 0; k--) high[k] = high[k + 1] * (1.0 - occupancy[k + 1]);
+
+      var m = mask[row];
+      var outBase = row * 49;
+      for (var target = 0; target < 7; target++) {
+        if (!(m & (1 << target))) continue;
+        for (var origin = 0; origin < 7; origin++) {
+          var internal = 0.0;
+          if (origin !== target) {
+            var absent = 1.0;
+            var klo = Math.min(origin, target) + 1;
+            var khi = Math.max(origin, target);
+            for (k = klo; k < khi; k++) absent *= 1.0 - occupancy[k];
+            internal = occupancy[origin] * absent;
+          }
+          var incoming = low[target] * source[origin] / norm0 +
+                         high[target] * source[7 + origin] / norm1;
+          out[outBase + origin * 7 + target] = 0.5 * (internal + incoming) / support;
+        }
+      }
+
+      for (k = 0; k < 7; k++) {
+        if (m & (1 << k)) {
+          a[k] += high[k];
+          bAcc[k] += high[k];
+          c[k] += high[k];
+          a[7 + k] += low[k];
+          bAcc[7 + k] += low[k];
+          c[7 + k] += low[k];
+        }
+      }
+    }
+    return out;
+  }
+
+  /* ========================================================================
+   * geometry.cumulative  --  CDF of the raised-cosine density
+   * ===================================================================== */
+  function geometryCumulative(t, signedBudget, query, radius) {
+    var n = t.length;
+    var m = query.length;
+    var out = new Float64Array(m);
+    if (n === 0) return out;
+    var origin = t[0];
+    var omega = Math.PI / radius;
+    var prefix = new Float64Array((n + 1) * 4);
+    var i, j, base, nb;
+    for (i = 0; i < n; i++) {
+      var x = t[i] - origin;
+      var phase = omega * x;
+      base = i * 4;
+      nb = base + 4;
+      var bu = signedBudget[i];
+      prefix[nb] = prefix[base] + bu;
+      prefix[nb + 1] = prefix[base + 1] + bu * x;
+      prefix[nb + 2] = prefix[base + 2] + bu * Math.cos(phase);
+      prefix[nb + 3] = prefix[base + 3] + bu * Math.sin(phase);
+    }
+    var twoR = 2 * radius;
+    var twoPi = 2 * Math.PI;
+    for (j = 0; j < m; j++) {
+      var q = query[j];
+      var lo = lowerBound(t, q - radius);
+      var hi = upperBound(t, q + radius);
+      var amount = prefix[hi * 4] - prefix[lo * 4];
+      var first = prefix[hi * 4 + 1] - prefix[lo * 4 + 1];
+      var co = prefix[hi * 4 + 2] - prefix[lo * 4 + 2];
+      var si = prefix[hi * 4 + 3] - prefix[lo * 4 + 3];
+      var qphase = omega * (q - origin);
+      out[j] = prefix[lo * 4] + 0.5 * amount +
+               ((q - origin) * amount - first) / twoR +
+               (Math.sin(qphase) * co - Math.cos(qphase) * si) / twoPi;
+    }
+    return out;
+  }
+
+  /* ========================================================================
+   * geometry.linear_wmean  --  same step integral as _wmean, without the clamp
+   * ===================================================================== */
+  function linearWmean(s, val, width, helpers) {
+    var n = getN(s);
+    var dtDiff = getDtDiff(s);
+    var starts = getStarts(s);
+    var inc = new Float64Array(n);
+    var i;
+    for (i = 0; i < n - 1; i++) inc[i] = val[i] * dtDiff[i];
+    var cum = helpers.segCumsum(inc, starts);     /* seg_cumsum(inc) */
+    var op = wmeanOperator(helpers, s, width);
+    var jhi = op.jhi, dhi = op.dhi, jlo = op.jlo, dlo = op.dlo;
+    var out = new Float64Array(n);
+    for (i = 0; i < n; i++) {
+      var hi = jhi[i], lo = jlo[i];
+      var integralHi = cum[hi] - inc[hi];         /* integral = seg_cumsum - inc */
+      var integralLo = cum[lo] - inc[lo];
+      out[i] = (integralHi + val[hi] * dhi[i] - (integralLo + val[lo] * dlo[i])) / width;
+    }
+    return out;
+  }
+
+  /* ========================================================================
+   * geometry.window_curve
+   * ===================================================================== */
+  function geometryWindowCurve(b, s, p, helpers) {
+    var n = getN(s);
+    var t = getT(s);
+    var starts = getStarts(s);
+    var width = +p.w_x;
+
+    var w = geometryWeights(p);
+    var atoms = geometryBudgets(b, s, helpers);
+
+    var signed = new Float64Array(n);
+    var r, k;
+    for (r = 0; r < n; r++) {
+      var base = r * 49;
+      var acc = 0.0;
+      for (k = 0; k < 49; k++) acc += atoms[base + k] * w[k];
+      signed[r] = acc;
+    }
+
+    var out = new Float64Array(n);
+    var nSeg = starts.length - 1;
+    var half = width / 2;
+    var divisor = width / 1000.0;
+    for (var seg = 0; seg < nSeg; seg++) {
+      var a0 = starts[seg] | 0;
+      var z0 = starts[seg + 1] | 0;
+      var m = z0 - a0;
+      if (m <= 0) continue;
+      var tSeg = t.subarray(a0, z0);
+      var bSeg = signed.subarray(a0, z0);
+      var tLo = tSeg[0];
+      var tHi = tSeg[m - 1];
+      var qlo = new Float64Array(m);
+      var qhi = new Float64Array(m);
+      for (r = 0; r < m; r++) {
+        var lo = tSeg[r] - half; if (lo < tLo) lo = tLo;
+        var hi = tSeg[r] + half; if (hi > tHi) hi = tHi;
+        qlo[r] = lo;
+        qhi[r] = hi;
+      }
+      var chi = geometryCumulative(tSeg, bSeg, qhi, RADIUS);
+      var clo = geometryCumulative(tSeg, bSeg, qlo, RADIUS);
+      for (r = 0; r < m; r++) out[a0 + r] = (chi[r] - clo[r]) / divisor;
+    }
+    return out;
+  }
+
+  /* ========================================================================
+   * recovery.py
+   * ===================================================================== */
+
+  /* recovery.mean_rate */
+  function recoveryMeanRate(heads, query, width) {
+    var h = sortedCopy(heads);
+    var q = toF64(query);
+    if (width <= 0 || !isFinite(width)) throw new Error('Positive mean width required.');
+    var nq = q.length;
+    if (h.length === 0) return zeros(nq);
+    var origin = h[0];
+    var i, m = h.length;
+    for (i = 0; i < m; i++) h[i] -= origin;
+    for (i = 0; i < nq; i++) q[i] -= origin;
+    var prefix = new Float64Array(m + 1);
+    for (i = 0; i < m; i++) prefix[i + 1] = prefix[i] + h[i];
+
+    var outer = (1000.0 + width) / 2.0;
+    var inner = Math.abs(1000.0 - width) / 2.0;
+    var plateau = Math.min(1000.0, width) / width;
+    var out = new Float64Array(nq);
+    for (i = 0; i < nq; i++) {
+      var qi = q[i];
+      var lo = lowerBound(h, qi - outer);
+      var a = lowerBound(h, qi - inner);
+      var bb = upperBound(h, qi + inner);
+      var hi = upperBound(h, qi + outer);
+      var left = (prefix[a] - prefix[lo]) - (a - lo) * (qi - outer);
+      var right = (hi - bb) * (qi + outer) - (prefix[hi] - prefix[bb]);
+      var v = (bb - a) * plateau + (left + right) / width;
+      out[i] = v > 0.0 ? v : 0.0;
+    }
+    return out;
+  }
+
+  /* recovery.ratio_area: integral of positive linear / positive linear */
+  function recoveryRatioArea(a0, a1, b0, b1, length) {
+    var m = a0.length;
+    var out = new Float64Array(m);
+    for (var i = 0; i < m; i++) {
+      var A0 = a0[i], A1 = a1[i], B0 = b0[i], B1 = b1[i], L = length[i];
+      var d = (B1 - B0) / B0;
+      var w0, w1;
+      if (Math.abs(d) < 1e-4) {
+        var z = -d;
+        var u0 = 0.0, u1 = 0.0, power = 1.0;
+        for (var k = 0; k < 7; k++) {
+          u0 += power / ((k + 1.0) * (k + 2.0));
+          u1 += power / (k + 2.0);
+          power *= z;
+        }
+        w0 = u0;
+        w1 = u1;
+      } else {
+        var log = Math.log1p(d);
+        w0 = ((1.0 + d) * log - d) / (d * d);
+        w1 = (d - log) / (d * d);
+      }
+      var num = Math.max(A0, 0.0) * Math.max(w0, 0.0) + Math.max(A1, 0.0) * Math.max(w1, 0.0);
+      var v = L * num / B0;
+      out[i] = v > 0.0 ? v : (v === v ? 0.0 : NaN);   /* np.maximum(v, 0) */
+    }
+    return out;
+  }
+
+  /* recovery.roots: linear interpolation of strict sign changes */
+  function recoveryRoots(time, y) {
+    var n = time.length;
+    var vals = [];
+    for (var i = 0; i < n - 1; i++) {
+      var y0 = y[i], y1 = y[i + 1];
+      var up = (y0 < 0.0 && y1 > 0.0);
+      var down = (y0 > 0.0 && y1 < 0.0);
+      if (up || down) vals.push(time[i] - y0 * (time[i + 1] - time[i]) / (y1 - y0));
+    }
+    return Float64Array.from(vals);
+  }
+
+  function allFinite(a) {
+    for (var i = 0; i < a.length; i++) if (!isFinite(a[i])) return false;
+    return true;
+  }
+
+  function maxFloor(values, floor) {
+    var out = new Float64Array(values.length);
+    for (var i = 0; i < values.length; i++) {
+      var v = values[i];
+      out[i] = v > floor ? v : floor;
+    }
+    return out;
+  }
+
+  function subArray(a, lo, hi) {
+    var out = new Float64Array(hi - lo);
+    for (var i = lo; i < hi; i++) out[i - lo] = a[i];
+    return out;
+  }
+
+  function diffArray(a) {
+    var n = a.length;
+    var out = new Float64Array(n > 0 ? n - 1 : 0);
+    for (var i = 0; i < n - 1; i++) out[i] = a[i + 1] - a[i];
+    return out;
+  }
+
+  /* recovery.prepare */
+  function recoveryPrepare(heads, shortWidth, longWidth, floor) {
+    if (floor === undefined || floor === null) floor = 1e-6;
+    var h = sortedCopy(heads);
+    var w = Math.max(+shortWidth, 50.0);
+    var wl = Math.max(+longWidth, 1000.0);
+    if (h.length === 0 || !allFinite(h) || !isFinite(w) || !isFinite(wl)) {
+      throw new Error('Finite nonempty heads and widths required.');
+    }
+    var unique = uniqueSorted(h);
+    var widths = [w, wl];
+    var knots = [];
+    for (var wi = 0; wi < 2; wi++) {
+      var width = widths[wi];
+      var A = (1000.0 + width) / 2.0;
+      var B = Math.abs(1000.0 - width) / 2.0;
+      var shifts = [-A, -B, B, A];
+      for (var si = 0; si < 4; si++) {
+        var shift = shifts[si];
+        var part = new Float64Array(unique.length);
+        for (var i = 0; i < unique.length; i++) part[i] = unique[i] + shift;
+        knots.push(part);
+      }
+    }
+    var t = uniqueSorted(concatF64(knots));
+    var l = recoveryMeanRate(h, t, wl);
+    var lMinusFloor = new Float64Array(l.length);
+    for (i = 0; i < l.length; i++) lMinusFloor[i] = l[i] - floor;
+    t = uniqueSorted(concatF64([t, recoveryRoots(t, lMinusFloor)]));
+
+    var s = recoveryMeanRate(h, t, w);
+    l = recoveryMeanRate(h, t, wl);
+    var lf = maxFloor(l, floor);
+    var sMinusL = new Float64Array(s.length);
+    for (i = 0; i < s.length; i++) sMinusL[i] = s[i] - lf[i];
+    t = uniqueSorted(concatF64([t, recoveryRoots(t, sMinusL)]));
+
+    s = recoveryMeanRate(h, t, w);
+    l = maxFloor(recoveryMeanRate(h, t, wl), floor);
+    var a = new Float64Array(s.length);
+    for (i = 0; i < s.length; i++) {
+      var d = s[i] - l[i];
+      a[i] = d > 0.0 ? d : 0.0;                 /* np.maximum(s - l, 0) */
+    }
+    var nKnot = t.length;
+    var area = recoveryRatioArea(
+      subArray(a, 0, nKnot - 1), subArray(a, 1, nKnot),
+      subArray(l, 0, nKnot - 1), subArray(l, 1, nKnot),
+      diffArray(t)
+    );
+    var prefix = new Float64Array(nKnot);
+    for (i = 0; i < area.length; i++) prefix[i + 1] = prefix[i] + area[i];
+
+    return {
+      time: t,
+      numerator: a,
+      denominator: l,
+      prefix: prefix,
+      width: w,
+      long_width: wl
+    };
+  }
+
+  /* recovery.integral */
+  function recoveryIntegral(model, query) {
+    var q = toF64(query);
+    var t = model.time;
+    var n = t.length;
+    var a = model.numerator, b = model.denominator, prefix = model.prefix;
+    var out = new Float64Array(q.length);
+    for (var k = 0; k < q.length; k++) {
+      var qk = q[k];
+      var i = upperBound(t, qk) - 1;
+      var before = i < 0;
+      var after = i >= n - 1;
+      if (i < 0) i = 0;
+      if (i > n - 2) i = n - 2;
+      var span = t[i + 1] - t[i];
+      var length = qk - t[i];
+      if (length < 0.0) length = 0.0;
+      if (length > span) length = span;
+      var fraction = length / span;
+      var aq = a[i] + fraction * (a[i + 1] - a[i]);
+      var bq = b[i] + fraction * (b[i + 1] - b[i]);
+      var value = prefix[i] + recoveryRatioArea(
+        Float64Array.of(a[i]), Float64Array.of(aq),
+        Float64Array.of(b[i]), Float64Array.of(bq),
+        Float64Array.of(length))[0];
+      if (before) out[k] = 0.0;
+      else if (after) out[k] = prefix[n - 1];
+      else out[k] = value;
+    }
+    return out;
+  }
+
+  /* recovery.interval_mass */
+  function recoveryIntervalMass(model, start, end) {
+    var m = start.length;
+    var t = model.time;
+    var nt = t.length;
+    var num = model.numerator, den = model.denominator, prefix = model.prefix;
+    var t0 = t[0], tLast = t[nt - 1];
+
+    var lo = new Float64Array(m), hi = new Float64Array(m);
+    var iIdx = new Int32Array(m), jIdx = new Int32Array(m);
+    var k;
+    for (k = 0; k < m; k++) {
+      var lv = start[k]; if (lv < t0) lv = t0;
+      var hv = end[k]; if (hv > tLast) hv = tLast;
+      lo[k] = lv;
+      hi[k] = hv;
+      var ii = upperBound(t, lv) - 1;
+      if (ii < 0) ii = 0;
+      if (ii > nt - 2) ii = nt - 2;
+      var jj = upperBound(t, hv) - 1;
+      if (jj < 0) jj = 0;
+      if (jj > nt - 2) jj = nt - 2;
+      iIdx[k] = ii;
+      jIdx[k] = jj;
+    }
+
+    var al = new Float64Array(m), bl = new Float64Array(m);
+    var ah = new Float64Array(m), bh = new Float64Array(m);
+    for (k = 0; k < m; k++) {
+      var i1 = iIdx[k], i2 = i1 + 1;
+      var f = (lo[k] - t[i1]) / (t[i2] - t[i1]);
+      if (f < 0.0) f = 0.0; else if (f > 1.0) f = 1.0;
+      al[k] = (1.0 - f) * num[i1] + f * num[i2];
+      bl[k] = (1.0 - f) * den[i1] + f * den[i2];
+      var j1 = jIdx[k], j2 = j1 + 1;
+      var g = (hi[k] - t[j1]) / (t[j2] - t[j1]);
+      if (g < 0.0) g = 0.0; else if (g > 1.0) g = 1.0;
+      ah[k] = (1.0 - g) * num[j1] + g * num[j2];
+      bh[k] = (1.0 - g) * den[j1] + g * den[j2];
+    }
+
+    var oneLen = new Float64Array(m), leftLen = new Float64Array(m), rightLen = new Float64Array(m);
+    var leftA1 = new Float64Array(m), leftB1 = new Float64Array(m);
+    var rightA0 = new Float64Array(m), rightB0 = new Float64Array(m);
+    for (k = 0; k < m; k++) {
+      var span = hi[k] - lo[k];
+      oneLen[k] = span > 0.0 ? span : 0.0;
+      var ll = t[iIdx[k] + 1] - lo[k];
+      leftLen[k] = ll > 0.0 ? ll : 0.0;
+      var rl = hi[k] - t[jIdx[k]];
+      rightLen[k] = rl > 0.0 ? rl : 0.0;
+      leftA1[k] = num[iIdx[k] + 1];
+      leftB1[k] = den[iIdx[k] + 1];
+      rightA0[k] = num[jIdx[k]];
+      rightB0[k] = den[jIdx[k]];
+    }
+
+    var one = recoveryRatioArea(al, ah, bl, bh, oneLen);
+    var left = recoveryRatioArea(al, leftA1, bl, leftB1, leftLen);
+    var right = recoveryRatioArea(rightA0, ah, rightB0, bh, rightLen);
+
+    var out = new Float64Array(m);
+    for (k = 0; k < m; k++) {
+      if (hi[k] <= lo[k]) { out[k] = 0.0; continue; }   /* empty */
+      if (iIdx[k] === jIdx[k]) { out[k] = one[k]; continue; }
+      var gap = prefix[jIdx[k]] - prefix[iIdx[k] + 1];
+      if (gap < 0.0) gap = 0.0;
+      out[k] = left[k] + gap + right[k];
+    }
+    return out;
+  }
+
+  /* recovery.curve */
+  function recoveryCurve(heads, query, shortWidth, longWidth) {
+    var q = toF64(query);
+    var model = recoveryPrepare(heads, shortWidth, longWidth);
+    var w = model.width;
+    var m = q.length;
+    var start = new Float64Array(m), end = new Float64Array(m);
+    for (var i = 0; i < m; i++) {
+      start[i] = q[i] - w / 2.0;
+      end[i] = q[i] + w / 2.0;
+    }
+    var mass = recoveryIntervalMass(model, start, end);
+    var out = new Float64Array(m);
+    for (i = 0; i < m; i++) {
+      var v = mass[i] / w;
+      if (v < -1e-10) throw new Error('Positive recovery mass invariant violated.');
+      out[i] = v > 0.0 ? v : (v === v ? 0.0 : NaN);   /* np.maximum(out, 0) */
+    }
+    return out;
+  }
+
+  /* ========================================================================
+   * coordinates.coordinate  (optional; needs s.tg + s.colPos/s.col_chain)
+   * ===================================================================== */
+  function columnRowPositions(s, col) {
+    if (s.colPos && s.colPos[col] !== undefined) return s.colPos[col];
+    if (s.col_chain && s.col_chain[col] !== undefined) {
+      var c = s.col_chain[col];
+      if (c && c.pos !== undefined) return c.pos;
+      return c;
+    }
+    if (s.b && s.b.colPos && s.b.colPos[col] !== undefined) return s.b.colPos[col];
+    return null;
+  }
+
+  function coordinate(s, bd, pos, tau) {
+    var n = pos.length;
+    var out = new Float64Array(n);
+    var i;
+    if (!(bd > 0 && bd < 7)) {
+      var fill = Math.min(Math.max(bd, 0), 6);
+      for (i = 0; i < n; i++) out[i] = fill;
+      return out;
+    }
+    var tg = s.tg !== undefined && s.tg !== null ? s.tg : s.t;
+    var weights = [];
+    for (var slot = 0; slot < 2; slot++) {
+      var col = slot === 0 ? bd - 1 : bd;
+      var rows = columnRowPositions(s, col);
+      var wt = new Float64Array(n);
+      if (rows !== null && rows.length) {
+        var times = new Float64Array(rows.length);
+        for (i = 0; i < rows.length; i++) times[i] = tg[rows[i]];
+        for (i = 0; i < n; i++) {
+          var q = tg[pos[i]];
+          var hi = lowerBound(times, q);
+          if (hi > times.length - 1) hi = times.length - 1;
+          var lo = hi - 1; if (lo < 0) lo = 0;
+          var d1 = Math.abs(q - times[hi]);
+          var d0 = Math.abs(q - times[lo]);
+          var d = d1 < d0 ? d1 : d0;
+          var u = d / tau; if (u < 0.0) u = 0.0; else if (u > 1.0) u = 1.0;
+          var c = Math.cos(Math.PI * u / 2.0);
+          wt[i] = c * c;
+        }
+      }
+      weights.push(wt);
+    }
+    var left = weights[0], right = weights[1];
+    for (i = 0; i < n; i++) {
+      var den = left[i] + right[i];
+      if (!(den > 1e-12)) den = 1e-12;
+      out[i] = ((bd - 1) * left[i] + bd * right[i]) / den;
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------------- exports */
+  global.SPMExtGeometry = {
+    /* contract API */
+    geometryWeights: geometryWeights,
+    geometryBudgets: geometryBudgets,
+    geometryCumulative: geometryCumulative,
+    linearWmean: linearWmean,
+    geometryWindowCurve: geometryWindowCurve,
+    recoveryCurve: recoveryCurve,
+    coordinate: coordinate,
+    /* recovery primitives, exported for reuse/debugging */
+    recoveryMeanRate: recoveryMeanRate,
+    recoveryRatioArea: recoveryRatioArea,
+    recoveryRoots: recoveryRoots,
+    recoveryPrepare: recoveryPrepare,
+    recoveryIntegral: recoveryIntegral,
+    recoveryIntervalMass: recoveryIntervalMass,
+    /* constants (geometry.py) */
+    SYNC: SYNC,
+    MEMORY: MEMORY,
+    NULL_ATOM: NULL_ATOM,
+    RADIUS: RADIUS
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+// ============================================================
 // Exports (browser global)
 // ============================================================
 var SPMEngine = {
-    SPM_V1_PARAMS, makeParams,
+    SPM_V1_PARAMS, SPM_V120_PARAMS, SPM_V120_MODEL, makeParams,
     parseOsu, buildBatch, buildStruct, computeCurves, combine,
     aggregatePow, postprocess, evaluateChart, displayCurves,
     computeSectionData, processMap,
