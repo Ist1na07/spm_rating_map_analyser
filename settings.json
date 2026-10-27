@@ -11,9 +11,9 @@
     "uniqueID": "algorithm",
     "type": "options",
     "title": "Rating Algorithm",
-    "description": "Difficulty algorithm used for the rating (reserved for future algorithm versions)",
-    "options": ["SPM Rating v1.2.0"],
-    "value": "SPM Rating v1.2.0"
+    "description": "SPM Rating v1.2.0 model variant: Detailed / 完整 is the full model, Compact / 精简 the lighter one. Both use the same RC/LN sub-model and their own dan tables; changing this re-rates the current chart",
+    "options": ["SPM Rating v1.2.0 (Detailed / 完整)", "SPM Rating v1.2.0 (Compact / 精简)"],
+    "value": "SPM Rating v1.2.0 (Detailed / 完整)"
   },
   {
     "uniqueID": "subDifficultyScheme",

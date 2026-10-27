@@ -855,7 +855,11 @@ body {
     const CANVAS_INK = { cursor: '#ffffff', cursorGlow: 'rgba(255,255,255,0.6)' };
 
     let settings = {
-        algorithm: 'SPM Rating v1.2.0',
+        // Rating algorithm = SPM Rating v1.2.0 model variant. The stored value
+        // is the settings-panel label; algorithmModel() maps it to the engine
+        // variant id. A stale pre-1.2.0 value ("SPM Rating v1.2.0") keeps the
+        // detailed (完整) model.
+        algorithm: 'SPM Rating v1.2.0 (Detailed / 完整)',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
         danDisplayStyle: 'Thirds (low/high)',
         colorScheme: 'Default Dark',
@@ -870,6 +874,19 @@ body {
         showTimeline: true,
         showBreak: true,
     };
+
+    /** Rating-algorithm setting -> engine model variant id ("detail" | "compact").
+     *  Only the compact label selects the compact (精简) model; unknown or
+     *  stale values keep the detailed (完整) model. */
+    function algorithmModel() {
+        return /compact/i.test(String(settings.algorithm || '')) ? 'compact' : 'detail';
+    }
+
+    /** Sub-difficulty scheme option -> processMap scheme id. Both labels are
+     *  named explicitly so a stale stored value falls back to the default. */
+    function currentSubScheme() {
+        return settings.subDifficultyScheme === 'Legacy v0.5.1' ? 'v051' : 'direct';
+    }
 
     // dan label style key from the settings option string
     function danStyleKey() {
@@ -1863,41 +1880,48 @@ body {
                 }
             }
 
-            // sub-difficulty scheme: both option labels are named explicitly so
-            // a stale stored value falls back rather than silently switching
-            let subScheme = 'direct';
-            if (settings.subDifficultyScheme === 'Legacy v0.5.1') subScheme = 'v051';
-            else if (settings.subDifficultyScheme === 'Direct (RC/LN sub-model)') subScheme = 'direct';
-            const result = processMap(content, 'full', speedRate, { subDifficultyScheme: subScheme });
-            if (result) {
-                // 7K charts with a tag-engine result keep the classification UI;
-                // 4K/6K show difficulty rating, dan (per-keycount table) and curve.
-                result.classified = cachedTagResult != null;
-                if (result.classified) result.mapType = String(cachedTagResult.overall.sort || '').toUpperCase() || result.mapType;
-            }
-            if (!result) {
-                showLoading('No notes found');
-                cachedResult = null;
-                cachedRawCurves = null;
-                cachedSegStats = null;
-                return;
-            }
-            // keep the unsmoothed series so the smoothing setting can be
-            // changed later without re-analysing the chart
-            cachedRawCurves = {
-                sectionDifficulties: result.sectionDifficulties,
-                rcSectionDifficulties: result.rcSectionDifficulties,
-                lnSectionDifficulties: result.lnSectionDifficulties,
-            };
-            cachedResult = result;
-            // rebuildCurves() reads cachedResult, so it must run after it is set
-            rebuildCurves();
-
-            showResult(result);
+            renderRating(speedRate);
         } catch (e) {
             console.error('SPM Map Analyser error:', e);
             showLoading('Error: ' + e.message);
         }
+    }
+
+    /** Rate + display the cached chart with the active rating algorithm.
+     *  Split out of fetchAndRate so a rating-algorithm or sub-difficulty-scheme
+     *  change can re-evaluate the same chart without re-fetching it; the tag
+     *  classification is model independent and stays cached. */
+    function renderRating(speedRate) {
+        const result = processMap(cachedOsuContent, 'full', speedRate, {
+            subDifficultyScheme: currentSubScheme(),
+            model: algorithmModel(),
+        });
+        if (result) {
+            // 7K charts with a tag-engine result keep the classification UI;
+            // 4K/6K show difficulty rating, dan (per-keycount table) and curve.
+            result.classified = cachedTagResult != null;
+            if (result.classified) result.mapType = String(cachedTagResult.overall.sort || '').toUpperCase() || result.mapType;
+            result.subDifficultyScheme = currentSubScheme();
+        }
+        if (!result) {
+            showLoading('No notes found');
+            cachedResult = null;
+            cachedRawCurves = null;
+            cachedSegStats = null;
+            return null;
+        }
+        // keep the unsmoothed series so the smoothing setting can be changed
+        // later without re-analysing the chart
+        cachedRawCurves = {
+            sectionDifficulties: result.sectionDifficulties,
+            rcSectionDifficulties: result.rcSectionDifficulties,
+            lnSectionDifficulties: result.lnSectionDifficulties,
+        };
+        cachedResult = result;
+        // rebuildCurves() reads cachedResult, so it must run after it is set
+        rebuildCurves();
+        showResult(result);
+        return result;
     }
 
     function startAnimationLoop() {
@@ -1996,13 +2020,34 @@ body {
         return changed;
     }
 
+    /** True when the cached rating came from a different algorithm/scheme than
+     *  the one selected now (those settings need a fresh evaluation). */
+    function ratingSettingsChanged() {
+        if (!cachedResult) return false;
+        if (cachedResult.modelVariant !== algorithmModel()) return true;
+        if (cachedResult.subDifficultyScheme !== currentSubScheme()) return true;
+        return false;
+    }
+
     function reapplySettingsToUI() {
-        // the smoothing setting re-derives the curves from the cached raw
-        // series; everything else is a pure re-render
-        rebuildCurves();
         applyColorScheme(settings.colorScheme);
         applyUiStyle();
         applyClassificationVisibility();
+        // a rating-algorithm or sub-difficulty-scheme change re-rates the cached
+        // chart (the numbers themselves change, not just the presentation)
+        if (cachedOsuContent && ratingSettingsChanged()) {
+            try {
+                if (renderRating(currentSpeedRate || 1.0)) {
+                    lastSegIndex = -2;
+                    return;
+                }
+            } catch (e) {
+                console.error('SPM Map Analyser: re-rating failed:', e);
+            }
+        }
+        // the smoothing setting re-derives the curves from the cached raw
+        // series; everything else is a pure re-render
+        rebuildCurves();
         if (cachedResult) {
             lastSegIndex = -2;
             showResult(cachedResult);

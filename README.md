@@ -15,6 +15,7 @@ A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time di
   - **LN** — long-note (hold) difficulty
 - On pure RC maps the LN rating is hidden automatically, so you only see the numbers that matter.
 - Ratings use SPM Rating's **reference scale** (each key count is aligned to its own label domain), so compare star values within the same key count.
+- **Both SPM Rating v1.2.0 models are available** and selectable under **Rating Algorithm**: **Detailed / 完整** (the full model, default) and **Compact / 精简** (the lighter upstream model that differs in 16 calibrated parameters, its role price and its reference alignment). Switching re-rates the current chart immediately.
 
 ### Map summary
 
@@ -48,6 +49,7 @@ Pattern classification currently runs on **7K** maps only; 4K/6K maps show the s
   - **4K RC**: 1st ~ 10th, then **Alpha / Beta / Gamma / Delta / Epsilon** · **4K LN**: 1st ~ 15th
   - **6K RC**: Start ~ 9th · **6K LN**: 0th ~ 14th
   - **7K RC / LN**: 0th ~ Stellium
+- The dan nodes are measured **separately for each rating-algorithm model** (Detailed / 完整 and Compact / 精简), so switching the algorithm keeps the ladder's meaning
 - Outside the measured range it shows `< ...` / `> ...` (e.g. `< 0th`, `> Stellium`)
 - Three display styles for the dan value: **thirds** (low / high), **signs** (`-` / `+`), or a **decimal number** (+0.5 shift: 8.5 = 8th dan exactly, 11.5 = Gamma in 7K)
 - Hybrid maps additionally show a **Total** dan
@@ -93,7 +95,7 @@ Two layouts under **UI Style**:
 
 | Setting | What it does | Default |
 |---------|--------------|---------|
-| Rating Algorithm | Algorithm selector (reserved for future versions) | SPM Rating v1.2.0 |
+| Rating Algorithm | SPM Rating v1.2.0 model variant: **Detailed / 完整** (full model) or **Compact / 精简** (lighter model). Each has its own measured dan nodes; changing it re-rates the current chart | Detailed |
 | Sub Difficulty Scheme | **Direct**: RC/LN sub-ratings always come from the new sub-models. **Legacy v0.5.1**: LN maps show LN difficulty equal to the total | Direct |
 | UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags only) | Rating first |
 | Panel Density | **Standard** or **Compact** panel size | Standard |
@@ -111,7 +113,8 @@ Two layouts under **UI Style**:
 ## Version history
 
 ### v1.2.0
-- **Algorithm upgraded to SPM Rating v1.2.0-rc3 (detailed model) + the new SPMSubmodel RC/LN model**
+- **Algorithm upgraded to SPM Rating v1.2.0-rc3 + the new SPMSubmodel RC/LN model**
+- **Both v1.2.0 model variants are selectable** under **Rating Algorithm**: Detailed / 完整 (full) and Compact / 精简 (lighter). They differ in 16 calibrated parameters plus their role price and reference alignment; dan nodes are re-measured for both, and switching the algorithm re-rates the current chart
 - **Total / RC / LN difficulty** now come from the new hand-contact, finger-role, chord-gesture and two-level aggregation model; every chart is scored together with its mirror and the two difficulty fields are averaged
 - **Dan mapping re-measured** on the new reference scale for 4K / 6K / 7K and RC / LN; the ladder shape and `< ...` / `> ...` markers are unchanged
 - **Number dan style shifted by +0.5**: the displayed number is the value mania players quote, so 8.5 shows 8dan exactly and 11.5 shows Gamma in 7K. Thirds and signs styles, ratings, curves and all other logic are unchanged
@@ -173,7 +176,7 @@ Measured against [ManiaMapAnalyser](https://github.com/LeoBlackMT/osumania_map_a
 - **Per-bucket percentile instead of per-bucket max.** Today a 400 ms bucket reports its single hardest note row, so a bucket holding one note looks as hard as a dense one. Taking the 85th percentile of the rows in a bucket would remove that bias at the source and steady the curve *without* any smoothing.
 - **Cover-art accent sampling.** Tint the panel from the beatmap background image, the way LeoBlack's `coverTheme` does. Needs an image fetch and a colour quantiser.
 - **Layout presets.** LeoBlack ships 15 named presets plus JSON import/export. The two UI styles and two densities here cover the useful range; a preset system only pays off with more content to preset.
-- **More estimators.** LeoBlack integrates Etterna MinaCalc (five versions), Interlude, Sunny Rework, Daniel and Companella through WASM/ONNX. That is a different scale of project — bundled binaries, a worker and a benchmark harness — and it changes what the numbers mean, which is why the rating algorithm setting here is still reserved.
+- **More estimators.** LeoBlack integrates Etterna MinaCalc (five versions), Interlude, Sunny Rework, Daniel and Companella through WASM/ONNX. That is a different scale of project — bundled binaries, a worker and a benchmark harness — and it changes what the numbers mean, which is why the rating algorithm setting here only offers SPM Rating's own two model variants.
 
 ## Notes
 
