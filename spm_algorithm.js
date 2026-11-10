@@ -829,16 +829,13 @@ function wcount(b, s, w, W) {
     const cs = new Float64Array(n + 1);
     for (let r = 0; r < n; r++) cs[r + 1] = cs[r] + w[r];
     const out = new Float64Array(n);
+    let ilo = 0, ihi = 0;
     for (let r = 0; r < n; r++) {
         const zlo = clamp(t[r] - 0.5 * W, t[0], t[n - 1] + 1.0);
         const zhi = clamp(t[r] + 0.5 * W, t[0], t[n - 1] + 1.0);
-        // searchsorted left
-        let lo = 0, hi = n;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < zlo) lo = mid + 1; else hi = mid; }
-        const ilo = lo;
-        lo = 0; hi = n;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] < zhi) lo = mid + 1; else hi = mid; }
-        out[r] = cs[lo] - cs[ilo];
+        while (ilo < n && t[ilo] < zlo) ilo++;
+        while (ihi < n && t[ihi] < zhi) ihi++;
+        out[r] = cs[ihi] - cs[ilo];
     }
     if (key.endsWith("imp")) s.wcountOps.set(key, { w, out });
     return out;
@@ -849,28 +846,7 @@ function wmean(b, s, val, W) {
     const n = b.n;
     if (n < 2) return Float64Array.from(val);
     const t = b.t;
-    // cached interpolation operator
-    let op = s.wmeanOps.get(W);
-    if (!op) {
-        // no tlo/thi subtleties for a single chart: clip to [t0, tlast]
-        const jhi = new Int32Array(n), dhi = new Float64Array(n),
-              jlo = new Int32Array(n), dlo = new Float64Array(n);
-        for (let r = 0; r < n; r++) {
-            const zhi = Math.min(t[r] + 0.5 * W, t[n - 1]);
-            const zlo = Math.max(t[r] - 0.5 * W, t[0]);
-            // searchsorted(tg, z, right) - 1, clipped [0, n-2]
-            let lo = 0, hi = n;
-            while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zhi) lo = mid + 1; else hi = mid; }
-            jhi[r] = clamp(lo - 1, 0, n - 2);
-            dhi[r] = zhi - t[jhi[r]];
-            lo = 0; hi = n;
-            while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zlo) lo = mid + 1; else hi = mid; }
-            jlo[r] = clamp(lo - 1, 0, n - 2);
-            dlo[r] = zlo - t[jlo[r]];
-        }
-        op = { jhi, dhi, jlo, dlo };
-        s.wmeanOps.set(W, op);
-    }
+    const op = wmeanIndexOp(b, s, W);
     // prefix integral I[r] = int from t[0] to t[r] of val (val holds on [t[r], t[r+1]))
     const inc = zeros(n);
     for (let r = 0; r < n - 1; r++) inc[r] = val[r] * (t[r + 1] - t[r]);
@@ -890,22 +866,25 @@ function wmean(b, s, val, W) {
 
 // ---- window interpolation operator (used by geometry.linear_wmean)
 function wmeanIndexOp(b, s, W) {
+    const cached = s.wmeanOps.get(W);
+    if (cached) return cached;
     const n = b.n, t = b.t;
     const jhi = new Int32Array(n), dhi = new Float64Array(n),
           jlo = new Int32Array(n), dlo = new Float64Array(n);
+    let hi = 0, lo = 0;
     for (let r = 0; r < n; r++) {
         const zhi = Math.min(t[r] + 0.5 * W, t[n - 1]);
         const zlo = Math.max(t[r] - 0.5 * W, t[0]);
-        let lo = 0, hi = n;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zhi) lo = mid + 1; else hi = mid; }
-        jhi[r] = clamp(lo - 1, 0, n - 2);
+        while (hi < n && t[hi] <= zhi) hi++;
+        while (lo < n && t[lo] <= zlo) lo++;
+        jhi[r] = clamp(hi - 1, 0, n - 2);
         dhi[r] = zhi - t[jhi[r]];
-        lo = 0; hi = n;
-        while (lo < hi) { const mid = (lo + hi) >> 1; if (t[mid] <= zlo) lo = mid + 1; else hi = mid; }
         jlo[r] = clamp(lo - 1, 0, n - 2);
         dlo[r] = zlo - t[jlo[r]];
     }
-    return { jhi, dhi, jlo, dlo };
+    const op = { jhi, dhi, jlo, dlo };
+    s.wmeanOps.set(W, op);
+    return op;
 }
 
 function geometryHelpers(b, s) {
@@ -2690,7 +2669,8 @@ function evaluateChart(osuContent, speedRate, p, modelInfo) {
         if (!b) return { error: "too few notes" };
         const s = buildStruct(b, local);
         let cur = computeCurves(b, s, Object.assign({}, local, { d_rec: 0 }));
-        const rec = SPMExtGeometry.recoveryCurve(view.time, s.t, local.recov_w, local.recov_wl);
+        const rec = sources.length ? sources[0].cur.Recov
+            : SPMExtGeometry.recoveryCurve(view.time, s.t, local.recov_w, local.recov_wl);
         cur = Object.assign({}, cur, { Recov: rec });
         const data = SPMExtHandRole.handExtract(view, 30.0);
         const rates = SPMExtHandRole.handField(data, s.t, local.w_jm);
@@ -3220,7 +3200,8 @@ function danLevelToLabel(level, keyCount, kind, style, variant) {
         // is the dan value mania players quote: 8.5 = 8dan exactly, 11.5 = Gamma
         // (7K). Display-only: ratings and dan levels are unchanged.
         if (!Number.isFinite(level)) return "-";
-        return (Math.max(level, 0) + 0.5).toFixed(2);
+        if (level < 0) return "< 0.50";
+        return (level + 0.5).toFixed(2);
     }
     if (!Number.isFinite(level)) return "-";
     // below the lowest dan (level < 0) or above the highest measured dan:
@@ -3319,6 +3300,12 @@ function processMap(osuContent, mode, speedRate, options) {
         od: res.od,
         sectionDifficulties, rcSectionDifficulties, lnSectionDifficulties,
         sectionTimes,
+        // SPMTagClassifier perception integration schema 1
+        ...(options.includeTagEvidence ? {tagEvidence: {
+            schemaVersion: 1, keyCount, speedRate, clock: 'post-rate-ms',
+            modelIdentity: variant.id === 'compact' ? '55216a3abcf6653c4c78b2082c730d64a0ed4bc476d3e477c4789a39f309fb4e' : '5b0ddc61be53f5107f3b4dfa26a8397aa515e316c16b244878d1fc7039d0ba8f',
+            query: Array.from(res.b.t), demand: Array.from(res.D),
+        }} : {}),
         firstNoteTime: times[0], lastNoteTime: times[times.length - 1],
     };
 }
@@ -3842,11 +3829,9 @@ function processMap(osuContent, mode, speedRate, options) {
    * actions.field (geometry.cumulative CDF of raised-cosine density)    *
    * ------------------------------------------------------------------ */
 
-  // geometry.cumulative(t, budget, query, radius) -> Float64Array(query.length)
-  function cumulative(t, budget, query, radius) {
+  // Prefix moments of the raised-cosine action train.
+  function actionPrefix(t, budget, radius) {
     var n = t.length;
-    var out = new Float64Array(query.length);
-    if (n === 0) return out;
     var prefix = new Float64Array((n + 1) * 4);
     var origin = t[0];
     var omega = Math.PI / radius;
@@ -3861,6 +3846,17 @@ function processMap(osuContent, mode, speedRate, options) {
       prefix[b1 + 2] = prefix[b0 + 2] + bi * Math.cos(phase);
       prefix[b1 + 3] = prefix[b0 + 3] + bi * Math.sin(phase);
     }
+    return prefix;
+  }
+
+  function cumulative(t, budget, query, radius, prefix) {
+    var n = t.length;
+    var out = new Float64Array(query.length);
+    if (n === 0) return out;
+    // Both endpoints use the same action train; build its trigonometric moments once.
+    prefix = prefix || actionPrefix(t, budget, radius);
+    var origin = t[0];
+    var omega = Math.PI / radius;
     var twoPi = 2.0 * Math.PI;
     var twoR = 2.0 * radius;
     for (var j = 0; j < query.length; j++) {
@@ -3883,8 +3879,9 @@ function processMap(osuContent, mode, speedRate, options) {
     var m = start.length;
     var out = new Float64Array(m);
     if (time.length === 0) return out;
-    var left = cumulative(time, cost, start, radius);
-    var right = cumulative(time, cost, end, radius);
+    var prefix = actionPrefix(time, cost, radius);
+    var left = cumulative(time, cost, start, radius, prefix);
+    var right = cumulative(time, cost, end, radius, prefix);
     for (var i = 0; i < m; i++) {
       var v = right[i] - left[i];
       out[i] = v > 0.0 ? v : 0.0;
@@ -4775,12 +4772,20 @@ function processMap(osuContent, mode, speedRate, options) {
     var inner = Math.abs(1000.0 - width) / 2.0;
     var plateau = Math.min(1000.0, width) / width;
     var out = new Float64Array(nq);
+    var lo = 0, a = 0, bb = 0, hi = 0;
     for (i = 0; i < nq; i++) {
       var qi = q[i];
-      var lo = lowerBound(h, qi - outer);
-      var a = lowerBound(h, qi - inner);
-      var bb = upperBound(h, qi + inner);
-      var hi = upperBound(h, qi + outer);
+      if (i > 0 && !(qi >= q[i - 1])) {
+        lo = lowerBound(h, qi - outer);
+        a = lowerBound(h, qi - inner);
+        bb = upperBound(h, qi + inner);
+        hi = upperBound(h, qi + outer);
+      } else {
+        while (lo < m && h[lo] < qi - outer) lo++;
+        while (a < m && h[a] < qi - inner) a++;
+        while (bb < m && h[bb] <= qi + inner) bb++;
+        while (hi < m && h[hi] <= qi + outer) hi++;
+      }
       var left = (prefix[a] - prefix[lo]) - (a - lo) * (qi - outer);
       var right = (hi - bb) * (qi + outer) - (prefix[hi] - prefix[bb]);
       var v = (bb - a) * plateau + (left + right) / width;

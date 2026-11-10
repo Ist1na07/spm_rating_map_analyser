@@ -1,4 +1,4 @@
-# SPM Map Analyser
+# SPM Map Analyser v1.2.1
 
 一个 [tosu](https://tosu.app) 游戏内叠加界面，为 osu!mania **4K / 6K / 7K** 谱面提供实时难度评级、段位映射与键型分类。
 
@@ -37,7 +37,7 @@
 
 由此提供：
 
-- **整体标签** — 谱面主要键型以标签形式显示在评级下方
+- **整体标签** — 使用 **SPMTagClassifier v1.2.3** 稳定版，主标签与次要分支旁均显示连续时间多因子积分得到的整谱负担百分数：**分支贴合度 × 难度负担 × 动作物量**。直接复用当前 Detailed／Compact 评分同次生成的原始逐行难度场，不重复评分。它不是识别置信度或时间占比，各键型允许重叠；Hybrid 分别显示 RC／LN 家族份额。切换评分模型会同步更新标签与百分数，曲线平滑不会影响它们
 - **实时当前段** — 游玩时跟随进度，显示当前段的键型、置信度与等效 BPM
 - **键型时间轴** — 覆盖全谱的彩色条带，带播放游标
 
@@ -52,6 +52,7 @@
 - 段位节点按**两种 Rating Algorithm 模型分别实测**（SPM Rating v1.2.0-Detailed 与 SPM Rating v1.2.0-Compact），因此切换算法时段位阶梯的含义保持不变
 - 超出实测范围时显示 `< ...` / `> ...`（如 `< 0th`、`> Stellium`）
 - 段位值支持三种显示风格：**三段**（low / high）、**符号**（`-` / `+`）、**小数数字**（+0.5 偏移：8.5 对应 8dan 整、7K 中 11.5 对应 Gamma）
+- 小数模式下，低于 0th 时保留越界标记，显示 **`< 0.50`**，不再显示为 `0.50`
 - Hybrid 谱面额外显示 **Total** 段位
 
 ### 配色方案与界面风格
@@ -87,7 +88,7 @@
 
 ## 使用方法
 
-1. 前往 [Release](https://github.com/Ist1na07/spm_rating_map_analyser/releases/latest) 下载。
+1. 从本仓库下载 [v1.2.1 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将文件夹放入 tosu 的 `static` 目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
@@ -111,6 +112,13 @@
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.1
+- 完整内置 **SPMTagClassifier v1.2.3** 浏览器引擎，固定上游提交 `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`；使用稳定 7K 路径，包括 Break／BPM 修补与整谱负担积分聚合
+- 整谱标签百分数改为新算法的连续时间多因子积分份额，直接复用当前评分模型的原始难度场，无需重复评分
+- 修复数字段位低于 0th 时缺少 `<`，现在显示 `< 0.50`
+- 镜像共用恢复曲线、时间窗端点线性扫描、插值算子缓存、动作前缀矩复用：本机 371 张谱面的评分平均耗时由 149.5 降至 109.8 ms；同一新版分类器口径的完整流程由 207.7 降至 168.1 ms（缩短 19.1%）。详见 [验证记录](TESTING.md)
+- 保留原评分结果、段位表、曲线、设置、当前段置信度与仅 7K 显示分类的逻辑；不包含本地数据集与谱面
 
 ### v1.2.0
 - **算法升级到 SPM Rating v1.2.0-rc3 + 全新 SPMSubmodel RC/LN 模型**
@@ -185,20 +193,23 @@
 
 ## 开发
 
-`_dev/` 是本次版本用来构建与验证的本地工具，不属于插件本体，运行插件不需要它们：
+在包含 Git 历史的源码 checkout 中使用 Node 20 或更新版本运行：
 
-| 工具 | 作用 |
-|------|------|
-| `unit.js` | 曲线平滑、分段统计、元数据解析与段位标签的 Node 单元测试（`node _dev/unit.js [map.osu]`） |
-| `corpus.js` | 在一个 `.osu` 语料目录上批量校验引擎，输出平滑/分段不变量与耗时 |
-| `serve.js` | 模拟 tosu 服务器（`:24050`），提供 v2 websocket、设置与谱面文件接口，用于本地预览 |
-| `shot.js` | 对着模拟服务器用 Chrome 无头渲染 overlay 并输出 PNG |
-| `probe_map.js` | 打印单张谱面的评级、段位与分段列表（`node _dev/probe_map.js map.osu`） |
+```sh
+node --test tests/regression.test.cjs
+# 可选：读取本地数据集／谱面及 v1.2.3 分类器 checkout。
+node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
+```
+
+浏览器验收脚本为 `tests/browser.cjs`，测试依赖与运行方法见 [TESTING.md](TESTING.md)。
+
+测试逐值对比原 `1e99e4d` 引擎的评分，并覆盖原始难度场交接、双模型、倍率、时间窗边界与段位标签。可选语料检查另验证浏览器 bundle 与上游原件一致、Node／浏览器输出一致；JSON 报告仅输出到标准输出，不复制谱面到仓库。[TESTING.md](TESTING.md) 记录本次实际验收，[CLASSIFIER.md](CLASSIFIER.md) 记录固定的上游版本。
 
 ## 参考
 
 - [tosu](https://tosu.app) — 本 overlay 的运行环境
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — 难度算法
+- [SPMTagClassifier v1.2.3](https://github.com/Ist1na07/SPMTagClassifier/tree/v1.2.3) — 键型分类与整谱负担积分
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — RC / 长键子模型
 
 ## License

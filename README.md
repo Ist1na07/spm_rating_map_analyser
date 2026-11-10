@@ -1,4 +1,4 @@
-# SPM Map Analyser
+# SPM Map Analyser v1.2.1
 
 A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
 
@@ -37,7 +37,7 @@ The map is automatically split into sections, and each section is classified int
 
 What you get from it:
 
-- **Overall tags** — the map's dominant pattern types shown as chips under the rating
+- **Overall tags** — SPMTagClassifier **v1.2.3** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows separate RC/LN family shares. Switching the rating model updates the tags and percentages; smoothing does not
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
@@ -52,6 +52,7 @@ Pattern classification currently runs on **7K** maps only; 4K/6K maps show the s
 - The dan nodes are measured **separately for each rating-algorithm model** (SPM Rating v1.2.0-Detailed and SPM Rating v1.2.0-Compact), so switching the algorithm keeps the ladder's meaning
 - Outside the measured range it shows `< ...` / `> ...` (e.g. `< 0th`, `> Stellium`)
 - Three display styles for the dan value: **thirds** (low / high), **signs** (`-` / `+`), or a **decimal number** (+0.5 shift: 8.5 = 8th dan exactly, 11.5 = Gamma in 7K)
+- In number mode, levels below 0th retain the lower-bound marker: **`< 0.50`** rather than `0.50`
 - Hybrid maps additionally show a **Total** dan
 
 ### Colour schemes and UI styles
@@ -87,7 +88,7 @@ Two layouts under **UI Style**:
 
 ## Usage
 
-1. Download the latest release from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases/latest).
+1. Download the [v1.2.1 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.1 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder inside tosu's `static` directory.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
@@ -111,6 +112,13 @@ Two layouts under **UI Style**:
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
+
+### v1.2.1
+- Bundle the complete **SPMTagClassifier v1.2.3** browser engine, pinned to upstream commit `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`; use its stable 7K path, including Break/BPM fixes and perceptual whole-map aggregation
+- Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
+- Fix number-style dans below 0th to show `< 0.50`
+- Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On a local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
+- Existing ratings, dan tables, curves, settings, live-section confidence and 7K-only classification visibility are retained. Local datasets and beatmaps are not included
 
 ### v1.2.0
 - **Algorithm upgraded to SPM Rating v1.2.0-rc3 + the new SPMSubmodel RC/LN model**
@@ -186,20 +194,23 @@ Measured against [ManiaMapAnalyser](https://github.com/LeoBlackMT/osumania_map_a
 
 ## Development
 
-`_dev/` holds the local-only tooling used to build and verify this version. It is not part of the plugin and is not needed to run it:
+Run the checked-in regression tests from a Git checkout with Node 20 or newer:
 
-| Tool | What it does |
-|------|--------------|
-| `unit.js` | Node unit tests for the curve smoother, segment stats, metadata parser and dan labels (`node _dev/unit.js [map.osu]`) |
-| `corpus.js` | Batch-validates the engines over a directory of `.osu` files and reports smoothing/segment invariants and timings |
-| `serve.js` | Mock tosu server (`:24050`) that serves the overlay and emulates the v2 websocket, settings and beatmap-file endpoints for local preview |
-| `shot.js` | Renders the overlay headlessly in Chrome against the mock server and writes a PNG |
-| `probe_map.js` | Prints one map's rating, dans and segment list (`node _dev/probe_map.js map.osu`) |
+```sh
+node --test tests/regression.test.cjs
+# Optional: use your own local datasets/maps and a v1.2.3 classifier checkout.
+node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
+```
+
+The browser checks are also checked in as `tests/browser.cjs`; test-only setup is in [TESTING.md](TESTING.md).
+
+The tests compare ratings against the original `1e99e4d` engine and check the new rating-evidence handoff, both model variants, rate mods, window edges and dan labels. The optional corpus check also verifies the exact upstream browser bundle and Node/browser output parity. It prints a JSON report to stdout; chart files are never copied into the repository. See [TESTING.md](TESTING.md) for the completed local checks and [CLASSIFIER.md](CLASSIFIER.md) for the pinned upstream source.
 
 ## References
 
 - [tosu](https://tosu.app) — the runtime this overlay runs on
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — the difficulty algorithm
+- [SPMTagClassifier v1.2.3](https://github.com/Ist1na07/SPMTagClassifier/tree/v1.2.3) — the pattern classifier and whole-map burden integration
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — the RC / long-note sub-model
 
 ## License
