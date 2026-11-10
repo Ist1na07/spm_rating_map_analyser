@@ -90,4 +90,3 @@ test('vendored standalone API retains native 4K/6K, legacy and modern entry poin
     assert.equal(typeof tags.buildEvidenceMap, 'function');
     assert.equal(typeof tags.extractIntermediate, 'function');
 });
-

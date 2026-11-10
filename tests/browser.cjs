@@ -73,4 +73,3 @@ const {fixture}=require('./helpers.cjs');
   console.log(JSON.stringify({result:'PASS',scenarios:['raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','430px and 380px layout','Minimal/Compact','DT and paused playback','4K/6K original visibility','numeric <0.50'],screenshots:output},null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
-
