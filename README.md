@@ -37,7 +37,7 @@ The map is automatically split into sections, and each section is classified int
 
 What you get from it:
 
-- **Overall tags** — SPMTagClassifier **v1.2.3** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows separate RC/LN family shares. Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall tags** — SPMTagClassifier **v1.2.3** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
@@ -124,6 +124,7 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 ## Version history
 
 ### v1.2.1
+- Remove the “Burden” prefix; normalize the Hybrid chip’s RC/LN pair to 100% while retaining its relative proportion and leaving algorithm outputs unchanged
 - Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
 - Bundle the complete **SPMTagClassifier v1.2.3** browser engine, pinned to upstream commit `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`; use its stable 7K path, including Break/BPM fixes and perceptual whole-map aggregation
 - Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass

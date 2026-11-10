@@ -27,7 +27,10 @@ the cached analysis. Local-section confidence retains its previous meaning.
 
 The UI reads `overall.labelPercentages` for selected tags and
 `overall.percentages` for secondary branches, already on a 0–100 scale.
-Hybrid displays `overall.familyMass` as separate RC/LN percentages. Empty tag
+Hybrid displays `100 × rc / (rc + ln)` from `overall.familyMass` and its LN complement,
+so the displayed pair sums to 100% and retains the original proportion to
+integer rounding. The raw family masses and other tag percentages are unchanged.
+The tag row has no “Burden” prefix; percentage meaning remains in tooltips. Empty tag
 sets display “No dominant pattern” and retain the rating engine's family.
 
 The continuous integral, support definition, LN interval union and exact

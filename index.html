@@ -1299,10 +1299,6 @@ body {
             ? 'Integrated branch support × SPM difficulty burden × action load'
             : 'Integrated branch support × action load (no difficulty input)';
         elTagsRow.title = meaning + '; burden share, not accuracy or time share. Patterns may overlap.';
-        const label = document.createElement('span');
-        label.textContent = 'Burden';
-        label.style.cssText = 'font-size:11.5px;opacity:.75;align-self:center';
-        elTagsRow.prepend(label);
         if (!tags.length) {
             const unknown = document.createElement('span');
             unknown.textContent = 'No dominant pattern'; unknown.style.fontSize = '11.5px';
@@ -1313,9 +1309,16 @@ body {
             const tag = tags[i], pct = document.createElement('span');
             pct.className = 'pct'; pct.style.marginLeft = '5px';
             if (tag === 'hybrid') {
-                pct.textContent = 'RC ' + Math.round(100 * overall.familyMass.rc) + '% / LN '
-                    + Math.round(100 * overall.familyMass.ln) + '%';
-                chip.title = 'Hybrid: RC / LN family burden shares';
+                const total = overall.familyMass.rc + overall.familyMass.ln;
+                // Normalize only this display pair. Complementary rounding
+                // keeps the two integer percentages at exactly 100 in total.
+                if (total > 0) {
+                    const rcPct = Math.round(100 * overall.familyMass.rc / total);
+                    pct.textContent = 'RC ' + rcPct + '% / LN ' + (100 - rcPct) + '%';
+                } else {
+                    pct.textContent = 'RC — / LN —';
+                }
+                chip.title = 'Hybrid: relative RC / LN family burden shares (sum = 100%)';
             } else {
                 pct.textContent = Math.round(overall.labelPercentages[tag] || 0) + '%';
                 chip.title = tag === 'rc mix' || tag === 'ln mix'

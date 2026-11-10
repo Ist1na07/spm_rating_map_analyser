@@ -48,6 +48,15 @@ DT timing, pause marker, original 4K/6K classification visibility, and the
 visible numeric `< 0.50` label. Screenshots were visually inspected. The source
 and fixture data were local; no dataset was uploaded.
 
+### Tag display follow-up
+
+The browser renderer checks that the “Burden” prefix is absent and Hybrid
+masses 0.44/0.52 display as RC 46% / LN 54%. Additional pairs check 50/50,
+33/67, 0/100 and 100/0; both absent masses show dashes rather than a fabricated
+ratio. Rendering leaves the classifier output unchanged. Integer percentages
+use complementary rounding, guaranteeing a displayed total of 100% whenever
+the original pair has positive mass.
+
 ### Follow-up against the installed tosu v4.26.3
 
 The real settings endpoint reproduced `ENOENT` for a nested installation's
