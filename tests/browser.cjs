@@ -6,24 +6,31 @@ const {fixture}=require('./helpers.cjs');
  const root=path.resolve(__dirname,'..');
  const output=process.env.SPM_TEST_OUTPUT||fs.mkdtempSync(path.join(os.tmpdir(),'spm-analyser-browser-'));
  fs.mkdirSync(output,{recursive:true});
+ const counterName='outer/spm analyser';
+ const settingsRequests=[];
  const server=http.createServer((req,res)=>{
-  const name=new URL(req.url,'http://localhost').pathname.slice(1)||'index.html';
+  const name=new URL(req.url,'http://localhost').pathname.split('/').filter(Boolean).at(-1)||'index.html';
   if(!['index.html','spm_algorithm.js','tag_engine.js','dan_constants.json'].includes(name)){res.writeHead(404).end();return;}
   res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.json')?'application/json':'text/html');
-  res.end(fs.readFileSync(path.join(root,name)));
+  const body=fs.readFileSync(path.join(root,name));
+  res.end(name==='index.html'?body.toString()+'<script>window.COUNTER_PATH='+JSON.stringify(counterName)+'</script>':body);
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{channel:'chrome'}),headless:true});
  try{
   const page=await browser.newPage({viewport:{width:430,height:600},deviceScaleFactor:1});
   const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  let game,settingsSocket,mapText=process.argv[2]?fs.readFileSync(process.argv[2],'utf8'):fixture(7,true),settings={danDisplayStyle:'Number'};
+  let game,settingsSocket,mapText=process.argv[2]?fs.readFileSync(process.argv[2],'utf8'):fixture(7,true),settings={error:'ENOENT: missing nested settings parent'};
   await page.route('http://localhost:24050/**',route=>route.fulfill({contentType:'text/plain',body:mapText,headers:{'Access-Control-Allow-Origin':'*'}}));
   await page.routeWebSocket('ws://localhost:24050/**',socket=>{
-   if(socket.url().includes('/commands')){settingsSocket=socket;socket.onMessage(()=>socket.send(JSON.stringify({message:settings})));}
+   if(socket.url().includes('/commands')){
+    settingsSocket=socket;
+    const from=new URL(socket.url()).searchParams.get('l');
+    socket.onMessage(command=>{settingsRequests.push({from,command});socket.send(JSON.stringify({message:command===`getSettings:${from}`?settings:{error:'Wrong overlay'}}));});
+   }
    else game=socket;
   });
-  await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/outer/spm%20analyser/index.html`);
   await page.waitForFunction(()=>typeof TagClassifier!=='undefined');
   await page.evaluate(()=>{
    window.__ratings=[];window.__tags=[];
@@ -47,9 +54,21 @@ const {fixture}=require('./helpers.cjs');
    });
   }
   await chart(mapText);let state=await checkPercentages();assert.deepEqual(state.solid,state.expected);assert.equal(state.profile,'detail');assert.equal(state.calls,1);assert.equal(state.ratings,1);
+  assert(settingsRequests.length>0);
+  assert(settingsRequests.every(r=>r.from===counterName&&r.command===`getSettings:${counterName}`));
+  await page.waitForFunction(()=>document.querySelector('#settings-warning').textContent.includes('Detailed defaults'));
+  assert(await page.locator('#settings-warning').isVisible());
+  await page.screenshot({path:path.join(output,'overlay-settings-error.png')});
+  await change({error:undefined,danDisplayStyle:'Number'});
+  assert(!await page.locator('#settings-warning').isVisible());
   await page.screenshot({path:path.join(output,'overlay-default.png')});
   await change({algorithm:'SPM Rating v1.2.0-Compact'});state=await checkPercentages();assert.equal(state.profile,'compact');assert.equal(state.calls,2);assert.equal(state.ratings,2);assert.deepEqual(state.solid,state.expected);
   const percentages=state.percentages;
+  await change({error:'temporary settings read failure'});
+  assert((await page.locator('#settings-warning').textContent()).includes('keeping Compact'));
+  assert.equal((await checkPercentages()).calls,2);
+  await change({error:undefined});
+  assert(!await page.locator('#settings-warning').isVisible());
   await change({curveSmoothing:'Max'});state=await checkPercentages();assert.equal(state.calls,2);assert.deepEqual(state.percentages,percentages);
   await page.setViewportSize({width:380,height:600});state=await checkPercentages();assert.equal(state.calls,2);assert.deepEqual(state.percentages,percentages);
   await change({uiStyle:'Minimal',panelDensity:'Compact',colorScheme:'High Contrast'});
@@ -70,6 +89,6 @@ const {fixture}=require('./helpers.cjs');
   await page.screenshot({path:path.join(output,'overlay-below-zero.png')});
   const r=await page.evaluate(()=>__tags.at(-1));assert.equal(r.modelInfo.version,'1.2.3');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',scenarios:['raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','430px and 380px layout','Minimal/Compact','DT and paused playback','4K/6K original visibility','numeric <0.50'],screenshots:output},null,2));
+  console.log(JSON.stringify({result:'PASS',scenarios:['nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','430px and 380px layout','Minimal/Compact','DT and paused playback','4K/6K original visibility','numeric <0.50'],screenshots:output},null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

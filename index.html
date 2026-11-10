@@ -534,11 +534,19 @@ body {
 #container.compact #seg-bpm { font-size: 18px; min-width: 36px; }
 #container.compact #seg-tag { font-size: 14px; }
 #container.compact #tags-row { min-height: 0; }
+#settings-warning {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text);
+    border-left: 2px solid var(--ln);
+    padding-left: 7px;
+}
 .hidden { display: none !important; }
 </style>
 </head>
 <body>
 <div id="container" class="hidden">
+    <div id="settings-warning" class="hidden" role="status"></div>
     <div id="summary-row" class="hidden">
         <span id="summary-main"></span>
         <span id="summary-meta"></span>
@@ -614,16 +622,17 @@ body {
     const TOSU_PORT = 24050;
     const MOD_BIT_FLAGS = { EZ: 2, HR: 16, DT: 64, HT: 256, NC: 512 };
 
-    // tosu injects window.COUNTER_PATH; fall back to the folder name so the
-    // settings channel also works when the page is opened outside tosu
+    // tosu appends COUNTER_PATH after the overlay scripts. Derive the full
+    // relative directory before opening the settings socket, including nested
+    // folders and decoded spaces, so its ?l and getSettings payload agree.
     if (!window.COUNTER_PATH) {
         try {
             const segs = location.pathname.split('/').filter(Boolean);
-            const last = segs[segs.length - 1] || '';
-            window.COUNTER_PATH = /\.html?$/i.test(last)
-                ? (segs[segs.length - 2] || '') : last;
+            if (/\.html?$/i.test(segs[segs.length - 1] || '')) segs.pop();
+            window.COUNTER_PATH = decodeURI(segs.join('/'));
         } catch { window.COUNTER_PATH = ''; }
     }
+    const counterPath = window.COUNTER_PATH;
 
     // v0.5.0 design system: two family anchors reused across badges,
     // sub-ratings, dan values, difficulty curves, tag chips and the
@@ -948,6 +957,7 @@ body {
 
     const elContainer = document.getElementById('container');
     const elLoading = document.getElementById('loading');
+    const elSettingsWarning = document.getElementById('settings-warning');
     const elRating = document.getElementById('rating');
     const elHeroDan = document.getElementById('hero-dan');
     const elSummaryRow = document.getElementById('summary-row');
@@ -1688,6 +1698,7 @@ body {
 
         // Main rating = total SR
         elRating.textContent = result.rating.toFixed(2);
+        elRating.title = 'SPM Rating v1.2.0-' + result.modelLabel;
         elTypeBadge.textContent = result.mapType;
         elTypeBadge.className = result.mapType.toLowerCase();
 
@@ -2073,12 +2084,24 @@ body {
     let settingsWs = null;
     let settingsPollTimer = null;
     let lastSettingsJson = null;
+    let hasReceivedSettings = false;
 
     function handleSettingsMessage(event) {
         let data;
         try { data = JSON.parse(event.data); } catch { return; }
         const message = data && data.message;
-        if (!message || typeof message !== 'object' || message.error) return;
+        if (!message || typeof message !== 'object') return;
+        if (message.error) {
+            const model = algorithmModel() === 'compact' ? 'Compact' : 'Detailed';
+            elSettingsWarning.textContent = 'Settings unavailable — '
+                + (hasReceivedSettings ? 'keeping ' + model : model + ' defaults');
+            elSettingsWarning.title = String(message.error)
+                + '\nInstall the overlay folder directly under tosu/static; nested folders may prevent tosu from creating its settings file.';
+            elSettingsWarning.classList.remove('hidden');
+            return;
+        }
+        hasReceivedSettings = true;
+        elSettingsWarning.classList.add('hidden');
         // dict shape: {danDisplayStyle: "...", showTags: true, ...}
         const next = JSON.stringify(message);
         if (next === lastSettingsJson) return;
@@ -2091,14 +2114,14 @@ body {
 
     function sendGetSettings() {
         if (settingsWs && settingsWs.readyState === 1) {
-            settingsWs.send(`getSettings:${window.COUNTER_PATH || ''}`);
+            settingsWs.send(`getSettings:${counterPath || ''}`);
         }
     }
 
     function connectSettings() {
         try {
             settingsWs = new WebSocket(
-                `ws://localhost:${TOSU_PORT}/websocket/commands?l=${encodeURIComponent(window.COUNTER_PATH || '')}`);
+                `ws://localhost:${TOSU_PORT}/websocket/commands?l=${encodeURIComponent(counterPath || '')}`);
         } catch { return; }
         settingsWs.onopen = sendGetSettings;
         settingsWs.onmessage = handleSettingsMessage;

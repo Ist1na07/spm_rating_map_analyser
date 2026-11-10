@@ -41,6 +41,8 @@
 - **实时当前段** — 游玩时跟随进度，显示当前段的键型、置信度与等效 BPM
 - **键型时间轴** — 覆盖全谱的彩色条带，带播放游标
 
+**分段标签为何大多与旧版相同？** v1.2.3 的默认稳定路径保留原局部分类专家，仅修补 Break 判据与等效 BPM；本版主要变化是整谱多分支负担聚合，不是替换全部局部分类模型。上游 `modern` 是另一个未替代默认的 LN 候选，不能直接与当前难度积分接口混用。详见 [上游约定](https://github.com/Ist1na07/SPMTagClassifier/blob/v1.2.3/docs/perception.md)。
+
 键型分类目前仅在 **7K** 谱面运行；4K / 6K 谱面显示摘要、难度评级、段位与曲线。
 
 ### 段位映射
@@ -89,8 +91,16 @@
 ## 使用方法
 
 1. 从本仓库下载 [v1.2.1 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
-2. 将文件夹放入 tosu 的 `static` 目录。
+2. 将**直接包含 `index.html`、`settings.json`、`metadata.txt` 的那一层文件夹**放入 tosu 的 `static` 目录，不要再套一层解压目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
+
+### 设置报错或新旧难度相差 0.0几
+
+推荐目录为 `tosu/static/spm_rating_map_analyser_v1.2.1/index.html`。tosu v4.26.3 在嵌套安装时可能无法创建对应的设置文件父目录，报 `ENOENT`。可改为上述单层安装；若保留嵌套结构，例如 `static/外层/内层/index.html`，须先创建 `tosu/settings/外层/`，再打开设置页。不要删除已有 `.values.json` 文件。
+
+插件已修复嵌套路径和 tosu 延迟注入 `COUNTER_PATH` 导致的 `Wrong overlay`；设置读取失败时会在面板顶部显示正在使用默认设置还是保留上次设置，不再静默忽略。鼠标悬停星数可查看当前 Detailed／Compact 模型。更新后刷新已打开的 overlay 页面。
+
+tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。比较新旧版本时应保持 **Rating Algorithm、Sub Difficulty Scheme 和倍率一致**；否则 Detailed 与 Compact 本来就可能相差 0.01～0.05 等数值。同模型、同谱面和同倍率下，本次优化不改变评分。旧配置可在 tosu 的 `settings/<旧目录>.values.json` 中找到；迁移前备份，只复制到对应新目录的设置文件，不覆盖旧文件。
 
 ## 设置
 
@@ -114,6 +124,7 @@
 ## 版本历史
 
 ### v1.2.1
+- 跟进修复：设置 websocket 使用完整且固定的插件相对目录，兼容嵌套／含空格路径与 tosu 延迟注入；增加设置失败提示与当前评分模型 tooltip，避免读取失败后误把默认 Detailed 与旧配置 Compact 作比较
 - 完整内置 **SPMTagClassifier v1.2.3** 浏览器引擎，固定上游提交 `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`；使用稳定 7K 路径，包括 Break／BPM 修补与整谱负担积分聚合
 - 整谱标签百分数改为新算法的连续时间多因子积分份额，直接复用当前评分模型的原始难度场，无需重复评分
 - 修复数字段位低于 0th 时缺少 `<`，现在显示 `< 0.50`

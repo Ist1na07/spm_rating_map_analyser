@@ -48,9 +48,38 @@ DT timing, pause marker, original 4K/6K classification visibility, and the
 visible numeric `< 0.50` label. Screenshots were visually inspected. The source
 and fixture data were local; no dataset was uploaded.
 
-A live osu!/tosu gameplay session was not available. Networking and settings
-protocols remain the existing implementation; the browser checks exercise the
-same HTTP/websocket handlers with local fixtures.
+### Follow-up against the installed tosu v4.26.3
+
+The real settings endpoint reproduced `ENOENT` for a nested installation's
+missing settings parent. Its creation and migration of the old choices restored
+the settings page. A second failure was reproduced: the initial socket used
+only the leaf folder, while tosu's later injected full path changed the
+`getSettings` payload, returning `Wrong overlay`. The full directory is now
+derived before connection and held fixed. The browser fixture reproduces this
+late-injection order, nested/space paths, settings errors and recovery.
+
+The installed old version used Compact; the failed new settings load left
+Detailed defaults. On the current local chart at NM these are 8.758589537484427
+and 8.73010777619925, displaying 8.76 and 8.73. Both installed scoring engines
+produced exactly equal complete results when the same model and rate were used
+(HT/NM/DT and both variants). After repairing settings, the actual live old/new
+overlay pages both displayed total 8.76, RC 8.39, LN 9.06, RC dan 10.98,
+LN dan 12.07, Total dan 11.58 and current-segment difficulty 8.37. The real tosu
+settings page rendered all 17 definitions with the retained choices. Screenshots
+were inspected. The live client was in the beatmap editor; gameplay behavior
+was not changed or separately exercised.
+
+Across all 332 local 7K dataset charts at NM, exact interval intersection
+compared old and stable v1.2.3 primary segment tags: 99.9220% of jointly covered
+time retained the same tag. Only four charts changed, all Break-to-active
+repairs (48.4925 s out of 62,192.778 s); an additional 157 ms differed in display
+envelope coverage. This is expected from the upstream stable contract, not an
+accuracy score. Local primary tags do not depend on the difficulty input; this
+comparison uses the action-only call to avoid unnecessary repeated scoring. Reproduce it with:
+
+```sh
+node tests/local-tags.cjs ../dataset/spm_dataset-0.4.0
+```
 
 Re-run the browser checks with Chrome installed (Playwright is a test-only
 dependency, not used by the overlay):

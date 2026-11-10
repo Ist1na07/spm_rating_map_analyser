@@ -41,6 +41,8 @@ What you get from it:
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
+**Why do most local labels look unchanged?** The v1.2.3 stable path retains the archived local expert, with Break-gate and equivalent-BPM fixes. Its main update is whole-map multi-branch burden aggregation, not replacement of every local classifier. Upstream `modern` is a separate LN candidate, not the accepted default, and cannot be passed the current rated-integration options. See the [upstream contract](https://github.com/Ist1na07/SPMTagClassifier/blob/v1.2.3/docs/perception.md).
+
 Pattern classification currently runs on **7K** maps only; 4K/6K maps show the summary, difficulty rating, dan and curve.
 
 ### Dan mapping
@@ -89,8 +91,16 @@ Two layouts under **UI Style**:
 ## Usage
 
 1. Download the [v1.2.1 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.1 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
-2. Place the folder inside tosu's `static` directory.
+2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
+
+### Settings errors or small rating differences after upgrading
+
+Use `tosu/static/spm_rating_map_analyser_v1.2.1/index.html`. With a nested installation, tosu v4.26.3 can fail to create the settings-file parent directory (`ENOENT`). Flatten the installation, or, for an existing `static/outer/inner/index.html`, create `tosu/settings/outer/` before opening Settings. Keep existing `.values.json` files.
+
+The overlay now uses the full, fixed relative directory for its settings socket, avoiding `Wrong overlay` when tosu injects `COUNTER_PATH` after startup. A settings-read failure displays whether defaults or previously loaded settings are in use. Hover the star value to check the active Detailed/Compact model. Refresh open overlay pages after updating.
+
+Tosu stores settings separately for each installation directory. Match **Rating Algorithm, Sub Difficulty Scheme and rate** when comparing versions: Detailed and Compact can legitimately differ by a few hundredths. Rating optimization preserves results for the same model, chart and rate. Previous choices are in tosu's `settings/<old-folder>.values.json`; back up and copy them to the corresponding new settings file without overwriting the old file.
 
 ## Settings
 
@@ -114,6 +124,7 @@ Two layouts under **UI Style**:
 ## Version history
 
 ### v1.2.1
+- Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
 - Bundle the complete **SPMTagClassifier v1.2.3** browser engine, pinned to upstream commit `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`; use its stable 7K path, including Break/BPM fixes and perceptual whole-map aggregation
 - Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
 - Fix number-style dans below 0th to show `< 0.50`

@@ -5,9 +5,13 @@
 commit `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`, file `dist/tag-engine.js`.
 MIT, copyright (c) 2026 Ist1na; see [LICENSE](LICENSE).
 
-The overlay calls the stable 7K path. All upstream entry points and model paths
-remain in the bundle; the overlay continues to hide pattern classification on
-4K/6K, preserving its existing interface.
+The overlay calls the stable 7K path. This retains the archived local expert
+and confidence, apart from the selected Break/BPM repairs; the new integral
+changes the whole-map decision and burden readout. Most segment labels should
+therefore remain identical. The separate `modern` LN candidate is not the
+accepted default and the upstream API rejects combining it with `ratingEvidence`.
+All upstream entry points and model paths remain in the bundle; the overlay
+continues to hide pattern classification on 4K/6K, preserving its existing interface.
 
 `processMap(..., {includeTagEvidence:true})` additionally returns `tagEvidence`:
 schema version 1, native keys, rate, post-rate-ms clock, the released model
