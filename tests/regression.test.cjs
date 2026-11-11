@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
-const {loadRating, loadTags, fixture} = require('./helpers.cjs');
+const {loadRating, loadTags, fixture, patternFixture} = require('./helpers.cjs');
 const root = path.resolve(__dirname, '..');
 const baseline = execFileSync('git', ['show', '1e99e4d:spm_algorithm.js'], {cwd: root, encoding: 'utf8'});
 const old = loadRating(baseline), current = loadRating(fs.readFileSync(path.join(root, 'spm_algorithm.js'), 'utf8'));
@@ -44,7 +44,8 @@ test('reused raw rating evidence matches native fractional-rate clocks for both 
         const {tagEvidence, ...plain} = result;
         assert.deepEqual(plain, old.engine.processMap(text, 'full', rate, {model}));
         const r = tags.analyzeMap(text, {speedRate: rate, ratingEvidence: tagEvidence});
-        assert.equal(r.modelInfo.version, '1.2.3');
+        assert.equal(r.modelInfo.version, '1.2.4');
+        assert.equal(r.modelInfo.localExpert, 'original56-joint-fixed-ridge01');
         assert.equal(r.modelInfo.perception.profile, model);
         assert.equal(r.overall.perception.difficultyAvailable, true);
         assert.equal(tagEvidence.query[0], 1000 / rate);
@@ -89,4 +90,36 @@ test('vendored standalone API retains native 4K/6K, legacy and modern entry poin
     assert.equal(typeof tags.buildCachedMap, 'function');
     assert.equal(typeof tags.buildEvidenceMap, 'function');
     assert.equal(typeof tags.extractIntermediate, 'function');
+});
+
+
+test('pinned 184408e activates the retuned local expert and keeps classic explicit', () => {
+    const text = fixture(7, true);
+    const stable = tags.analyzeMap(text), classic = tags.analyzeMap(text, {aggregation: 'classic'});
+    assert.equal(stable.modelInfo.localExpert, 'original56-joint-fixed-ridge01');
+    assert.equal(classic.modelInfo.localExpert, 'archived');
+    assert.equal(stable.modelInfo.segmentReadout.stepMs, 500);
+    assert.equal(stable.modelInfo.segmentReadout.cutContextMs, 4000);
+    assert.throws(() => tags.analyzeMap(text, {aggregation: 'classic', ratingEvidence: {}}), /UnusedRating/);
+});
+
+test('new hand readout excludes false chordstream but retains real hand substitutions', () => {
+    for (const [masks, expectedCut] of [[[[0,1,2],[4,5]], false], [[[0,2,4],[1,5]], true]]) {
+        const r = tags.analyzeMap(patternFixture(masks));
+        const middle = r.segments.filter(s => s.end > 9000 && s.start < 17000);
+        assert(middle.length);
+        assert.equal(middle.some(s => ['dense chordstream', 'fast chordstream'].includes(s.tag)), expectedCut);
+    }
+});
+
+test('same-type cadence plateaus retain 150/200 BPM and DT225/300', () => {
+    const text = patternFixture([[0,1,4],[2,5,6]], [[200,100],[267,75]]);
+    for (const rate of [1, 1.5]) {
+        const r = tags.analyzeMap(text, {speedRate: rate});
+        for (const [time, bpm] of [[10000,150*rate],[30000,200*rate]]) {
+            const s = r.segments.find(s => s.start <= time/rate && s.end > time/rate);
+            assert.equal(s.equivBpm, bpm);
+            assert(s.evidence.cadence);
+        }
+    }
 });

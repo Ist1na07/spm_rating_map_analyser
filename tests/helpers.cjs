@@ -23,4 +23,14 @@ function filesUnder(root) {
         return e.isDirectory() ? filesUnder(p) : e.name.endsWith('.osu') ? [p] : [];
     });
 }
-module.exports = {loadRating, loadTags, fixture, filesUnder};
+function patternFixture(masks, steps = [[240,100]]) {
+    const notes = [];
+    let t = 1000, row = 0;
+    for (const [count, step] of steps) for (let i = 0; i < count; i++, row++, t += step) {
+        for (const col of masks[row % masks.length]) {
+            notes.push(`${Math.floor((col + .5) * 512 / 7)},192,${Math.round(t)},1,0,0:0:0:0:`);
+        }
+    }
+    return '[General]\nMode:3\n[Difficulty]\nCircleSize:7\nOverallDifficulty:8\n[TimingPoints]\n0,400,4,2,1,50,1,0\n[HitObjects]\n' + notes.join('\n');
+}
+module.exports = {loadRating, loadTags, fixture, filesUnder, patternFixture};

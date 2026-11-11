@@ -37,11 +37,11 @@ The map is automatically split into sections, and each section is classified int
 
 What you get from it:
 
-- **Overall tags** — SPMTagClassifier **v1.2.3** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall tags** — SPMTagClassifier **1.2.4 + commit `184408e`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
-**Why do most local labels look unchanged?** The v1.2.3 stable path retains the archived local expert, with Break-gate and equivalent-BPM fixes. Its main update is whole-map multi-branch burden aggregation, not replacement of every local classifier. Upstream `modern` is a separate LN candidate, not the accepted default, and cannot be passed the current rated-integration options. See the [upstream contract](https://github.com/Ist1na07/SPMTagClassifier/blob/v1.2.3/docs/perception.md).
+**Local classifier updated:** the pinned [184408e snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/src/index.cjs) uses jointly retuned original 56D RC/LN expert parameters and a fixed reference predictor for whole-map aggregation. It also includes static-hand false chordstream exclusion, the LN Wildcard rest exemption and stable within-type tempo plateaus. Local labels can now differ from the prior v1.2.3 engine. This is the commit's unreleased retune, not merely the published v1.2.4 bundle; `modern` remains a separate opt-in candidate. See [CLASSIFIER.md](CLASSIFIER.md).
 
 Pattern classification currently runs on **7K** maps only; 4K/6K maps show the summary, difficulty rating, dan and curve.
 
@@ -126,10 +126,10 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 ### v1.2.1
 - Remove the “Burden” prefix; normalize the Hybrid chip’s RC/LN pair to 100% while retaining its relative proportion and leaving algorithm outputs unchanged
 - Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
-- Bundle the complete **SPMTagClassifier v1.2.3** browser engine, pinned to upstream commit `6ed4e6b130e1e86ef48dcc01f191ac5aabddf8d0`; use its stable 7K path, including Break/BPM fixes and perceptual whole-map aggregation
+- Bundle the complete classifier from **SPMTagClassifier `184408e`** (`184408e3154e082946a4c2355e724daa118fb0e9`, package 1.2.4 plus unreleased local-expert retune), including the selected RC/LN parameters, fixed integral prior and segment-readout repairs
 - Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
 - Fix number-style dans below 0th to show `< 0.50`
-- Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On a local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
+- Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On the initial v1.2.3 integration's local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
 - Existing ratings, dan tables, curves, settings, live-section confidence and 7K-only classification visibility are retained. Local datasets and beatmaps are not included
 
 ### v1.2.0
@@ -210,7 +210,7 @@ Run the checked-in regression tests from a Git checkout with Node 20 or newer:
 
 ```sh
 node --test tests/regression.test.cjs
-# Optional: use your own local datasets/maps and a v1.2.3 classifier checkout.
+# Optional: use your own local datasets/maps and classifier runtime source pinned to `184408e`.
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```
 
@@ -222,7 +222,7 @@ The tests compare ratings against the original `1e99e4d` engine and check the ne
 
 - [tosu](https://tosu.app) — the runtime this overlay runs on
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — the difficulty algorithm
-- [SPMTagClassifier v1.2.3](https://github.com/Ist1na07/SPMTagClassifier/tree/v1.2.3) — the pattern classifier and whole-map burden integration
+- [SPMTagClassifier 184408e](https://github.com/Ist1na07/SPMTagClassifier/tree/184408e3154e082946a4c2355e724daa118fb0e9) — the pattern classifier and whole-map burden integration
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — the RC / long-note sub-model
 
 ## License

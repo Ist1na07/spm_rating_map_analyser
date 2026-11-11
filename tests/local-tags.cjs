@@ -1,8 +1,10 @@
 const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
 const {loadTags,filesUnder}=require('./helpers.cjs');
 const root=path.resolve(__dirname,'..');
-if(!process.argv[2])throw Error('Usage: node tests/local-tags.cjs <7K-dataset-folder>');
-const old=loadTags(execFileSync('git',['show','1e99e4d:tag_engine.js'],{cwd:root,encoding:'utf8'})),now=loadTags(fs.readFileSync(path.join(root,'tag_engine.js'),'utf8'));
+if(!process.argv[2])throw Error('Usage: node tests/local-tags.cjs <7K-dataset-folder> [candidate-git-ref]');
+const candidate=process.argv[3];
+const candidateSource=candidate?execFileSync('git',['show',candidate+':tag_engine.js'],{cwd:root,encoding:'utf8'}):fs.readFileSync(path.join(root,'tag_engine.js'),'utf8');
+const old=loadTags(execFileSync('git',['show','1e99e4d:tag_engine.js'],{cwd:root,encoding:'utf8'})),now=loadTags(candidateSource);
 const report={charts:0,chartsWithChangedLocalTag:0,coveredMs:0,changedMs:0,envelopeDifferenceMs:0,transitions:{},failures:[]};
 for(const file of filesUnder(process.argv[2])){
  try{

@@ -5,14 +5,14 @@ const {performance} = require('node:perf_hooks'), {execFileSync} = require('node
 const {loadRating, loadTags, filesUnder, fixture} = require('./helpers.cjs');
 const root = path.resolve(__dirname, '..');
 const dataset = process.argv[2], maps = process.argv[3], upstream = process.argv[4];
-if (!dataset || !maps) throw Error('Usage: node tests/corpus.cjs <dataset> <maps> [SPMTagClassifier-v1.2.3-checkout]');
+if (!dataset || !maps) throw Error('Usage: node tests/corpus.cjs <dataset> <maps> [SPMTagClassifier-184408e-source]');
 const old = loadRating(execFileSync('git', ['show', '1e99e4d:spm_algorithm.js'], {cwd: root, encoding: 'utf8'})).engine;
 const current = loadRating(fs.readFileSync(path.join(root, 'spm_algorithm.js'), 'utf8')).engine;
 const bundle = fs.readFileSync(path.join(root, 'tag_engine.js'), 'utf8'), tags = loadTags(bundle);
 let reference;
 if (upstream) {
     assert.equal(bundle, fs.readFileSync(path.join(upstream, 'dist/tag-engine.js'), 'utf8'));
-    assert.equal(require(path.resolve(upstream, 'package.json')).version, '1.2.3');
+    assert.equal(require(path.resolve(upstream, 'package.json')).version, '1.2.4');
     reference = require(path.resolve(upstream, 'src/index.cjs'));
 }
 const files = [];
@@ -47,6 +47,7 @@ for (let i=0;i<files.length;i++) {
         if (b.keyCount===7) {
             const t=performance.now(),r=tags.analyzeMap(text,{speedRate:rate,ratingEvidence:tagEvidence});tagMs=performance.now()-t;
             assert.equal(r.modelInfo.perception.profile,model);
+            assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
             assert.equal(r.overall.perception.difficultyAvailable,true);
             assert.equal(r.segments[0].start,r.map.firstNote);
             assert.equal(r.segments.at(-1).end,r.map.lastNote);

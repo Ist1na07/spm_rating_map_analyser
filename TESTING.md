@@ -2,7 +2,7 @@
 
 ## Automated checks
 
-- `node --test tests/regression.test.cjs`: six tests passed. Includes 38 full
+- `node --test tests/regression.test.cjs`: nine tests passed. Includes 38 full
   rating comparisons across 4K/6K/7K, taps/holds, Detailed/Compact, HT/NM/DT and
   legacy sub-difficulty display; all result fields and curve buckets equal
   the original engine. Numeric lower-bound labels and optimized window helpers
@@ -13,12 +13,18 @@
   the standalone map. Models and rates alternate deterministically. No rating,
   dan or curve differences; all 334 7K rated classifications consumed difficulty
   successfully. Twelve real-map results matched the upstream Node API exactly.
-- The vendored bundle equals upstream v1.2.3 `dist/tag-engine.js` byte for byte.
-  Upstream `npm test`: 57 passed; one optional updater test was skipped because
-  its separate `.upstream` fixture was absent. This overlay's own integration
-  is covered by the regression and browser checks.
+- The vendored bundle equals `dist/tag-engine.js` from full commit
+  `184408e3154e082946a4c2355e724daa118fb0e9` byte for byte. Package version 1.2.4
+  alone is insufficient to identify this unreleased retune. The selected
+  upstream API, perception and segment-readout tests passed (15 tests); the
+  full research/build suite was not run. No fitting was performed.
 
-## Performance on the local corpus
+The current pinned run, using the same corpus protocol below, measured mean
+rating time 148.9 → 110.5 ms and rating + the same new classifier 212.8 →
+174.4 ms (18.0% shorter than the unoptimized integration). These are local
+single-pass timings, not accuracy measurements.
+
+## Historical performance: initial v1.2.3 integration
 
 Node on the development Windows machine; two synthetic warm-up ratings per
 engine; each real chart measured once, alternating engine order. Same texts,
@@ -29,8 +35,8 @@ models and rates; exact result equality was checked alongside timing.
 | Rating | 149.5 ms | 109.8 ms |
 | Rating + the same v1.2.3 classifier | 207.7 ms | 168.1 ms |
 
-The upgraded pipeline is 19.1% faster than the unoptimized integration. This
-comparison holds the **new classifier** fixed; it does not compare old and new
+That v1.2.3 pipeline was 19.1% faster than its unoptimized integration. This
+comparison held the **v1.2.3 classifier** fixed; it does not compare old and new
 classification algorithms or promise these timings on every machine.
 
 The optimizations reuse the column-independent recovery field for the mirror,
@@ -38,7 +44,14 @@ advance sorted window endpoints linearly, share interpolation operators and
 build action-prefix moments once for both integration endpoints. No sampling,
 model simplification or floating-point expression reordering is used.
 
-## Browser checks
+## Browser checks at 184408e
+
+In addition to the existing UI cases below, the actual renderer passed live
+playhead transitions at 150/200 and DT225/300 BPM, and a static-hand fixture
+showed Wildcard with 18% classification support instead of a false chordstream
+or fabricated zero. The default `localExpert` is asserted to be
+`original56-joint-fixed-ridge01`; `classic` is explicitly `archived`.
+
 
 The actual overlay scripts were run in headless Chrome, with intercepted local
 HTTP and websocket fixtures emulating tosu. Checked the rendered 430 px and
@@ -57,7 +70,7 @@ ratio. Rendering leaves the classifier output unchanged. Integer percentages
 use complementary rounding, guaranteeing a displayed total of 100% whenever
 the original pair has positive mass.
 
-### Follow-up against the installed tosu v4.26.3
+### Earlier live tosu check (v1.2.3 classifier)
 
 The real settings endpoint reproduced `ENOENT` for a nested installation's
 missing settings parent. Its creation and migration of the old choices restored
@@ -68,7 +81,7 @@ derived before connection and held fixed. The browser fixture reproduces this
 late-injection order, nested/space paths, settings errors and recovery.
 
 The installed old version used Compact; the failed new settings load left
-Detailed defaults. On the current local chart at NM these are 8.758589537484427
+Detailed defaults. On the local chart used in that check at NM these are 8.758589537484427
 and 8.73010777619925, displaying 8.76 and 8.73. Both installed scoring engines
 produced exactly equal complete results when the same model and rate were used
 (HT/NM/DT and both variants). After repairing settings, the actual live old/new
@@ -82,12 +95,12 @@ Across all 332 local 7K dataset charts at NM, exact interval intersection
 compared old and stable v1.2.3 primary segment tags: 99.9220% of jointly covered
 time retained the same tag. Only four charts changed, all Break-to-active
 repairs (48.4925 s out of 62,192.778 s); an additional 157 ms differed in display
-envelope coverage. This is expected from the upstream stable contract, not an
-accuracy score. Local primary tags do not depend on the difficulty input; this
-comparison uses the action-only call to avoid unnecessary repeated scoring. Reproduce it with:
+envelope coverage. This was expected from the old v1.2.3 stable contract, not an
+accuracy score; it does not describe the current retuned classifier. Local primary tags do not depend on the difficulty
+input; this comparison uses the action-only call to avoid unnecessary repeated scoring. Reproduce it with:
 
 ```sh
-node tests/local-tags.cjs ../dataset/spm_dataset-0.4.0
+node tests/local-tags.cjs ../dataset/spm_dataset-0.4.0 9105c09
 ```
 
 Re-run the browser checks with Chrome installed (Playwright is a test-only
