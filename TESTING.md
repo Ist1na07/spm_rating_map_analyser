@@ -2,13 +2,15 @@
 
 ## Automated checks
 
-- `node --test tests/regression.test.cjs`: nine tests passed. Includes 38 full
+- `node --test tests/regression.test.cjs`: eleven tests passed. Includes 38 full
   rating comparisons across 4K/6K/7K, taps/holds, Detailed/Compact, HT/NM/DT and
   legacy sub-difficulty display; all result fields and curve buckets equal
   the original engine. Numeric lower-bound labels and optimized window helpers
   are checked separately. Native 4K/6K tests cover taps/holds at HT/NM/DT,
   five-class composition and segment difficulty, and reject accidental use of
-  the 7K-only rating-evidence protocol.
+  the 7K-only rating-evidence protocol. Two new tests verify that sustained
+  sensor input reaches both rated Break gates and that unrated/classic/modern/
+  legacy/4K/6K outputs retain their previous behavior.
 - `node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier`: 371 local
   charts passed (19 4K, 18 6K, 334 7K). Includes all 332 local 7K dataset charts,
   size-stratified 4K/6K samples, the longest file from each course directory and
@@ -17,13 +19,16 @@
   successfully. All 37 4K/6K charts now also passed native coarse classification
   and segment-stat checks. Twelve real-map results matched the upstream Node
   API exactly, stratified as four each for 4K, 6K and 7K.
+  All 334 rated calls reported `breakPolicy.ratingUsed:true`; 130 charts
+  exercised a sustained-pressure rest veto with their actual raw difficulty.
+  This is runtime coverage, not a human-annotated accuracy measurement.
 - The vendored bundle equals `dist/tag-engine.js` from full commit
-  `184408e3154e082946a4c2355e724daa118fb0e9` byte for byte. Package version 1.2.4
-  alone is insufficient to identify this unreleased retune. The selected
-  upstream API, perception and segment-readout tests passed (15 tests); the
-  full research/build suite was not run. No fitting was performed.
+  `b311c408ef02d6705d30b51a4ea789d3e86d2976` byte for byte. Package version 1.2.4
+  alone is insufficient to identify this unreleased retune and Break repair.
+  The selected upstream API, perception, segment-readout and Break-pressure
+  tests passed (20 tests); the full research/build suite was not run. No fitting was performed.
 
-The earlier pinned 7K-only integration run, using the same corpus protocol below, measured mean
+The earlier `184408e` 7K-only integration run measured mean
 rating time 148.9 → 110.5 ms and rating + the same new classifier 212.8 →
 174.4 ms (18.0% shorter than the unoptimized integration). These are local
 single-pass timings, not accuracy measurements.
@@ -48,7 +53,13 @@ advance sorted window endpoints linearly, share interpolation operators and
 build action-prefix moments once for both integration endpoints. No sampling,
 model simplification or floating-point expression reordering is used.
 
-## Browser checks at 184408e
+## Browser checks at b311c40
+
+Both Detailed and Compact report the new `sustained-native-demand-r1` policy
+with rating input enabled, still using only one rating pass per change.
+The real 7K LN chart `bm_0005.osu` exercised one protected parent in the browser
+run; its rendered tags, curve and timeline were inspected alongside the
+full-width tag row and real 6K display.
 
 In addition to the existing UI cases below, the actual renderer passed live
 playhead transitions at 150/200 and DT225/300 BPM, and a static-hand fixture
@@ -122,8 +133,10 @@ compared old and stable v1.2.3 primary segment tags: 99.9220% of jointly covered
 time retained the same tag. Only four charts changed, all Break-to-active
 repairs (48.4925 s out of 62,192.778 s); an additional 157 ms differed in display
 envelope coverage. This was expected from the old v1.2.3 stable contract, not an
-accuracy score; it does not describe the current retuned classifier. Local primary tags do not depend on the difficulty
-input; this comparison uses the action-only call to avoid unnecessary repeated scoring. Reproduce it with:
+accuracy score; it does not describe the current classifier. Local primary tags
+did not depend on difficulty input in that historical version, so this
+comparison uses the action-only call. Current `b311c40` rated Break decisions
+do consume the raw difficulty field. Reproduce it with:
 
 ```sh
 node tests/local-tags.cjs ../dataset/spm_dataset-0.4.0 9105c09

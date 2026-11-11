@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
-const {loadRating, loadTags, fixture, patternFixture} = require('./helpers.cjs');
+const {loadRating, loadTags, fixture, patternFixture, pressureFixture} = require('./helpers.cjs');
 const root = path.resolve(__dirname, '..');
 const baseline = execFileSync('git', ['show', '1e99e4d:spm_algorithm.js'], {cwd: root, encoding: 'utf8'});
 const old = loadRating(baseline), current = loadRating(fs.readFileSync(path.join(root, 'spm_algorithm.js'), 'utf8'));
@@ -47,6 +47,8 @@ test('reused raw rating evidence matches native fractional-rate clocks for both 
         assert.equal(r.modelInfo.version, '1.2.4');
         assert.equal(r.modelInfo.localExpert, 'original56-joint-fixed-ridge01');
         assert.equal(r.modelInfo.perception.profile, model);
+        assert.equal(r.modelInfo.breakPolicy.id, 'sustained-native-demand-r1');
+        assert.equal(r.modelInfo.breakPolicy.ratingUsed, true);
         assert.equal(r.overall.perception.difficultyAvailable, true);
         assert.equal(tagEvidence.query[0], 1000 / rate);
         assert.equal(r.map.firstNote, Math.round(1000 / rate));
@@ -106,7 +108,7 @@ test('vendored standalone API retains native 4K/6K, legacy and modern entry poin
 });
 
 
-test('pinned 184408e activates the retuned local expert and keeps classic explicit', () => {
+test('pinned b311c40 retains the retuned local expert and keeps classic explicit', () => {
     const text = fixture(7, true);
     const stable = tags.analyzeMap(text), classic = tags.analyzeMap(text, {aggregation: 'classic'});
     assert.equal(stable.modelInfo.localExpert, 'original56-joint-fixed-ridge01');
@@ -114,6 +116,38 @@ test('pinned 184408e activates the retuned local expert and keeps classic explic
     assert.equal(stable.modelInfo.segmentReadout.stepMs, 500);
     assert.equal(stable.modelInfo.segmentReadout.cutContextMs, 4000);
     assert.throws(() => tags.analyzeMap(text, {aggregation: 'classic', ratingEvidence: {}}), /UnusedRating/);
+});
+
+test('sustained raw demand reaches the pre-classification Break gate in both profiles', () => {
+    const text = pressureFixture();
+    assert.equal(tags.analyzeMap(text).segments[0].tag, 'break');
+    for (const model of ['detail', 'compact']) {
+        const result = current.engine.processMap(text, 'full', 1, {model, includeTagEvidence:true});
+        // Controlled pressure sensor: native query/model protocol from the real
+        // rating pass, constant demand to isolate the soft-rest veto.
+        const evidence = {...result.tagEvidence, demand: result.tagEvidence.demand.map(() => 10)};
+        const before = structuredClone(evidence), r = tags.analyzeMap(text, {ratingEvidence:evidence});
+        assert.notEqual(r.segments[0].tag, 'break');
+        assert.equal(r.modelInfo.breakPolicy.protectedParents, 1);
+        assert.equal(r.modelInfo.breakPolicy.referenceDemand, 10);
+        assert.deepEqual(evidence, before);
+    }
+});
+
+test('b311c40 preserves the previous unrated, classic, modern and native 4K/6K paths', () => {
+    const previous = loadTags(execFileSync('git', ['show', '7fd451e:tag_engine.js'], {cwd:root, encoding:'utf8'}));
+    for (const [text, options] of [
+        [pressureFixture(), {}], [fixture(7,true), {aggregation:'classic'}],
+        [fixture(7,true), {algorithm:'modern'}], [fixture(7,true), {algorithm:'legacy'}],
+        [fixture(4,true), {}], [fixture(6,true), {speedRate:1.5}],
+    ]) {
+        const r = tags.analyzeMap(text, options), before = previous.analyzeMap(text, options);
+        if (r.modelInfo?.breakPolicy) {
+            assert.equal(r.modelInfo.breakPolicy.ratingUsed, false);
+            delete r.modelInfo.breakPolicy;
+        }
+        assert.deepEqual(r, before);
+    }
 });
 
 test('new hand readout excludes false chordstream but retains real hand substitutions', () => {

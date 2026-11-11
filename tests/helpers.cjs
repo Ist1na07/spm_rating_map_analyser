@@ -33,4 +33,17 @@ function patternFixture(masks, steps = [[240,100]]) {
     }
     return '[General]\nMode:3\n[Difficulty]\nCircleSize:7\nOverallDifficulty:8\n[TimingPoints]\n0,400,4,2,1,50,1,0\n[HitObjects]\n' + notes.join('\n');
 }
-module.exports = {loadRating, loadTags, fixture, filesUnder, patternFixture};
+// Same physical regression shape as upstream's public Break-pressure API test:
+// irregular two-note rows followed by a dense three-note section.
+function pressureFixture() {
+    const notes = [];
+    let t = 1000;
+    for (const [count, columns, steps] of [[160, [0,2], [80,120,300,80,120,500]], [400, [0,2,4], [75]]]) {
+        for (let i = 0; i < count; i++) {
+            for (const offset of columns) notes.push(`${Math.floor(((i+offset)%7+.5)*512/7)},192,${t},1,0,0:0:0:0:`);
+            t += steps[i % steps.length];
+        }
+    }
+    return '[General]\nMode:3\n[Difficulty]\nCircleSize:7\nOverallDifficulty:8\n[TimingPoints]\n0,500,4,2,1,100,1,0\n[HitObjects]\n' + notes.join('\n');
+}
+module.exports = {loadRating, loadTags, fixture, filesUnder, patternFixture, pressureFixture};

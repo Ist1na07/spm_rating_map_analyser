@@ -13,6 +13,7 @@ const overlay7=load(12),overlayProfile=load(13);
 const profile4=load(14),profile7=load(15);
 const native4=load(16),native6=load(17),native7=load(18);
 const perception=load(19),perceptionProfiles=load(20).profiles;
+const {createPressureGuard}=load(21),breakProfile=load(22);
 function profile(key){return key===4?profile4:profile7;}
 function evidenceMap(osuText,opts={}) {
   const map=parseOsu(osuText,opts),ctx=prepare(map,10);
@@ -32,7 +33,16 @@ function describe(w) {
 function stable7(osuText,opts,e) {
   const perceptual=opts.aggregation!=='classic';
   const name=opts.ratingEvidence?(opts.ratingEvidence.modelIdentity===perception.COMPACT_RATING?'compact':'detail'):'actions',p=perceptionProfiles[name];
-  const r=overlay7.analyzeMap(osuText,{...opts,_rawEvidence:true,_archivedExpert:!perceptual,_segmentReadout:(raw,resolveBpm)=>refineSegments(e.ctx,raw,p.classes,{resolveBpm,speedRate:opts.speedRate??1,supportPower:p.supportPower??1})}),geometryContext=geometry.prepare(e.ctx);
+  const policy=breakProfile.profiles[name],protectedParents=new Set();let pressure=null;
+  if(perceptual&&opts.ratingEvidence){
+    perception.validateRating(e.map,opts.ratingEvidence,{speedRate:opts.speedRate??1,modelIdentity:p.modelIdentity});
+    pressure=createPressureGuard(opts.ratingEvidence,policy,breakProfile.gapMs);
+  }
+  const breakPolicy=perceptual?{...policy,protects:(start,end,stage)=>{
+    if(!pressure||!policy.target.split('+').includes(stage))return false;
+    const result=pressure.measure(start,end);if(result.protected)protectedParents.add(start+':'+end);return result.protected;
+  }}:undefined;
+  const r=overlay7.analyzeMap(osuText,{...opts,_rawEvidence:true,_archivedExpert:!perceptual,_breakPolicy:breakPolicy,_segmentReadout:(raw,resolveBpm)=>refineSegments(e.ctx,raw,p.classes,{resolveBpm,speedRate:opts.speedRate??1,supportPower:p.supportPower??1})}),geometryContext=geometry.prepare(e.ctx);
   const classicPrior=r.debug.classicPrior,branchSupport=r.debug.readoutSupport,cutExclusions=r.debug.cutExclusions;
   delete r.debug.classicPrior;delete r.debug.readoutSupport;delete r.debug.cutExclusions;
   const raw=r.debug.rawSegments;delete r.debug.rawSegments;
@@ -62,6 +72,7 @@ function stable7(osuText,opts,e) {
     overlayPolicy:{regularityRestRelativeNps:overlayProfile.gate.ratio,regularityRestRowRateMax:overlayProfile.gate.rowRateMax,
       rowRateUnit:'rows per converted second',aggregation:'unchanged legacy policy'}};
   if(perceptual){
+    r.modelInfo.breakPolicy={id:breakProfile.id,ratingUsed:!!pressure,confidenceFloor:policy.confidenceFloor,lowNpsScale:policy.lowNpsScale,quantile:policy.quantile,fraction:policy.fraction,referenceDemand:pressure?.reference??null,protectedParents:protectedParents.size};
     const rating=opts.ratingEvidence;
     const a=perception.infer(e.map,raw,rating,p,{speedRate:opts.speedRate??1,context:e.ctx,baseline:classicPrior??r.overall,_branchSupport:branchSupport});
     r.overall=a.overall;perception.decorateSegments(r.segments,a,p.classes);
@@ -7953,6 +7964,7 @@ var TagClassifier = (() => {
   return nps < referenceNps * relativeNps || rowCount * 1000 / durationMs < rowRateMax;
 }
   function classifySegments(cm, opts = {}) {
+    const breakPolicy=opts._breakPolicy, lowNpsScale=breakPolicy?.lowNpsScale??1;
     const out = [];
     const lnDom = opts.lnDominantRatio ?? CONFIG.lnDominantRatio;
     const mapMeds = computeMapMedians(cm.windows);
@@ -7967,8 +7979,8 @@ var TagClassifier = (() => {
       }
       const f = segF[i];
       const ex = cm.extras[i];
-      const lowStakes = s.end - s.start >= 2500 && f.nps < mapNps && (f.nps < 18.5 && ex.segIvLogStd > 0.41 || regularityRestSupported(f.nps, mapNps, ex.rowCount, s.end - s.start, 0.85, 16) && f.chordMean < 1.9 && ex.vibroFraction > 0.3 && ex.segRhythmChangeRate < 0.1 || f.nps < 22.5 && ex.segIvLogStd > 0.25 && ex.vibroFraction < 0.45 && f.lnWeightRatio < 0.5);
-      if (lowStakes) {
+      const lowStakes = s.end - s.start >= 2500 && f.nps < mapNps && (f.nps < 18.5 * lowNpsScale && ex.segIvLogStd > 0.41 || regularityRestSupported(f.nps, mapNps, ex.rowCount, s.end - s.start, 0.85, 16) && f.chordMean < 1.9 && ex.vibroFraction > 0.3 && ex.segRhythmChangeRate < 0.1 || f.nps < 22.5 * lowNpsScale && ex.segIvLogStd > 0.25 && ex.vibroFraction < 0.45 && f.lnWeightRatio < 0.5);
+      if (lowStakes && !breakPolicy?.protects?.(s.start,s.end,"low")) {
         out.push({ start: s.start, end: s.end, tag: "break", confidence: 1, family: "break" });
         continue;
       }
@@ -8036,9 +8048,9 @@ var TagClassifier = (() => {
       const seg = out[i];
       if (seg.family === "break") continue;
       const dur = seg.end - seg.start;
-      const easyAmbiguous = seg.tag !== "ln wildcard" && seg.confidence < 0.5 && diffs[i] <= Math.max(p15, 1) && (medians[i].nps ?? 0) < mapNps;
+      const easyAmbiguous = seg.tag !== "ln wildcard" && seg.confidence < (breakPolicy?.confidenceFloor??0.5) && diffs[i] <= Math.max(p15, 1) && (medians[i].nps ?? 0) < mapNps;
       const shortSparse = dur < 2e4 && medians[i].nps > 0 && medians[i].nps < medNps * 0.4 && medians[i].nps < 4;
-      if (easyAmbiguous || shortSparse) {
+      if ((easyAmbiguous && !breakPolicy?.protects?.(seg.start,seg.end,"late")) || shortSparse) {
         seg.tag = "break";
         seg.secondary = void 0;
         seg.family = "break";
@@ -8204,9 +8216,9 @@ var TagClassifier = (() => {
     const rate = opts.speedRate ?? 1;
     if (rate !== 1) map = rescale(map, rate);
     const cm = buildCachedMap(osuText, opts);
-    const rawEvidence = opts._rawEvidence ? classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined}) : null;
+    const rawEvidence = opts._rawEvidence ? classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined,_breakPolicy:opts._archivedExpert?undefined:opts._breakPolicy}) : null;
 
-    const originalSegments = smoothSegments(rawEvidence ? rawEvidence.map(s=>({...s})) : classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined}));
+    const originalSegments = smoothSegments(rawEvidence ? rawEvidence.map(s=>({...s})) : classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined,_breakPolicy:opts._archivedExpert?undefined:opts._breakPolicy}));
     const classicPrior = aggregateOverall(smoothSegments(classifySegments(cm,{scorer:"model",_expertModel:model_generated_default})), {"dominantShare":0.52,"mixShare":0.07,"secondRel":0.75});
     let readout = null;
     if (opts._segmentReadout) {
@@ -13423,6 +13435,73 @@ module.exports={
         "researchBaseline": "v1.1.0",
         "frozenIntermediatePrior": "v1.2.2"
       }
+    }
+  }
+}
+;
+},
+function(module,exports,load){
+'use strict';
+// Right-continuous raw demand on the native head-row clock. Never extend a
+// sample through a physical long gap or beyond the final observed head.
+function distribution(query,demand,gapMs){
+ const spans=[];
+ for(let i=0;i+1<query.length;i++){
+  const dt=query[i+1]-query[i];
+  if(dt>0&&dt<gapMs)spans.push({start:query[i],end:query[i+1],value:demand[i]});
+ }
+ return spans;
+}
+function weightedQuantile(spans,q){
+ const sorted=[...spans].sort((a,b)=>a.value-b.value),total=sorted.reduce((s,x)=>s+x.end-x.start,0);let seen=0;
+ for(const s of sorted){seen+=s.end-s.start;if(seen>=q*total)return s.value;}
+ return 0;
+}
+function createPressureGuard(rating,{quantile,fraction},gapMs=2500){
+ if(!Number.isFinite(quantile)||quantile<0||quantile>1||!Number.isFinite(fraction)||fraction<=0||fraction>1||!Number.isFinite(gapMs)||gapMs<=0)throw Error('InvalidBreakPressurePolicy');
+ const spans=distribution(rating.query,rating.demand,gapMs),reference=weightedQuantile(spans,quantile);
+ const starts=spans.map(s=>s.start),prefix=[0],covered=[0];
+ for(const s of spans){prefix.push(prefix.at(-1)+(s.value>=reference&&reference>0?s.end-s.start:0));covered.push(covered.at(-1)+s.end-s.start);}
+ function integral(t,values,high){
+  let lo=0,hi=starts.length;while(lo<hi){const m=(lo+hi)>>1;if(starts[m]<t)lo=m+1;else hi=m;}
+  if(!lo)return 0;const i=lo-1,s=spans[i],dt=Math.min(s.end,t)-s.start;
+  return values[i]+Math.max(0,dt)*(!high||s.value>=reference&&reference>0?1:0);
+ }
+ function measure(start,end){
+  const highMs=integral(end,prefix,true)-integral(start,prefix,true),observedMs=integral(end,covered,false)-integral(start,covered,false);
+  return{reference,highMs,observedMs,highFraction:highMs/Math.max(1,end-start),protected:reference>0&&highMs>0&&highMs>=(end-start)*fraction};
+ }
+ return{measure,reference};
+}
+module.exports={distribution,weightedQuantile,createPressureGuard};
+
+},
+function(module,exports,load){
+module.exports={
+  "schemaVersion": 1,
+  "id": "sustained-native-demand-r1",
+  "gapMs": 2500,
+  "profiles": {
+    "actions": {
+      "quantile": null,
+      "fraction": null,
+      "target": "none",
+      "confidenceFloor": 0.5,
+      "lowNpsScale": 1.0
+    },
+    "detail": {
+      "quantile": 0.5,
+      "fraction": 0.5,
+      "target": "low+late",
+      "confidenceFloor": 0.5,
+      "lowNpsScale": 1.0
+    },
+    "compact": {
+      "quantile": 0.5,
+      "fraction": 0.5,
+      "target": "low+late",
+      "confidenceFloor": 0.5,
+      "lowNpsScale": 1.0
     }
   }
 }

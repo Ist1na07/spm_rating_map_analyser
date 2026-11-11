@@ -60,6 +60,8 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
    });
   }
   await chart(mapText);let state=await checkPercentages();assert.deepEqual(state.solid,state.expected);assert.equal(state.profile,'detail');assert.equal(state.calls,1);assert.equal(state.ratings,1);
+  const pressure=await page.evaluate(()=>__tags.at(-1).modelInfo.breakPolicy);
+  assert.equal(pressure.id,'sustained-native-demand-r1');assert.equal(pressure.ratingUsed,true);
   assert(settingsRequests.length>0);
   assert(settingsRequests.every(r=>r.from===counterName&&r.command===`getSettings:${counterName}`));
   await page.waitForFunction(()=>document.querySelector('#settings-warning').textContent.includes('Detailed defaults'));
@@ -69,6 +71,7 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
   assert(!await page.locator('#settings-warning').isVisible());
   await page.screenshot({path:path.join(output,'overlay-default.png')});
   await change({algorithm:'SPM Rating v1.2.0-Compact'});state=await checkPercentages();assert.equal(state.profile,'compact');assert.equal(state.calls,2);assert.equal(state.ratings,2);assert.deepEqual(state.solid,state.expected);
+  assert.equal(await page.evaluate(()=>__tags.at(-1).modelInfo.breakPolicy.ratingUsed),true);
   const normalized=await page.evaluate(()=>{
    const original=__tags.at(-1),fixtures=[[.44,.52],[1,1],[1,2],[0,2],[2,0],[0,0]],results=[];
    for(const [rc,ln] of fixtures){
@@ -183,6 +186,6 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
   const r=await page.evaluate(()=>__tags.at(-1));assert.equal(r.modelInfo.version,'1.2.4');
   assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',scenarios:['184408e retuned local expert','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','710px full-width chips and natural narrow wrapping','430px and 380px layout','Minimal/Compact','DT and paused playback','native 4K/6K classification, percentages, live segments, difficulty and timeline; NM/DT/HT','numeric <0.50'],screenshots:output},null,2));
+  console.log(JSON.stringify({result:'PASS',initialProtectedParents:pressure.protectedParents,scenarios:['b311c40 pressure-aware Break policy and retuned local expert','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','710px full-width chips and natural narrow wrapping','430px and 380px layout','Minimal/Compact','DT and paused playback','native 4K/6K classification, percentages, live segments, difficulty and timeline; NM/DT/HT','numeric <0.50'],screenshots:output},null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

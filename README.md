@@ -37,12 +37,14 @@ The map is automatically split into sections. **7K** retains the detailed taxono
 
 What you get from it:
 
-- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `184408e`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `b311c40`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
 - **Overall 4K/6K tags** — the upstream dominant morphology is solid; secondary classes are outlined. Percentages show normalized local morphology support weighted by duration, relative physical effort and concentration. The five raw shares sum to 100% before rounding; this is a different measure from 7K difficulty-integral burden. These classifiers do not consume the Detailed/Compact rating field
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
-**Local classifier updated:** the pinned [184408e snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/src/index.cjs) uses jointly retuned original 56D RC/LN expert parameters and a fixed reference predictor for whole-map aggregation. It also includes static-hand false chordstream exclusion, the LN Wildcard rest exemption and stable within-type tempo plateaus. Local labels can now differ from the prior v1.2.3 engine. This is the commit's unreleased retune, not merely the published v1.2.4 bundle; `modern` remains a separate opt-in candidate. See [CLASSIFIER.md](CLASSIFIER.md).
+**Classifier source:** the pinned [b311c40 snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/src/index.cjs) retains the jointly retuned 56D RC/LN experts, fixed whole-map reference prior, static-hand false chordstream exclusion, LN Wildcard rest exemption and stable tempo plateaus. It includes unreleased changes beyond the published v1.2.4 bundle; `modern` remains a separate opt-in candidate.
+
+**Pressure-aware Break repair:** the same Detailed/Compact raw demand now participates in soft-rest decisions before aggregation. Switching rating models can therefore change local Break boundaries; smoothing cannot. Long head gaps and time after the last head do not extend pressure evidence. No additional rating pass is needed. See [CLASSIFIER.md](CLASSIFIER.md).
 
 **Why can a lower-percentage 7K tag be solid?** Solid chips are selected by prior-aware gates, not a simple percentage ranking. Under Detailed, a prior tag can survive at 25% while a new tag normally needs 50%; family/mix gates also apply. Thus Fast Chordstream 33% may remain solid while Dense Chordstream 37% is outlined. The percentages describe burden, not correctness. Tags now use the full panel width and wrap only when needed.
 
@@ -127,10 +129,11 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 ## Version history
 
 ### v1.2.1
+- Update to classifier `b311c40`: reuse the existing raw SPM demand before soft Break gates, preserving sustained-pressure sections without another rating pass; keep unrated and native 4K/6K behavior unchanged
 - Expose native 4K/6K five-class tags, weighted composition percentages, live sections and timeline; remove the tag row's fixed 440px cap and clarify main-tag gating in tooltips
 - Remove the “Burden” prefix; normalize the Hybrid chip’s RC/LN pair to 100% while retaining its relative proportion and leaving algorithm outputs unchanged
 - Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
-- Bundle the complete classifier from **SPMTagClassifier `184408e`** (`184408e3154e082946a4c2355e724daa118fb0e9`, package 1.2.4 plus unreleased local-expert retune), including the selected RC/LN parameters, fixed integral prior and segment-readout repairs
+- Bundle the complete classifier from **SPMTagClassifier `b311c40`** (`b311c408ef02d6705d30b51a4ea789d3e86d2976`, package 1.2.4 plus unreleased local-expert retune and pressure-aware Break repair), including the selected RC/LN parameters, fixed integral prior and segment-readout repairs
 - Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
 - Fix number-style dans below 0th to show `< 0.50`
 - Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On the initial v1.2.3 integration's local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
@@ -214,7 +217,7 @@ Run the checked-in regression tests from a Git checkout with Node 20 or newer:
 
 ```sh
 node --test tests/regression.test.cjs
-# Optional: use your own local datasets/maps and classifier runtime source pinned to `184408e`.
+# Optional: use your own local datasets/maps and classifier runtime source pinned to `b311c40`.
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```
 
@@ -226,7 +229,7 @@ The tests compare ratings against the original `1e99e4d` engine and check the ne
 
 - [tosu](https://tosu.app) — the runtime this overlay runs on
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — the difficulty algorithm
-- [SPMTagClassifier 184408e](https://github.com/Ist1na07/SPMTagClassifier/tree/184408e3154e082946a4c2355e724daa118fb0e9) — the pattern classifier and whole-map burden integration
+- [SPMTagClassifier b311c40](https://github.com/Ist1na07/SPMTagClassifier/tree/b311c408ef02d6705d30b51a4ea789d3e86d2976) — the pattern classifier and whole-map burden integration
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — the RC / long-note sub-model
 
 ## License

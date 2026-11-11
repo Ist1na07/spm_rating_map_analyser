@@ -1,10 +1,10 @@
 # Classifier source and integration
 
 `tag_engine.js` is the complete, unmodified `dist/tag-engine.js` from
-[SPMTagClassifier commit 184408e](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/dist/tag-engine.js),
-full commit `184408e3154e082946a4c2355e724daa118fb0e9`. Its package version is **1.2.4**,
-but this commit includes the subsequent unreleased local-expert retune; the
-published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
+[SPMTagClassifier commit b311c40](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/dist/tag-engine.js),
+full commit `b311c408ef02d6705d30b51a4ea789d3e86d2976`. Its package version is **1.2.4**,
+but this commit includes the unreleased local-expert retune and pressure-aware
+Break repair; the published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
 see [LICENSE](LICENSE). The analyser version remains **v1.2.1**.
 
 ## Default 7K now uses the retuned local expert
@@ -24,6 +24,26 @@ aggregation path. `modern` remains a separate opt-in LN candidate; upstream
 rejects combining it with `ratingEvidence`. All upstream entry points remain
 in the bundle. Native 4K/6K classification is also exposed by the overlay,
 using the separate five-class path described below.
+
+## Raw difficulty now also protects active sections from false Break
+
+The pinned update uses the same native Detailed/Compact demand field before
+soft-rest classification, not just during whole-map aggregation. The policy is
+`modelInfo.breakPolicy.id = 'sustained-native-demand-r1'`; the rated overlay must
+report `ratingUsed:true`. At least half of a candidate section must have valid
+demand at or above the chart's time-weighted median to veto a low-stakes or
+low-fit rest gate. A single spike is not sufficient.
+
+Head-to-head gaps of 2500 ms or more and time after the last head do not extend
+pressure evidence. Initial marked/empty rests and sparse handling remain in
+place. The fixed whole-map reference prior and local type W/b are unchanged.
+Actions without rating input, `classic`, `legacy`, `modern` and native 4K/6K
+retain their prior behavior.
+
+Switching Detailed/Compact may now change local Break boundaries as well as
+whole-map tags and percentages. Raw field reuse still needs only one rating
+pass; display smoothing and panel width do not affect classification. The
+bundled API validates the sensor clock and model identity before using it.
 
 ## Native 4K/6K classification
 
@@ -56,9 +76,10 @@ the same rating evaluation, before display calibration, 400 ms bucketing or
 smoothing. No rating is performed inside the classifier. Model identities are
 upstream protocol literals, not newly computed file digests.
 
-`renderRating` passes this evidence to `TagClassifier.analyzeMap`. Both Detailed
-and Compact changes update whole-map aggregation. Display-only settings retain
-the cached analysis. Local-section confidence still displays the classifier's
+`renderRating` passes this evidence to `TagClassifier.analyzeMap` for 7K. Both
+Detailed and Compact changes update pressure-aware Break handling and whole-map
+aggregation. Display-only settings retain the cached analysis. Local-section
+confidence still displays the classifier's
 `segment.confidence`, including Wildcard classes without a matching integral
 branch; it is not replaced with a fabricated zero.
 
@@ -83,7 +104,7 @@ branches into main tags. The tag row uses the full panel width and wraps only
 when its actual contents no longer fit.
 
 The continuous integral, support definition, LN interval union and exact
-endpoint rules are in the pinned [perception contract](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/docs/perception.md).
+endpoint rules are in the pinned [perception contract](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/docs/perception.md).
 Detailed uses alpha=2, beta=1; Compact uses alpha=4, beta=1.5. Both use a 1000 ms
 action window and hold credit 1. Concrete branch percentages can overlap; they
 are not accuracy, elapsed-time shares or a normalized partition.
