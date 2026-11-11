@@ -6,20 +6,24 @@
   rating comparisons across 4K/6K/7K, taps/holds, Detailed/Compact, HT/NM/DT and
   legacy sub-difficulty display; all result fields and curve buckets equal
   the original engine. Numeric lower-bound labels and optimized window helpers
-  are checked separately.
+  are checked separately. Native 4K/6K tests cover taps/holds at HT/NM/DT,
+  five-class composition and segment difficulty, and reject accidental use of
+  the 7K-only rating-evidence protocol.
 - `node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier`: 371 local
   charts passed (19 4K, 18 6K, 334 7K). Includes all 332 local 7K dataset charts,
   size-stratified 4K/6K samples, the longest file from each course directory and
   the standalone map. Models and rates alternate deterministically. No rating,
   dan or curve differences; all 334 7K rated classifications consumed difficulty
-  successfully. Twelve real-map results matched the upstream Node API exactly.
+  successfully. All 37 4K/6K charts now also passed native coarse classification
+  and segment-stat checks. Twelve real-map results matched the upstream Node
+  API exactly, stratified as four each for 4K, 6K and 7K.
 - The vendored bundle equals `dist/tag-engine.js` from full commit
   `184408e3154e082946a4c2355e724daa118fb0e9` byte for byte. Package version 1.2.4
   alone is insufficient to identify this unreleased retune. The selected
   upstream API, perception and segment-readout tests passed (15 tests); the
   full research/build suite was not run. No fitting was performed.
 
-The current pinned run, using the same corpus protocol below, measured mean
+The earlier pinned 7K-only integration run, using the same corpus protocol below, measured mean
 rating time 148.9 → 110.5 ms and rating + the same new classifier 212.8 →
 174.4 ms (18.0% shorter than the unoptimized integration). These are local
 single-pass timings, not accuracy measurements.
@@ -57,9 +61,31 @@ The actual overlay scripts were run in headless Chrome, with intercepted local
 HTTP and websocket fixtures emulating tosu. Checked the rendered 430 px and
 380 px layouts, primary percentages, live Detailed/Compact switching, one
 rating pass per change, smoothing/resize invariance, Minimal/Compact styling,
-DT timing, pause marker, original 4K/6K classification visibility, and the
+DT timing, pause marker, native 4K/6K classification visibility, and the
 visible numeric `< 0.50` label. Screenshots were visually inspected. The source
 and fixture data were local; no dataset was uploaded.
+
+### Native 4K/6K and tag-row follow-up
+
+The actual renderer now checks five-class native tags, the 0–1 to percentage
+adapter, taxonomy-specific tooltips, live tag/confidence, segment difficulty,
+timeline and NM/DT/HT clocks for both 4K and 6K. Besides synthetic tap/hold
+charts, one real median-size chart from each local key-count dataset was
+rendered. Smoothing and resizing retained native classifications and their
+original output objects; Detailed/Compact rating selection remained usable.
+No difficulty field was passed to the native coarse classifiers.
+
+The attached 710px layout was reproduced with Fast Chordstream 33%, Dense
+Chordstream 37%, Speed 15% and Chordjack 13%. All four chips occupy one line
+after removing the 440px cap; at 430px the row wraps naturally without chip
+overflow. Main-tag selection is unchanged and the tooltip now explains its
+prior-aware gates. Wide/narrow and real 4K/6K screenshots were inspected.
+
+Run the browser check with optional real 4K/6K dataset fixtures:
+
+```sh
+node tests/browser.cjs /path/to/7k-chart.osu ../dataset
+```
 
 ### Tag display follow-up
 

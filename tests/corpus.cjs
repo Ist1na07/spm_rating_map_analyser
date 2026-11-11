@@ -33,7 +33,7 @@ for (const entry of fs.readdirSync(maps)) {
         if (courses.length) files.push(courses[0]);
     } else if (p.endsWith('.osu')) files.push(p);
 }
-const report = {charts: 0, keys: {}, ratedClassifications: 0, upstreamParity: 0, failures: [], timing: []};
+const report = {charts: 0, keys: {}, ratedClassifications: 0, coarseClassifications: 0, upstreamParity: 0, parityKeys: {}, failures: [], timing: []};
 for (const engine of [old,current]) for (let i=0;i<2;i++) engine.processMap(fixture(7,true),'full',1);
 for (let i=0;i<files.length;i++) {
     const file=files[i], text=fs.readFileSync(file,'utf8'), model=i%2?'compact':'detail', rate=[1,.75,1.5][i%3];
@@ -44,19 +44,33 @@ for (let i=0;i<files.length;i++) {
         if (i%2) {runNew();runOld();} else {runOld();runNew();}
         const {tagEvidence,...plain}=b; assert.deepEqual(plain,a);
         let tagMs=0;
-        if (b.keyCount===7) {
-            const t=performance.now(),r=tags.analyzeMap(text,{speedRate:rate,ratingEvidence:tagEvidence});tagMs=performance.now()-t;
-            assert.equal(r.modelInfo.perception.profile,model);
-            assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
-            assert.equal(r.overall.perception.difficultyAvailable,true);
-            assert.equal(r.segments[0].start,r.map.firstNote);
-            assert.equal(r.segments.at(-1).end,r.map.lastNote);
-            assert(Object.values(r.overall.percentages).every(x=>Number.isFinite(x)&&x>=0&&x<=100+1e-8));
-            if (reference && report.upstreamParity<12) {
-                assert.equal(JSON.stringify(r),JSON.stringify(reference.analyzeMap(text,{speedRate:rate,ratingEvidence:tagEvidence})));
-                report.upstreamParity++;
+        if ([4,6,7].includes(b.keyCount)) {
+            const options={speedRate:rate,...(b.keyCount===7?{ratingEvidence:tagEvidence}:{})};
+            const t=performance.now(),r=tags.analyzeMap(text,options);tagMs=performance.now()-t;
+            if (b.keyCount===7) {
+                assert.equal(r.modelInfo.perception.profile,model);
+                assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
+                assert.equal(r.overall.perception.difficultyAvailable,true);
+                assert.equal(r.segments[0].start,r.map.firstNote);
+                assert.equal(r.segments.at(-1).end,r.map.lastNote);
+                assert(Object.values(r.overall.percentages).every(x=>Number.isFinite(x)&&x>=0&&x<=100+1e-8));
+                report.ratedClassifications++;
+            } else {
+                assert.equal(r.modelInfo.taxonomy,'coarse5');
+                assert.equal(r.modelInfo.nativeKeyCount,b.keyCount);
+                const p=r.overall.composition;
+                assert(Object.values(p).every(x=>Number.isFinite(x)&&x>=0&&x<=1));
+                assert(Math.abs(Object.values(p).reduce((a,b)=>a+b,0)-1)<1e-8);
+                assert(r.segments.every(s=>['jack','stamina','speed','tech','ln','break'].includes(s.tag)));
+                const stats=current.computeSegmentStats(r.segments,b);
+                assert.equal(stats.length,r.segments.length);
+                assert(stats.every(s=>Number.isFinite(s.mean)&&Number.isFinite(s.peak)));
+                report.coarseClassifications++;
             }
-            report.ratedClassifications++;
+            if (reference && (report.parityKeys[b.keyCount]||0)<4) {
+                assert.equal(JSON.stringify(r),JSON.stringify(reference.analyzeMap(text,options)));
+                report.upstreamParity++;report.parityKeys[b.keyCount]=(report.parityKeys[b.keyCount]||0)+1;
+            }
         }
         report.charts++;report.keys[b.keyCount]=(report.keys[b.keyCount]||0)+1;
         report.timing.push({model,rate,keys:b.keyCount,notes:b.noteCount,oldMs,newMs,tagMs});

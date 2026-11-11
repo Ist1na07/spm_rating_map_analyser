@@ -265,7 +265,6 @@ body {
     gap: 5px;
     flex-wrap: wrap;
     min-height: 20px;
-    max-width: 440px;
 }
 .ov-tag {
     font-size: 11.5px;
@@ -652,6 +651,7 @@ body {
         'coordination': 'Coordination', 'density': 'Density', 'inverse': 'Inverse',
         'technical': 'Technical', 'release': 'Release', 'ln wildcard': 'LN Wildcard',
         'break': 'Break', 'rc mix': 'RC Mix', 'ln mix': 'LN Mix', 'hybrid': 'Hybrid',
+        'jack': 'Jack', 'stamina': 'Chordstream', 'ln': 'LN',
     };
     const TAG_KEYS = Object.keys(TAG_LABELS);
 
@@ -679,6 +679,7 @@ body {
                 'dense chordstream': '#3cc8d8', 'fast chordstream': '#2fc4a8',
                 'speed': '#4ade80', 'tech': '#8b9df0', 'vibro': '#b48cf2',
                 'wildcard': '#9aa1ac',
+                'jack': '#4f9cff', 'stamina': '#3cc8d8', 'ln': '#ff8c5a',
                 'inverse': '#ff6b5e', 'coordination': '#ffa257',
                 'density': '#e8b23e', 'release': '#f2d060',
                 'technical': '#ee82a8', 'ln wildcard': '#a89e94',
@@ -699,6 +700,7 @@ body {
                 'dense chordstream': '#2dd4bf', 'fast chordstream': '#34d399',
                 'speed': '#5eead4', 'tech': '#818cf8', 'vibro': '#a78bfa',
                 'wildcard': '#94a3b8',
+                'jack': '#38bdf8', 'stamina': '#2dd4bf', 'ln': '#fb7185',
                 'inverse': '#fb7185', 'coordination': '#fb923c',
                 'density': '#fbbf24', 'release': '#facc15',
                 'technical': '#f472b6', 'ln wildcard': '#a8a29e',
@@ -719,6 +721,7 @@ body {
                 'dense chordstream': '#00bcd4', 'fast chordstream': '#009e73',
                 'speed': '#00c853', 'tech': '#7b7bff', 'vibro': '#cc79a7',
                 'wildcard': '#bbbbbb',
+                'jack': '#0072b2', 'stamina': '#00bcd4', 'ln': '#e69f00',
                 'inverse': '#d55e00', 'coordination': '#e69f00',
                 'density': '#f0e442', 'release': '#ffcc33',
                 'technical': '#ff4081', 'ln wildcard': '#c8b89a',
@@ -936,7 +939,7 @@ body {
     let currentSpeedRate = 1.0;
     let cachedResult = null;
     let cachedRawCurves = null;   // v1.0.1: unsmoothed series, so the smoothing setting can be re-applied without re-analysis
-    let cachedTagResult = null;   // v0.5.0: segment classifier result (7K only)
+    let cachedTagResult = null;   // native 4K/6K coarse or stable 7K classifier result
     let cachedSegStats = null;    // v1.0.1: per-segment difficulty, aligned to cachedTagResult.segments
     let curveScaleMax = 0;        // v1.0.1: y-scale anchor = RAW curve max (smoothing never moves the scale)
     let cachedMeta = null;        // v1.0.1: beatmap metadata for the summary line
@@ -1279,12 +1282,20 @@ body {
         return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
     }
 
-    // SPMTagClassifier: whole-map burden, independent of display smoothing.
+    // SPMTagClassifier: retain each native path's percentage semantics.
     function renderOverallTags(tagRes) {
         elTagsRow.innerHTML = '';
         elTagsRow.title = '';
         const overall = tagRes && tagRes.overall;
-        if (!overall || !overall.percentages) return;
+        if (!overall) return;
+        const coarse = tagRes.modelInfo.taxonomy === 'coarse5';
+        // 4K/6K exposes a normalized composition, NOT the 7K integral fields.
+        // Adapt units for presentation without mutating the classifier result.
+        const percentages = coarse
+            ? Object.fromEntries(Object.entries(overall.composition).map(([tag, share]) => [tag, 100 * share]))
+            : overall.percentages;
+        const labelPercentages = coarse ? percentages : overall.labelPercentages;
+        if (!percentages) return;
         for (const tag of overall.tags || []) {
             const c = tagColor(tag), chip = document.createElement('span');
             chip.className = 'ov-tag';
@@ -1295,14 +1306,18 @@ body {
             elTagsRow.appendChild(chip);
         }
         const tags = overall.tags || [];
-        const meaning = overall.perception.difficultyAvailable
+        const meaning = coarse
+            ? 'Weighted morphology composition: duration × relative physical effort × local concentration'
+            : overall.perception.difficultyAvailable
             ? 'Integrated branch support × SPM difficulty burden × action load'
             : 'Integrated branch support × action load (no difficulty input)';
-        elTagsRow.title = meaning + '; burden share, not accuracy or time share. Patterns may overlap.';
+        elTagsRow.title = meaning + (coarse
+            ? '; five classes sum to 100%, not correctness probability. Solid = dominant morphology.'
+            : '; overlapping burden shares, not accuracy or time share. Solid = selected by prior-aware tag gates, not simply the highest percentage.');
         if (!tags.length) {
             const unknown = document.createElement('span');
             unknown.textContent = 'No dominant pattern'; unknown.style.fontSize = '11.5px';
-            unknown.title = 'No branch meets the whole-map tag threshold';
+            unknown.title = coarse ? 'No active morphology support' : 'No branch selected by the whole-map tag gates';
             elTagsRow.appendChild(unknown);
         }
         [...elTagsRow.querySelectorAll('.ov-tag')].forEach((chip, i) => {
@@ -1320,20 +1335,22 @@ body {
                 }
                 chip.title = 'Hybrid: relative RC / LN family burden shares (sum = 100%)';
             } else {
-                pct.textContent = Math.round(overall.labelPercentages[tag] || 0) + '%';
+                pct.textContent = Math.round(labelPercentages[tag] || 0) + '%';
                 chip.title = tag === 'rc mix' || tag === 'ln mix'
-                    ? 'Family burden share covered by this mix' : meaning;
+                    ? 'Family burden share covered by this mix' : meaning + (coarse
+                        ? '; dominant morphology' : '; selected by prior-aware tag gates, not percentage rank alone');
             }
             chip.appendChild(pct);
         });
         let shown = tags.length;
-        for (const [tag, share] of Object.entries(overall.percentages).sort((a,b) => b[1]-a[1])) {
+        for (const [tag, share] of Object.entries(percentages).sort((a,b) => b[1]-a[1])) {
             if (shown >= 4) break;
             if (tags.includes(tag) || share < 1) continue;
             const c = tagColor(tag), chip = document.createElement('span');
             chip.className = 'ov-share'; chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
             chip.style.color = chipInk(c); chip.textContent = tagLabel(tag);
-            chip.title = 'Secondary branch burden share; below the whole-map tag threshold';
+            chip.title = coarse ? 'Secondary weighted morphology composition; not the dominant class'
+                : 'Secondary branch burden share; not selected by the prior-aware whole-map tag gates';
             const pct = document.createElement('span'); pct.className = 'pct';
             pct.textContent = Math.round(share) + '%'; chip.appendChild(pct);
             elTagsRow.appendChild(chip); shown++;
@@ -1618,7 +1635,7 @@ body {
             elSegDiff.classList.add('hidden');
         }
         // the divider separates the difficulty zone from the pattern zone —
-        // hide it when the whole pattern zone is gone (non-7K or all toggled off)
+        // hide it when classification is unavailable or all pattern blocks are off
         const anyPatternVisible = classified &&
             (settings.showTags || settings.showSegmentTag || settings.showTimeline);
         elDivider.classList.toggle('hidden', !anyPatternVisible);
@@ -1713,7 +1730,7 @@ body {
         elLnSep.classList.toggle('hidden', !hasLnDisplay);
 
         // 4K/6K: per-keycount dan node tables are applied inside the engine;
-        // the keys badge shows the frame for unclassified (non-7K) charts.
+        // the keys badge shows the frame if classification is unavailable.
         // Dan labels using per-keycount node tables + the configured style
         const style = danStyleKey();
         elRcDan.textContent = result.rcDan != null ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
@@ -1771,7 +1788,7 @@ body {
         elMinTypeBadge.className = result.mapType.toLowerCase()
             + (result.classified ? '' : ' hidden');
         // the family suffix is only needed where the badge cannot show
-        // (unclassified non-7K charts)
+        // (charts without classification)
         elMinHeroSuf.textContent = heroTxt && !result.classified ? heroSuf : '';
         elMinRcDan.textContent = result.rcDan != null
             ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
@@ -1785,7 +1802,7 @@ body {
         // v1.0.1: map summary line
         renderSummary();
 
-        // v0.5.0: classification blocks (hidden automatically for non-7K maps)
+        // Classification blocks for each supported native key count.
         applyClassificationVisibility();
         if (result.classified && cachedTagResult) {
             renderOverallTags(cachedTagResult);
@@ -1913,18 +1930,20 @@ body {
             includeTagEvidence: cachedKeyCount === 7,
         });
         cachedTagResult = null;
-        if (result && cachedKeyCount === 7 && typeof TagClassifier !== 'undefined') {
+        if (result && [4, 6, 7].includes(cachedKeyCount) && typeof TagClassifier !== 'undefined') {
             try {
                 cachedTagResult = TagClassifier.analyzeMap(cachedOsuContent, {
-                    speedRate, ratingEvidence: result.tagEvidence,
+                    speedRate,
+                    // Only stable 7K consumes the rating field. Native 4K/6K
+                    // uses its own weighted five-class morphology model.
+                    ...(cachedKeyCount === 7 ? {ratingEvidence: result.tagEvidence} : {}),
                 });
             } catch (e) {
                 console.error('SPM Map Analyser: perception classification failed:', e);
             }
         }
         if (result) {
-            // 7K charts with a tag-engine result keep the classification UI;
-            // 4K/6K show difficulty rating, dan (per-keycount table) and curve.
+            // Native classifier results drive the same tags/segments/timeline UI.
             result.classified = cachedTagResult != null;
             if (result.classified && cachedTagResult.overall.tags.length) result.mapType = String(cachedTagResult.overall.sort || '').toUpperCase() || result.mapType;
             result.subDifficultyScheme = currentSubScheme();

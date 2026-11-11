@@ -3007,7 +3007,7 @@ function computeSegmentStats(segments, result) {
 // v1.0.1 — beatmap metadata for the summary line
 // ============================================================
 // Read straight from the .osu header so the summary works for every key count
-// (the 7K-only tag engine is not involved) and does not depend on which
+// (the tag engine is not involved) and does not depend on which
 // fields the running client happens to expose over the websocket.
 function parseOsuMeta(content) {
     if (!content) return null;
@@ -3291,7 +3291,7 @@ function processMap(osuContent, mode, speedRate, options) {
         // which rating algorithm produced these numbers (for the UI / debugging)
         modelVariant: variant.id, modelLabel: variant.label,
         mapType, isMix: false,
-        classified: false,          // tag engine only runs on 7K; set by caller
+        classified: false,          // set by the caller after native classification
         noteCount: res.nNotes,
         lnCount: b.tailN,
         lnRatio: b.n ? b.tailN / res.nNotes : 0,

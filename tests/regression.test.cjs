@@ -81,10 +81,23 @@ test('window endpoints keep left/right inclusion, clipping and duplicate-time be
 });
 
 test('vendored standalone API retains native 4K/6K, legacy and modern entry points', () => {
-    for (const keys of [4, 6]) {
-        const r = tags.analyzeMap(fixture(keys, true));
+    for (const keys of [4, 6]) for (const holds of [false, true]) for (const rate of [.75, 1, 1.5]) {
+        const text = fixture(keys, holds), r = tags.analyzeMap(text, {speedRate: rate});
         assert.equal(r.map.keys, keys);
+        assert.equal(r.modelInfo.taxonomy, 'coarse5');
+        assert.equal(r.modelInfo.nativeKeyCount, keys);
         assert(r.overall.tags.every(t => ['jack', 'stamina', 'speed', 'tech', 'ln'].includes(t)));
+        assert(r.segments.every(s => ['jack', 'stamina', 'speed', 'tech', 'ln', 'break'].includes(s.tag)));
+        const composition = r.overall.composition;
+        assert(Math.abs(Object.values(composition).reduce((a,b) => a+b,0)-1) < 1e-10);
+        assert.equal(r.overall.tags[0], Object.keys(composition).sort((a,b) => composition[b]-composition[a])[0]);
+        assert.equal(r.overall.percentages, undefined);
+        assert.equal(r.overall.perception, undefined);
+        assert.equal(r.map.firstNote, 1000/rate);
+        const stats = current.engine.computeSegmentStats(r.segments, current.engine.processMap(text,'full',rate));
+        assert.equal(stats.length,r.segments.length);
+        assert(stats.every(s => Number.isFinite(s.mean) && Number.isFinite(s.peak)));
+        assert.throws(() => tags.analyzeMap(text, {ratingEvidence: {}}), /UnsupportedKeys/);
     }
     for (const algorithm of ['stable', 'modern', 'legacy']) assert(tags.analyzeMap(fixture(), {algorithm}).segments.length);
     assert.equal(typeof tags.buildCachedMap, 'function');

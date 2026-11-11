@@ -115,7 +115,7 @@
     "uniqueID": "showSegmentDiff",
     "type": "checkbox",
     "title": "Show Segment Difficulty",
-    "description": "Display the current segment's difficulty (star rating and dan) next to its pattern tag. 7K only; needs Show Current Segment",
+    "description": "Display the current segment's difficulty (star rating and dan) next to its pattern tag for 4K/6K/7K; needs Show Current Segment",
     "options": [],
     "value": true
   },

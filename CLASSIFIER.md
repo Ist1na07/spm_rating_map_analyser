@@ -22,7 +22,29 @@ stable within-type cadence plateaus (including 150/200 and DT225/300 BPM).
 `aggregation:'classic'` keeps the archived local expert and its earlier
 aggregation path. `modern` remains a separate opt-in LN candidate; upstream
 rejects combining it with `ratingEvidence`. All upstream entry points remain
-in the bundle. The overlay still displays pattern classification only on 7K.
+in the bundle. Native 4K/6K classification is also exposed by the overlay,
+using the separate five-class path described below.
+
+## Native 4K/6K classification
+
+The same pinned bundle provides native 4K and shared native 6K coarse models.
+The overlay calls `analyzeMap(text, {speedRate})` for these key counts, without
+`ratingEvidence`: upstream rejects the 7K perception protocol for 4K/6K.
+There is no extra rating pass or projection to seven columns.
+
+The public tags are `jack / stamina / speed / tech / ln`; the UI labels
+`stamina` as **Chordstream**, its actual morphology, and keeps its source key
+unchanged. Whole-map tags, live segments, equivalent BPM, per-key-count segment
+difficulty/dan and the timeline are available. The upstream dominant class
+sets the family badge; rating numbers and dan tables remain unchanged.
+
+These models expose `overall.composition`, not `overall.percentages` or
+`overall.perception`. Display percentages are `100 × composition`: the five
+classes sum to one before display rounding. Their weights use local support ×
+duration × relative physical effort × concentration (`Σp²`). These are not
+the 7K continuous difficulty-integral shares or correctness probabilities.
+Detailed/Compact selection changes the rating, but not this native classifier.
+The 6K model is a shared coarse extrapolation, without human 6K accuracy claims.
 
 ## Reuse the same rating evaluation
 
@@ -42,13 +64,23 @@ branch; it is not replaced with a fabricated zero.
 
 ## Keep the overlay's percentage presentation
 
-The UI reads `overall.labelPercentages` for selected tags and
+For 7K, the UI reads `overall.labelPercentages` for selected tags and
 `overall.percentages` for secondary branches, already on a 0–100 scale.
 Hybrid displays `100 × rc / (rc + ln)` from `overall.familyMass` and its LN
 complement. Complementary integer rounding makes the displayed pair sum to
 100%; raw family masses and other tag percentages are unchanged. There is no
 “Burden” prefix. Empty tag sets display “No dominant pattern” and retain the
 rating engine's family.
+
+Solid chips are the upstream-selected tags, not simply the largest percentages.
+In the anchored 7K policy, a tag present in the frozen reference prior may be
+kept at 25% support-weighted burden, while a new tag needs 50% in Detailed.
+Compact disables ordinary additions (`addFloor=1.01`), but still applies its
+family/mix gates. Mixed priors and Hybrid have separate gates, so a larger
+outlined branch need not replace a smaller solid tag. Tooltips explain this
+distinction. The overlay preserves these decisions rather than re-ranking all
+branches into main tags. The tag row uses the full panel width and wraps only
+when its actual contents no longer fit.
 
 The continuous integral, support definition, LN interval union and exact
 endpoint rules are in the pinned [perception contract](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/docs/perception.md).

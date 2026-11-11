@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
 const os=require('node:os');
-const {fixture,patternFixture}=require('./helpers.cjs');
+const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
 (async()=>{
  const root=path.resolve(__dirname,'..');
  const output=process.env.SPM_TEST_OUTPUT||fs.mkdtempSync(path.join(os.tmpdir(),'spm-analyser-browser-'));
@@ -50,13 +50,13 @@ const {fixture,patternFixture}=require('./helpers.cjs');
   async function change(next){settings={...settings,...next};settingsSocket.send(JSON.stringify({message:settings}));await page.waitForTimeout(200);}
   async function checkPercentages(){
    return page.evaluate(()=>{
-    const r=__tags.at(-1),overall=r.overall;
+    const r=__tags.at(-1),overall=r.overall,coarse=r.modelInfo.taxonomy==='coarse5';
     const solid=[...document.querySelectorAll('#tags-row .ov-tag .pct')].map(n=>n.textContent);
     const family=overall.familyMass,total=family.rc+family.ln;
     const rcPct=total>0?Math.round(100*family.rc/total):null;
     const hybrid=rcPct===null?'RC — / LN —':`RC ${rcPct}% / LN ${100-rcPct}%`;
-    const expected=overall.tags.map(t=>t==='hybrid'?hybrid:`${Math.round(overall.labelPercentages[t]||0)}%`);
-    return {solid,expected,profile:r.modelInfo.perception.profile,calls:__tags.length,ratings:__ratings.length,percentages:overall.percentages};
+    const expected=overall.tags.map(t=>t==='hybrid'?hybrid:`${Math.round(coarse?100*overall.composition[t]:overall.labelPercentages[t]||0)}%`);
+    return {solid,expected,profile:r.modelInfo.perception?.profile,calls:__tags.length,ratings:__ratings.length,percentages:coarse?overall.composition:overall.percentages};
    });
   }
   await chart(mapText);let state=await checkPercentages();assert.deepEqual(state.solid,state.expected);assert.equal(state.profile,'detail');assert.equal(state.calls,1);assert.equal(state.ratings,1);
@@ -87,6 +87,25 @@ const {fixture,patternFixture}=require('./helpers.cjs');
   await page.screenshot({path:path.join(output,'overlay-hybrid-normalized.png')});
   await page.evaluate(()=>__renderOverallTags(__tags.at(-1)));
   assert(!(await page.locator('#tags-row').textContent()).includes('Burden'));
+  // Reproduce the attached 710px screenshot: all four chips fit the panel,
+  // but the former 440px cap forced Chordjack onto its own line.
+  await page.setViewportSize({width:710,height:600});
+  await page.evaluate(()=>{
+   const r=structuredClone(__tags.at(-1));r.overall.tags=['fast chordstream'];
+   r.overall.percentages={'fast chordstream':33,'dense chordstream':37,speed:15,chordjack:13};
+   r.overall.labelPercentages={'fast chordstream':33};__renderOverallTags(r);
+  });
+  const positions=()=>page.locator('#tags-row > span').evaluateAll(nodes=>nodes.map(n=>{
+   const r=n.getBoundingClientRect();return {top:r.top,center:r.top+r.height/2,left:r.left,right:r.right};
+  }));
+  let chips=await positions();assert.equal(chips.length,4);assert(chips.every(c=>Math.abs(c.center-chips[0].center)<1));
+  assert((await page.locator('#tags-row .ov-tag').getAttribute('title')).includes('prior-aware'));
+  await page.screenshot({path:path.join(output,'overlay-tags-wide.png')});
+  await page.setViewportSize({width:430,height:600});
+  chips=await positions();assert(chips.some(c=>c.center>chips[0].center+10));
+  const bounds=await page.locator('#tags-row').boundingBox();assert(chips.every(c=>c.right<=bounds.x+bounds.width+1));
+  await page.screenshot({path:path.join(output,'overlay-tags-narrow.png')});
+  await page.evaluate(()=>__renderOverallTags(__tags.at(-1)));
   const percentages=state.percentages;
   await change({error:'temporary settings read failure'});
   assert((await page.locator('#settings-warning').textContent()).includes('keeping Compact'));
@@ -122,9 +141,41 @@ const {fixture,patternFixture}=require('./helpers.cjs');
   assert.equal(await page.locator('#seg-conf').textContent(),await page.evaluate(()=>Math.round(__tags.at(-1).segments.find(s=>s.start<=10000&&s.end>10000).confidence*100)+'%'));
   assert.notEqual(await page.locator('#seg-conf').textContent(),'0%');
   await page.screenshot({path:path.join(output,'overlay-static-hand-wildcard.png')});
-  const count=await page.evaluate(()=>__tags.length);
-  await chart(fixture(4,true));assert.equal(await page.evaluate(()=>__tags.length),count);assert(!await page.locator('#tags-row').isVisible());
-  await chart(fixture(6,true));assert.equal(await page.evaluate(()=>__tags.length),count);assert(!await page.locator('#tags-row').isVisible());
+  async function checkNative(keys,text,mods=''){
+   const count=await page.evaluate(()=>__tags.length);
+   await chart(text,mods);assert.equal(await page.evaluate(()=>__tags.length),count+1);
+   const r=await page.evaluate(()=>__tags.at(-1));
+   assert.equal(r.map.keys,keys);assert.equal(r.modelInfo.taxonomy,'coarse5');assert.equal(r.modelInfo.nativeKeyCount,keys);
+   assert.equal(await page.evaluate(()=>__ratings.at(-1).tagEvidence),undefined);
+   assert(await page.locator('#tags-row').isVisible());assert(await page.locator('#seg-timeline-wrap').isVisible());
+   const state=await checkPercentages();assert.deepEqual(state.solid,state.expected);
+   assert((await page.locator('#tags-row').getAttribute('title')).includes('Weighted morphology composition'));
+   const segment=r.segments.find(s=>s.tag!=='break');assert(segment);
+   game.send(JSON.stringify(frame(mods,(segment.start+segment.end)/2)));
+   const label={jack:'Jack',stamina:'Chordstream',speed:'Speed',tech:'Tech',ln:'LN'}[segment.tag];
+   await page.waitForFunction(label=>document.querySelector('#seg-tag').textContent===label,label);
+   assert.equal(await page.locator('#seg-conf').textContent(),Math.round(segment.confidence*100)+'%');
+   assert.equal(await page.locator('.tl-seg').count(),r.segments.length);
+   assert(await page.locator('#seg-diff').isVisible());
+   const before=JSON.stringify(r.overall),calls=state.calls;
+   await change({curveSmoothing:'Light'});assert.equal((await checkPercentages()).calls,calls);
+   await page.setViewportSize({width:710,height:600});assert.equal((await checkPercentages()).calls,calls);
+   assert.equal(await page.evaluate(()=>JSON.stringify(__tags.at(-1).overall)),before);
+   await page.screenshot({path:path.join(output,`overlay-native-${keys}k${mods?'-'+mods:''}.png`)});
+   await page.setViewportSize({width:430,height:600});
+  }
+  for(const keys of [4,6]){
+   await checkNative(keys,fixture(keys,true));
+   await change({algorithm:'SPM Rating v1.2.0-Detailed'});
+   await checkNative(keys,fixture(keys,true),'DT');
+   await checkNative(keys,fixture(keys,false),'HT');
+   if(process.argv[3]){
+    const dir=path.join(process.argv[3],`spm_dataset_${keys}k-0.1.0`);
+    const files=filesUnder(dir).sort((a,b)=>fs.statSync(a).size-fs.statSync(b).size);
+    await checkNative(keys,fs.readFileSync(files[Math.floor(files.length/2)],'utf8'));
+   }
+   await change({algorithm:'SPM Rating v1.2.0-Compact'});
+  }
   const easy='osu file format v14\n[General]\nMode:3\n[Difficulty]\nCircleSize:7\nOverallDifficulty:5\n[TimingPoints]\n0,500,4,2,1,100,1,0\n[HitObjects]\n'+Array.from({length:12},(_,i)=>`36,192,${1000+i*4000},1,0,0:0:0:0:`).join('\n');
   await change({uiStyle:'Rating first',algorithm:'SPM Rating v1.2.0-Detailed'});
   await chart(easy);assert.equal(await page.locator('#rc-dan').textContent(),'< 0.50');
@@ -132,6 +183,6 @@ const {fixture,patternFixture}=require('./helpers.cjs');
   const r=await page.evaluate(()=>__tags.at(-1));assert.equal(r.modelInfo.version,'1.2.4');
   assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',scenarios:['184408e retuned local expert','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','430px and 380px layout','Minimal/Compact','DT and paused playback','4K/6K original visibility','numeric <0.50'],screenshots:output},null,2));
+  console.log(JSON.stringify({result:'PASS',scenarios:['184408e retuned local expert','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','710px full-width chips and natural narrow wrapping','430px and 380px layout','Minimal/Compact','DT and paused playback','native 4K/6K classification, percentages, live segments, difficulty and timeline; NM/DT/HT','numeric <0.50'],screenshots:output},null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

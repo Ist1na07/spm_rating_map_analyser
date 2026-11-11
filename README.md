@@ -23,7 +23,7 @@ An optional line at the top of the panel tells you what you are looking at: **ar
 
 ### Segment difficulty
 
-While playing, the overlay follows your position and shows the current section's pattern together with its **difficulty** — the SPM star value for that section plus the equivalent dan. It is computed from the raw per-section curve (smoothing never moves the number), so the value always belongs to the section shown next to it; hover it for the section's peak and dan. 7K only. Toggle with **Show Segment Difficulty**.
+While playing, the overlay follows your position and shows the current section's pattern together with its **difficulty** — the SPM star value for that section plus the equivalent dan. It is computed from the raw per-section curve (smoothing never moves the number), so the value always belongs to the section shown next to it; hover it for the section's peak and dan. Available on 4K/6K/7K. Toggle with **Show Segment Difficulty**.
 
 ### Difficulty curve
 
@@ -33,17 +33,20 @@ While playing, the overlay follows your position and shows the current section's
 
 ### Pattern classification
 
-The map is automatically split into sections, and each section is classified into a pattern type: **Chordjack**, **Minijack**, **Chordstream**, **Speed**, **Tech**, **Vibro**, **Coordination**, **Density**, **Inverse**, **Release**, **Technical**, **Break** and **Hybrid**.
+The map is automatically split into sections. **7K** retains the detailed taxonomy: **Chordjack**, **Minijack**, **Chordstream**, **Speed**, **Tech**, **Vibro**, **Coordination**, **Density**, **Inverse**, **Release**, **Technical**, **Break** and **Hybrid**. Native **4K/6K** uses five morphology classes: **Jack, Chordstream, Speed, Tech, LN**, plus Break segments. Chordstream is upstream's compatibility key `stamina`, not a generic endurance rating.
 
 What you get from it:
 
-- **Overall tags** — SPMTagClassifier **1.2.4 + commit `184408e`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `184408e`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall 4K/6K tags** — the upstream dominant morphology is solid; secondary classes are outlined. Percentages show normalized local morphology support weighted by duration, relative physical effort and concentration. The five raw shares sum to 100% before rounding; this is a different measure from 7K difficulty-integral burden. These classifiers do not consume the Detailed/Compact rating field
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
 **Local classifier updated:** the pinned [184408e snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/184408e3154e082946a4c2355e724daa118fb0e9/src/index.cjs) uses jointly retuned original 56D RC/LN expert parameters and a fixed reference predictor for whole-map aggregation. It also includes static-hand false chordstream exclusion, the LN Wildcard rest exemption and stable within-type tempo plateaus. Local labels can now differ from the prior v1.2.3 engine. This is the commit's unreleased retune, not merely the published v1.2.4 bundle; `modern` remains a separate opt-in candidate. See [CLASSIFIER.md](CLASSIFIER.md).
 
-Pattern classification currently runs on **7K** maps only; 4K/6K maps show the summary, difficulty rating, dan and curve.
+**Why can a lower-percentage 7K tag be solid?** Solid chips are selected by prior-aware gates, not a simple percentage ranking. Under Detailed, a prior tag can survive at 25% while a new tag normally needs 50%; family/mix gates also apply. Thus Fast Chordstream 33% may remain solid while Dense Chordstream 37% is outlined. The percentages describe burden, not correctness. Tags now use the full panel width and wrap only when needed.
+
+Classification, live segment difficulty and the timeline now run on **4K / 6K / 7K**. The 6K path is the upstream shared coarse model, not an unvalidated projection into 7K fine classes.
 
 ### Dan mapping
 
@@ -117,20 +120,21 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Show Map Summary | Show the song/difficulty/mapper/keys/BPM/objects/length line | On |
 | Show Pattern Tags | Show the overall pattern chips | On |
 | Show Current Segment | Show the live section pattern and equivalent BPM | On |
-| Show Segment Difficulty | Show the live section's star rating and dan (7K only) | On |
+| Show Segment Difficulty | Show the live section's star rating and dan (4K/6K/7K) | On |
 | Show Segment Timeline | Show the full-map pattern colour band | On |
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
 
 ### v1.2.1
+- Expose native 4K/6K five-class tags, weighted composition percentages, live sections and timeline; remove the tag row's fixed 440px cap and clarify main-tag gating in tooltips
 - Remove the “Burden” prefix; normalize the Hybrid chip’s RC/LN pair to 100% while retaining its relative proportion and leaving algorithm outputs unchanged
 - Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
 - Bundle the complete classifier from **SPMTagClassifier `184408e`** (`184408e3154e082946a4c2355e724daa118fb0e9`, package 1.2.4 plus unreleased local-expert retune), including the selected RC/LN parameters, fixed integral prior and segment-readout repairs
 - Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
 - Fix number-style dans below 0th to show `< 0.50`
 - Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On the initial v1.2.3 integration's local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
-- Existing ratings, dan tables, curves, settings, live-section confidence and 7K-only classification visibility are retained. Local datasets and beatmaps are not included
+- Existing ratings, dan tables, curves, saved settings and live-section confidence are retained. Local datasets and beatmaps are not included
 
 ### v1.2.0
 - **Algorithm upgraded to SPM Rating v1.2.0-rc3 + the new SPMSubmodel RC/LN model**
