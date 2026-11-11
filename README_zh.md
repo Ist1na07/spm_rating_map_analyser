@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.1
+# SPM Map Analyser v1.2.2
 
 一个 [tosu](https://tosu.app) 游戏内叠加界面，为 osu!mania **4K / 6K / 7K** 谱面提供实时难度评级、段位映射与键型分类。
 
@@ -15,7 +15,13 @@
   - **LN** — 长键（按住）部分的难度
 - 纯 RC 谱面会自动隐藏 LN 难度，只显示有意义的数值。
 - 评级使用 SPM Rating 的**参考尺度**（每个键数按各自的标注域对齐），因此星数请在同一键数内比较。
-- **SPM Rating v1.2.0 的两个模型都已内置**，可在 **Rating Algorithm** 中切换：**SPM Rating v1.2.0-Detailed**（完整模型，默认）与 **SPM Rating v1.2.0-Compact**（上游的轻量模型，差异为 16 个标定参数、角色价格与参考尺度对齐）。切换后会立即重新计算当前谱面。
+- **SPM Rating v1.2.0 的两个模型都已内置**，可在 **Rating Algorithm** 中切换：**SPM Rating v1.2.0-Detailed**（完整模型，默认）与 **SPM Rating v1.2.0-Compact**（上游的轻量模型，差异为 16 个标定参数、角色价格与参考尺度对齐）。切换后立即更新当前谱面，已有匹配缓存时直接复用。
+
+### 本地分析缓存
+
+**Local Analysis Cache** 默认开启。首次分析后，将难度、原始曲线及标签／分段数据 gzip 压缩后存入浏览器本地磁盘。面板显示 **Saved** 表示已保存，之后再次选中显示 **Cached**，不会重跑评分器或分类器；重启浏览器后仍可复用。
+
+读取前会核对实际 `.osu` 内容；编辑过就删除该文件全部旧配置缓存，分析器版本变化则在启动时清空缓存。Detailed／Compact、倍率、子难度方案分别缓存。压缩数据上限为 64 MiB／1024 张谱面，优先淘汰最久未用的数据。关闭开关会清空缓存；存储不可用时照常计算。缓存保存在浏览器配置文件中，不放进插件工作目录，也不上传 Git。详见 [缓存说明](CACHE.md)。
 
 ### 谱面摘要
 
@@ -95,7 +101,7 @@
 
 ## 使用方法
 
-1. 从本仓库下载 [v1.2.1 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
+1. 从本仓库下载 [v1.2.2 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将**直接包含 `index.html`、`settings.json`、`metadata.txt` 的那一层文件夹**放入 tosu 的 `static` 目录，不要再套一层解压目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
@@ -113,6 +119,7 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 |-------|------|------|
 | Rating Algorithm | SPM Rating v1.2.0 的模型选择：**SPM Rating v1.2.0-Detailed**（完整模型）或 **SPM Rating v1.2.0-Compact**（轻量模型）。两者各有独立实测的段位节点，切换后当前谱面会立即重新计算 | Detailed |
 | Sub Difficulty Scheme | **Direct**：RC/LN 子难度始终来自新子模型；**Legacy v0.5.1**：LN 谱面的 LN 难度等于总难度 | Direct |
+| Local Analysis Cache | 本地压缩保存分析结果；核对编辑、清除不兼容版本；关闭时清空缓存 | 开 |
 | UI Style | **Rating first**、**Dan first** 或 **Minimal**（只显示摘要、段位与整体键型标签） | Rating first |
 | Panel Density | **Standard** 或 **Compact** 面板密度 | Standard |
 | Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Default Dark |
@@ -127,6 +134,11 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.2
+- 新增默认开启的 gzip 本地磁盘分析缓存，含谱面编辑检测、版本／配置失效、LRU 空间限制与设置开关
+- 命中时恢复难度、标签、曲线与对应模型段位表，不重跑两个引擎；拒绝过期请求及错图响应
+- SPM Rating 与固定的 `b311c40` 分类器算法不变
 
 ### v1.2.1
 - 跟进分类器 `b311c40`：复用已有原始难度场，在软 Break 门控前保护持续高压力段，不增加评分次数；无难度输入及原生 4K／6K 路径保持不变
@@ -215,7 +227,7 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 在包含 Git 历史的源码 checkout 中使用 Node 20 或更新版本运行：
 
 ```sh
-node --test tests/regression.test.cjs
+node --test tests/regression.test.cjs tests/cache.test.cjs
 # 可选：读取本地数据集／谱面及固定到 `b311c40` 的分类器运行源码。
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```

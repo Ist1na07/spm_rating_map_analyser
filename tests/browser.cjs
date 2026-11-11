@@ -10,7 +10,7 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
  const settingsRequests=[];
  const server=http.createServer((req,res)=>{
   const name=new URL(req.url,'http://localhost').pathname.split('/').filter(Boolean).at(-1)||'index.html';
-  if(!['index.html','spm_algorithm.js','tag_engine.js','dan_constants.json'].includes(name)){res.writeHead(404).end();return;}
+  if(!['index.html','spm_algorithm.js','tag_engine.js','analysis_cache.js','metadata.txt','dan_constants.json'].includes(name)){res.writeHead(404).end();return;}
   res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.json')?'application/json':'text/html');
   const body=fs.readFileSync(path.join(root,name));
   // Expose only the renderer to synthetic display fixtures, not in production.

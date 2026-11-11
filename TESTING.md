@@ -1,4 +1,42 @@
-# v1.2.1 verification
+# v1.2.2 cache verification
+
+- `node --test tests/cache.test.cjs`: five tests passed, covering identity,
+  response matching, content-edit fingerprints, lossless/pruned snapshots and
+  the version/default-on setting. All eleven existing rating/classifier
+  regression tests also passed; neither engine source changed.
+- `node tests/browser-cache.cjs [local-chart.osu ...]`: the actual renderer and
+  real IndexedDB passed cold/hit comparisons, full Chrome process restart,
+  model/rate/subscheme variants, stale-checksum edits, deletion of all edited
+  variants, editor return, disable/clear/re-enable, damaged gzip, rapid-switch
+  and wrong-body rejection, count/byte LRU, version cleanup, older-tab write
+  rejection, quota failure, disable-during-write and blocked storage.
+- Three real local charts (7K, 4K and 6K) were cached and reopened. Complete
+  rendered rating/curve/tag snapshots matched their cold calculations exactly;
+  counters confirmed zero rating or classifier calls on hits. The prior
+  browser suite also passed, including Hybrid normalization, wide/narrow tags,
+  tempo transitions, live segments and settings recovery. Screenshots were
+  inspected. The local data was not uploaded.
+- Live tosu also passed: the installed v1.2.2 page showed **Saved**, then
+  **Cached** after reload, with exactly the same 9.80 rating, dan labels and
+  Jack/Tech/Speed/Chordstream percentages on the selected 4K chart. Its rendered
+  page was inspected; existing tosu setting values and game selection were not
+  changed. Different lazer rates 1.23411 and 1.23412 are distinct cache variants.
+
+Measured once in headless Chrome on this machine, including file verification
+and rendering. Cold includes initial storage; these are example latencies, not
+an accuracy evaluation or a machine-independent guarantee.
+
+| Local chart | Cold → hit | Compressed snapshot |
+|---|---:|---:|
+| 7K, Duplicity Shade (10828 objects) | 1115 → 31 ms | 28,470 bytes |
+| 4K, median-size local sample | 254 → 14 ms | 9,468 bytes |
+| 6K, median-size local sample | 132 → 14 ms | 9,237 bytes |
+
+Playwright remains test-only; no browser library is shipped. Run the new cache
+browser test with the same test-only setup below. Cache design, location and
+invalidation rules are in [CACHE.md](CACHE.md).
+
+# Historical v1.2.1 verification
 
 ## Automated checks
 

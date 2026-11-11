@@ -11,7 +11,7 @@
     "uniqueID": "algorithm",
     "type": "options",
     "title": "Rating Algorithm",
-    "description": "SPM Rating v1.2.0 model variant: SPM Rating v1.2.0-Detailed is the full model, SPM Rating v1.2.0-Compact the lighter one. Both use the same RC/LN sub-model and their own dan tables; changing this re-rates the current chart",
+    "description": "SPM Rating v1.2.0 model variant: SPM Rating v1.2.0-Detailed is the full model, SPM Rating v1.2.0-Compact the lighter one. Both use the same RC/LN sub-model and their own dan tables; changing this updates the current chart, reusing a matching local cache entry when available",
     "options": ["SPM Rating v1.2.0-Detailed", "SPM Rating v1.2.0-Compact"],
     "value": "SPM Rating v1.2.0-Detailed"
   },
@@ -22,6 +22,14 @@
     "description": "RC/LN sub-ratings source: Direct uses the new RC/LN sub-algorithms for every chart; Legacy v0.5.1 shows LN difficulty = total",
     "options": ["Direct (RC/LN sub-model)", "Legacy v0.5.1"],
     "value": "Direct (RC/LN sub-model)"
+  },
+  {
+    "uniqueID": "enableAnalysisCache",
+    "type": "checkbox",
+    "title": "Local Analysis Cache",
+    "description": "Save compressed analysis to local browser storage (up to 64 MiB / 1024 charts). Check .osu contents before reuse; edits invalidate old variants and analyser version changes clear all. Turning off clears the cache",
+    "options": [],
+    "value": true
   },
   {
     "uniqueID": "hDisplay",

@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.1
+# SPM Map Analyser v1.2.2
 
 A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
 
@@ -15,7 +15,13 @@ A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time di
   - **LN** — long-note (hold) difficulty
 - On pure RC maps the LN rating is hidden automatically, so you only see the numbers that matter.
 - Ratings use SPM Rating's **reference scale** (each key count is aligned to its own label domain), so compare star values within the same key count.
-- **Both SPM Rating v1.2.0 models are available** and selectable under **Rating Algorithm**: **SPM Rating v1.2.0-Detailed** (the full model, default) and **SPM Rating v1.2.0-Compact** (the lighter upstream model that differs in 16 calibrated parameters, its role price and its reference alignment). Switching re-rates the current chart immediately.
+- **Both SPM Rating v1.2.0 models are available** and selectable under **Rating Algorithm**: **SPM Rating v1.2.0-Detailed** (the full model, default) and **SPM Rating v1.2.0-Compact** (the lighter upstream model that differs in 16 calibrated parameters, its role price and its reference alignment). Switching updates the current chart, reusing a matching cache entry when available.
+
+### Local analysis cache
+
+**Local Analysis Cache** is on by default. Once a chart has been analysed, its rating, raw curves and tag/segment results are gzip-compressed into local browser storage. **Saved** means the result was stored; **Cached** means both engines were skipped on a later selection, including after a browser restart.
+
+Before reuse, the actual `.osu` contents are checked. Edits delete every old variant for that file; an analyser version change clears the cache on startup. Detailed/Compact, speed rate and sub-difficulty schemes are cached separately. Storage is bounded to 64 MiB of compressed payloads / 1024 charts, evicting the least recently used charts first. Turning the setting off clears the cache; unavailable storage never prevents analysis. Cache data stays in the browser profile, not the plugin directory or Git repository. See [cache details](CACHE.md).
 
 ### Map summary
 
@@ -95,7 +101,7 @@ Two layouts under **UI Style**:
 
 ## Usage
 
-1. Download the [v1.2.1 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.1 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
+1. Download the [v1.2.2 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.2 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
@@ -113,6 +119,7 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 |---------|--------------|---------|
 | Rating Algorithm | SPM Rating v1.2.0 model variant: **SPM Rating v1.2.0-Detailed** (full model) or **SPM Rating v1.2.0-Compact** (lighter model). Each has its own measured dan nodes; changing it re-rates the current chart | Detailed |
 | Sub Difficulty Scheme | **Direct**: RC/LN sub-ratings always come from the new sub-models. **Legacy v0.5.1**: LN maps show LN difficulty equal to the total | Direct |
+| Local Analysis Cache | Persist compressed results locally; verify edits, clear incompatible versions; turning off clears cached data | On |
 | UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags only) | Rating first |
 | Panel Density | **Standard** or **Compact** panel size | Standard |
 | Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Default Dark |
@@ -127,6 +134,11 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
+
+### v1.2.2
+- Add default-on, gzip-compressed local disk analysis caching with edit detection, version/config invalidation, bounded LRU storage and a settings switch
+- Restore complete rating/tag/curve UI without rerunning either engine, including the selected model's dan table; reject stale/wrong-map responses
+- Keep the SPM Rating and pinned `b311c40` classifier algorithms unchanged
 
 ### v1.2.1
 - Update to classifier `b311c40`: reuse the existing raw SPM demand before soft Break gates, preserving sustained-pressure sections without another rating pass; keep unrated and native 4K/6K behavior unchanged
@@ -216,7 +228,7 @@ Measured against [ManiaMapAnalyser](https://github.com/LeoBlackMT/osumania_map_a
 Run the checked-in regression tests from a Git checkout with Node 20 or newer:
 
 ```sh
-node --test tests/regression.test.cjs
+node --test tests/regression.test.cjs tests/cache.test.cjs
 # Optional: use your own local datasets/maps and classifier runtime source pinned to `b311c40`.
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```

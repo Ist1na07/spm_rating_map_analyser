@@ -5,7 +5,7 @@
 full commit `b311c408ef02d6705d30b51a4ea789d3e86d2976`. Its package version is **1.2.4**,
 but this commit includes the unreleased local-expert retune and pressure-aware
 Break repair; the published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
-see [LICENSE](LICENSE). The analyser version remains **v1.2.1**.
+see [LICENSE](LICENSE). The analyser version is **v1.2.2**.
 
 ## Default 7K now uses the retuned local expert
 
@@ -76,7 +76,9 @@ the same rating evaluation, before display calibration, 400 ms bucketing or
 smoothing. No rating is performed inside the classifier. Model identities are
 upstream protocol literals, not newly computed file digests.
 
-`renderRating` passes this evidence to `TagClassifier.analyzeMap` for 7K. Both
+`calculateAnalysis` passes this evidence to `TagClassifier.analyzeMap` for 7K
+on a cache miss. A validated disk hit restores the saved UI analysis without
+calling either engine; see [CACHE.md](CACHE.md). Both
 Detailed and Compact changes update pressure-aware Break handling and whole-map
 aggregation. Display-only settings retain the cached analysis. Local-section
 confidence still displays the classifier's

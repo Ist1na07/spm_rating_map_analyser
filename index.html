@@ -540,6 +540,7 @@ body {
     border-left: 2px solid var(--ln);
     padding-left: 7px;
 }
+#cache-status { margin-left: auto; color: var(--text-dim); font-size: 11px; font-weight: 500; white-space: nowrap; }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -563,6 +564,7 @@ body {
         <span id="type-badge" class="rc">RC</span>
         <span id="keys-badge" class="hidden"></span>
         <span id="mod-badge" class="hidden"></span>
+        <span id="cache-status" role="status"></span>
     </div>
     <div id="rc-ln-row">
         <div class="sub-item">
@@ -616,6 +618,7 @@ body {
 
 <script src="spm_algorithm.js"></script>
 <script src="tag_engine.js"></script>
+<script src="analysis_cache.js"></script>
 <script>
 (function() {
     const TOSU_PORT = 24050;
@@ -873,6 +876,7 @@ body {
         // detailed model.
         algorithm: 'SPM Rating v1.2.0-Detailed',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
+        enableAnalysisCache: true,
         danDisplayStyle: 'Thirds (low/high)',
         colorScheme: 'Default Dark',
         uiStyle: 'Rating first',
@@ -947,6 +951,11 @@ body {
     let segmentDiffFloor = 0;     // v1.0.1: below this a section is treated as a rest
     let cachedKeyCount = 7;
     let cachedOsuContent = null;
+    let cacheStore = null, cacheUnavailableReason = '';
+    let currentBeatmapFrame = null, currentSelectionKey = null;
+    let analysisSerial = 0, analysisPending = false, pendingOptions = null;
+    let failedSelectionKey = null, retryAfter = 0;
+    let lastStateName = '';
     let reconnectTimer = null;
     let animFrameId = null;
     let lastSegIndex = -2;
@@ -961,6 +970,7 @@ body {
     const elContainer = document.getElementById('container');
     const elLoading = document.getElementById('loading');
     const elSettingsWarning = document.getElementById('settings-warning');
+    const elCacheStatus = document.getElementById('cache-status');
     const elRating = document.getElementById('rating');
     const elHeroDan = document.getElementById('hero-dan');
     const elSummaryRow = document.getElementById('summary-row');
@@ -1071,7 +1081,7 @@ body {
         }
 
         const sortedCodes = [...modCodes].sort();
-        const modSignature = [client, speedRate.toFixed(3), sortedCodes.join('+')].join('|');
+        const modSignature = [client, String(speedRate), sortedCodes.join('+')].join('|');
 
         return { speedRate, modCodes: sortedCodes, modSignature };
     }
@@ -1892,81 +1902,117 @@ body {
         if (cachedTagResult) renderSegTimeline(cachedTagResult);
     }
 
-    async function fetchAndRate(speedRate) {
+    function cacheIndicator(state, reason='') {
+        elContainer.dataset.cacheState = state;
+        elCacheStatus.textContent = ({hit:'Cached', saved:'Saved', miss:'Calculated', off:'Cache off', ready:'Cache on', unavailable:'No cache'})[state] || '';
+        elCacheStatus.title = reason || ({
+            hit:'Loaded from local disk after checking the current .osu contents',
+            saved:'Analysis saved locally; selecting this unchanged chart again skips calculation',
+            miss:'Fresh analysis; saving a compressed local copy',
+            off:'Local analysis cache is disabled; existing cache data has been cleared',
+            ready:'Local analysis cache is enabled for the next selection',
+        })[state] || cacheUnavailableReason;
+    }
+    function cacheUnavailable(error) {
+        cacheUnavailableReason = String(error?.message || error);
+        console.warn('SPM Map Analyser: local cache unavailable:', cacheUnavailableReason);
+        if (settings.enableAnalysisCache) cacheIndicator('unavailable', cacheUnavailableReason);
+    }
+
+    async function fetchAndRate(speedRate, frame=currentBeatmapFrame) {
+        if (!frame) return;
+        const serial = ++analysisSerial;
+        const options = {model:algorithmModel(), subDifficultyScheme:currentSubScheme()};
+        const variant = JSON.stringify([options.model, options.subDifficultyScheme, speedRate]);
+        const selectionKey = currentSelectionKey;
+        const isCurrent = () => serial === analysisSerial && options.model === algorithmModel()
+            && options.subDifficultyScheme === currentSubScheme();
+        analysisPending = true; pendingOptions = options;
         try {
-            const resp = await fetch(`http://localhost:${TOSU_PORT}/files/beatmap/file`);
-            if (!resp.ok) {
-                showLoading('Failed to fetch .osu');
-                return;
-            }
+            // Even a hit re-reads the file: tosu's checksum can lag edits.
+            // Never rely on the HTTP browser cache for freshness.
+            const resp = await fetch(`http://localhost:${TOSU_PORT}/files/beatmap/file`, {cache:'no-store'});
+            if (!isCurrent()) return;
+            if (!resp.ok) throw Error('Failed to fetch .osu');
             const content = await resp.text();
-            if (!content || content.length < 50) {
-                showLoading('Empty .osu file');
-                return;
+            if (!isCurrent()) return;
+            if (!content || content.length < 50) throw Error('Empty .osu file');
+            if (!SPMAnalysisCache.matches(content,frame)) throw Error('Beatmap changed while loading; waiting for the current map');
+            await runtimeReady;
+            if (!isCurrent()) return;
+            let digest = null, analysis = null;
+            if (settings.enableAnalysisCache && frame.id && cacheStore?.available) {
+                try { digest = await SPMAnalysisCache.fingerprint(content); }
+                catch (e) { cacheUnavailable(e); }
+                if (!isCurrent()) return;
+                if (digest) analysis = await cacheStore.get(frame.id,digest,variant,isCurrent);
+                if (!isCurrent()) return;
             }
-
+            const hit = !!analysis;
+            if (!analysis) analysis = calculateAnalysis(content,speedRate,options);
+            if (!analysis.result) {
+                cachedResult = cachedRawCurves = cachedTagResult = cachedSegStats = null;
+                showLoading('No notes found'); return;
+            }
+            // Take an immutable RAW snapshot before smoothing mutates result.
+            const toStore = !hit && digest && analysis.tags
+                ? SPMAnalysisCache.snapshot(analysis.result,analysis.tags) : null;
             cachedOsuContent = content;
-            cachedKeyCount = parseKeyCount(content);
+            cachedKeyCount = analysis.result.keyCount;
             cachedMeta = SPMEngine.parseOsuMeta(content);
-
-            // SPMTagClassifier perception integration schema 1
-            cachedTagResult = null;
-
-            renderRating(speedRate);
+            cachedTagResult = analysis.tags;
+            cachedResult = analysis.result;
+            // processMap normally selects the implicit dan table. A disk hit
+            // skips that call, so restore its model before segment/dan rendering.
+            SPMEngine.setDanVariant(options.model);
+            cachedRawCurves = {
+                sectionDifficulties: cachedResult.sectionDifficulties,
+                rcSectionDifficulties: cachedResult.rcSectionDifficulties,
+                lnSectionDifficulties: cachedResult.lnSectionDifficulties,
+            };
+            rebuildCurves();
+            showResult(cachedResult);
+            cacheIndicator(!settings.enableAnalysisCache ? 'off' : hit ? 'hit'
+                : !digest || !cacheStore?.available ? 'unavailable' : 'miss',
+                !frame.id ? 'tosu must provide the folder-qualified beatmap path for persistent caching' : '');
+            if (toStore) void cacheStore.put(frame.id,digest,variant,toStore,isCurrent).then(saved => {
+                if (isCurrent() && settings.enableAnalysisCache) {
+                    if (saved) cacheIndicator('saved');
+                    else if (!cacheStore.available) cacheIndicator('unavailable');
+                }
+            });
         } catch (e) {
-            console.error('SPM Map Analyser error:', e);
-            showLoading('Error: ' + e.message);
+            if (!isCurrent()) return;
+            console.warn('SPM Map Analyser:', e);
+            failedSelectionKey = selectionKey; retryAfter = performance.now()+1000;
+            currentSelectionKey = null;
+            showLoading(e.message);
+        } finally {
+            if (serial === analysisSerial) { analysisPending = false; pendingOptions = null; }
         }
     }
 
-    /** Rate + display the cached chart with the active rating algorithm.
-     *  Split out of fetchAndRate so a rating-algorithm or sub-difficulty-scheme
-     *  change can re-evaluate the same chart without re-fetching it; the tag
-     *  classification reuses the active model's raw demand field. */
-    function renderRating(speedRate) {
-        const result = processMap(cachedOsuContent, 'full', speedRate, {
-            subDifficultyScheme: currentSubScheme(),
-            model: algorithmModel(),
-            includeTagEvidence: cachedKeyCount === 7,
+    /** Pure calculation; cache hits bypass both engines, not just rating. */
+    function calculateAnalysis(content, speedRate, options) {
+        const keyCount = parseKeyCount(content);
+        const result = processMap(content, 'full', speedRate, {
+            ...options, includeTagEvidence:keyCount === 7,
         });
-        cachedTagResult = null;
-        if (result && [4, 6, 7].includes(cachedKeyCount) && typeof TagClassifier !== 'undefined') {
+        let tags = null;
+        if (result && [4,6,7].includes(keyCount) && typeof TagClassifier !== 'undefined') {
             try {
-                cachedTagResult = TagClassifier.analyzeMap(cachedOsuContent, {
-                    speedRate,
-                    // Only stable 7K consumes the rating field. Native 4K/6K
-                    // uses its own weighted five-class morphology model.
-                    ...(cachedKeyCount === 7 ? {ratingEvidence: result.tagEvidence} : {}),
+                tags = TagClassifier.analyzeMap(content, {
+                    speedRate, ...(keyCount === 7 ? {ratingEvidence:result.tagEvidence} : {}),
                 });
-            } catch (e) {
-                console.error('SPM Map Analyser: perception classification failed:', e);
-            }
+            } catch (e) { console.error('SPM Map Analyser: perception classification failed:', e); }
         }
         if (result) {
-            // Native classifier results drive the same tags/segments/timeline UI.
-            result.classified = cachedTagResult != null;
-            if (result.classified && cachedTagResult.overall.tags.length) result.mapType = String(cachedTagResult.overall.sort || '').toUpperCase() || result.mapType;
-            result.subDifficultyScheme = currentSubScheme();
+            result.classified = tags != null;
+            if (result.classified && tags.overall.tags.length)
+                result.mapType = String(tags.overall.sort || '').toUpperCase() || result.mapType;
+            result.subDifficultyScheme = options.subDifficultyScheme;
         }
-        if (!result) {
-            showLoading('No notes found');
-            cachedResult = null;
-            cachedRawCurves = null;
-            cachedSegStats = null;
-            return null;
-        }
-        // keep the unsmoothed series so the smoothing setting can be changed
-        // later without re-analysing the chart
-        cachedRawCurves = {
-            sectionDifficulties: result.sectionDifficulties,
-            rcSectionDifficulties: result.rcSectionDifficulties,
-            lnSectionDifficulties: result.lnSectionDifficulties,
-        };
-        cachedResult = result;
-        // rebuildCurves() reads cachedResult, so it must run after it is set
-        rebuildCurves();
-        showResult(result);
-        return result;
+        return {result,tags};
     }
 
     function startAnimationLoop() {
@@ -2006,6 +2052,14 @@ body {
         if (typeof d.subDifficultyScheme === 'string') {
             changed = changed || settings.subDifficultyScheme !== d.subDifficultyScheme;
             settings.subDifficultyScheme = d.subDifficultyScheme;
+        }
+        if ('enableAnalysisCache' in d) {
+            const enabled = !!d.enableAnalysisCache;
+            if (settings.enableAnalysisCache !== enabled) {
+                settings.enableAnalysisCache = enabled; changed = true;
+                if (cacheStore) void cacheStore.setEnabled(enabled);
+                cacheIndicator(enabled ? 'ready' : 'off');
+            }
         }
         if (typeof d.danDisplayStyle === 'string') {
             changed = changed || settings.danDisplayStyle !== d.danDisplayStyle;
@@ -2068,6 +2122,8 @@ body {
     /** True when the cached rating came from a different algorithm/scheme than
      *  the one selected now (those settings need a fresh evaluation). */
     function ratingSettingsChanged() {
+        if (pendingOptions) return pendingOptions.model !== algorithmModel()
+            || pendingOptions.subDifficultyScheme !== currentSubScheme();
         if (!cachedResult) return false;
         if (cachedResult.modelVariant !== algorithmModel()) return true;
         if (cachedResult.subDifficultyScheme !== currentSubScheme()) return true;
@@ -2078,18 +2134,14 @@ body {
         applyColorScheme(settings.colorScheme);
         applyUiStyle();
         applyClassificationVisibility();
-        // a rating-algorithm or sub-difficulty-scheme change re-rates the cached
-        // chart (the numbers themselves change, not just the presentation)
-        if (cachedOsuContent && ratingSettingsChanged()) {
-            try {
-                if (renderRating(currentSpeedRate || 1.0)) {
-                    lastSegIndex = -2;
-                    return;
-                }
-            } catch (e) {
-                console.error('SPM Map Analyser: re-rating failed:', e);
-            }
+        // Numerical settings get their own cache variant. Re-read the file
+        // before lookup so an edit cannot reuse stale in-memory text either.
+        if ((cachedOsuContent || analysisPending) && ratingSettingsChanged()) {
+            showLoading('Loading analysis...');
+            void fetchAndRate(currentSpeedRate || 1.0);
+            return;
         }
+        if (analysisPending) return;
         // the smoothing setting re-derives the curves from the cached raw
         // series; everything else is a pure re-render
         rebuildCurves();
@@ -2131,7 +2183,7 @@ body {
         lastSettingsJson = next;
         applySettingsDict(message);
         if (!firstLoad) reapplySettingsToUI();
-        else if (cachedResult) reapplySettingsToUI();
+        else if (cachedResult || analysisPending) reapplySettingsToUI();
     }
 
     function sendGetSettings() {
@@ -2178,6 +2230,9 @@ body {
             try { data = JSON.parse(event.data); } catch { return; }
 
             const checksum = data.beatmap?.checksum;
+            const frame = SPMAnalysisCache.frame(data);
+            const selectionKey = JSON.stringify([frame.id, checksum]);
+            currentBeatmapFrame = frame;
             const mode = data.beatmap?.mode?.number;
 
             // v1.0.1: summary-line facts straight from the frame; the parsed
@@ -2200,6 +2255,8 @@ body {
             }
 
             if (mode !== 3) {
+                analysisSerial++; analysisPending = false; pendingOptions = null;
+                currentSelectionKey = null;
                 if (cachedResult !== null) {
                     cachedResult = null;
                     cachedRawCurves = null;
@@ -2215,6 +2272,8 @@ body {
 
             // "Hide While Playing": state 2 = play, 7 = resultScreen.
             const stateName = String(data?.state?.name || '').toLowerCase();
+            const returnedFromEditor = /edit/i.test(lastStateName) && !/edit/i.test(stateName);
+            lastStateName = stateName;
             const isPlay = stateName === 'play';
             const isResults = stateName === 'resultScreen';
             if (settings.hideOnPlay && isPlay) {
@@ -2229,12 +2288,14 @@ body {
             // the recover branch below must not un-hide either
 
             const needsRecalc = checksum && (
-                checksum !== currentChecksum ||
-                modData.modSignature !== currentModSignature
+                (selectionKey !== currentSelectionKey && (selectionKey !== failedSelectionKey || performance.now() >= retryAfter))
+                || modData.modSignature !== currentModSignature
+                || returnedFromEditor
             );
 
             if (needsRecalc) {
                 currentChecksum = checksum;
+                currentSelectionKey = selectionKey;
                 currentModSignature = modData.modSignature;
                 currentSpeedRate = modData.speedRate;
 
@@ -2251,10 +2312,10 @@ body {
                     elModBadge.classList.add('hidden');
                 }
 
-                showLoading('Calculating...');
-                fetchAndRate(modData.speedRate);
+                showLoading('Loading analysis...');
+                void fetchAndRate(modData.speedRate,frame);
                 startAnimationLoop();
-            } else if (cachedResult && elContainer.classList.contains('hidden') && !hideOnPlayActive) {
+            } else if (cachedResult && !analysisPending && elContainer.classList.contains('hidden') && !hideOnPlayActive) {
                 showResult(cachedResult);
                 startAnimationLoop();
             }
@@ -2262,6 +2323,8 @@ body {
 
         ws.onclose = () => {
             console.log('SPM Map Analyser: Disconnected');
+            analysisSerial++; analysisPending = false; pendingOptions = null;
+            currentSelectionKey = null;
             stopAnimationLoop();
             showLoading('Disconnected');
             if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -2276,10 +2339,24 @@ body {
     // Optional dan node override (defaults are inlined in spm_algorithm.js)
     async function loadDanConstants() {
         try {
-            const res = await fetch('dan_constants.json');
-            if (!res.ok) return;
-            SPMEngine.loadDanConstants(await res.json());
+            const res = await fetch('dan_constants.json', {cache:'no-store'});
+            if (!res.ok) return 'inlined';
+            const constants = await res.json();
+            SPMEngine.loadDanConstants(constants);
+            return JSON.stringify(constants);
         } catch { /* keep inlined defaults */ }
+        return 'inlined';
+    }
+    async function initializeCache() {
+        const constants = await loadDanConstants();
+        try {
+            const response = await fetch('metadata.txt', {cache:'no-store'});
+            if (!response.ok) throw Error('Cannot verify analyser version; local cache disabled');
+            const version = (await response.text()).match(/^version:\s*(\S+)\s*$/m)?.[1];
+            cacheStore = SPMAnalysisCache.create({version,signature:constants,onUnavailable:cacheUnavailable});
+            await cacheStore.ready;
+            await cacheStore.setEnabled(settings.enableAnalysisCache);
+        } catch (e) { cacheUnavailable(e); }
     }
 
     // paint the default scheme before the first frame arrives, so the panel
@@ -2294,8 +2371,13 @@ body {
     showLoading('Connecting to tosu...');
     connectSettings();
     startSettingsPolling();
-    loadDanConstants();
+    const runtimeReady = initializeCache();
     connect();
+    // Returning from an editor or refocusing the overlay revalidates the file
+    // even if tosu has not refreshed its checksum yet.
+    window.addEventListener('focus', () => {
+        if (currentBeatmapFrame && cachedResult && !analysisPending) void fetchAndRate(currentSpeedRate || 1);
+    });
 })();
 </script>
 </body>
