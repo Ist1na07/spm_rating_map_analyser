@@ -35,7 +35,9 @@ test('cache snapshot removes diagnostics and sensors without rounding raw curves
     assert.deepEqual(s.tags.overall,tags.overall);
     s.result.sectionDifficulties[0]=-1;assert.notEqual(result.sectionDifficulties[0],-1);
 });
-test('v1.2.2 metadata and default-on setting are delivered together',()=>{
-    assert.match(fs.readFileSync(require.resolve('../metadata.txt'),'utf8'),/^version:1\.2\.2\s*$/m);
-    assert.equal(require('../settings.json').find(s=>s.uniqueID==='enableAnalysisCache').value,true);
+test('v1.2.3 metadata and default-on setting are delivered together',()=>{
+    assert.match(fs.readFileSync(require.resolve('../metadata.txt'),'utf8'),/^version:1\.2\.3\s*$/m);
+    const settings=require('../settings.json');
+    assert.equal(settings.find(s=>s.uniqueID==='enableAnalysisCache').value,true);
+    assert.equal(settings.find(s=>s.uniqueID==='enableAnimations').value,true);
 });

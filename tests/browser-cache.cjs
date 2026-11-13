@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const {fixture}=require('./helpers.cjs');
 (async()=>{
     const root=path.resolve(__dirname,'..'),output=fs.mkdtempSync(path.join(os.tmpdir(),'spm-cache-browser-'));
-    let version='1.2.2',text='',game,settingsSocket,settings={danDisplayStyle:'Number'},delayed=null,delayNext=false;
+    let version='1.2.3',text='',game,settingsSocket,settings={danDisplayStyle:'Number'},delayed=null,delayNext=false;
     const server=http.createServer((req,res)=>{
         const file=decodeURIComponent(new URL(req.url,'http://localhost').pathname.split('/').at(-1))||'index.html';
         if(file==='favicon.ico'){res.writeHead(204).end();return;}
@@ -12,8 +12,8 @@ const {fixture}=require('./helpers.cjs');
         res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.json')?'application/json':'text/html; charset=utf-8');
         let body=fs.readFileSync(path.join(root,file),'utf8');
         if(file==='metadata.txt')body=body.replace(/^version:.*$/m,'version:'+version);
-        if(file==='index.html')body=body.replace('    function showResult(result) {',
-            '    function showResult(result) {\n        window.__paint=(window.__paint||0)+1; window.__view=SPMAnalysisCache.snapshot(result,cachedTagResult);');
+        if(file==='index.html')body=body.replace('        // Main rating = total SR',
+            '        window.__paint=(window.__paint||0)+1; window.__view=SPMAnalysisCache.snapshot(result,cachedTagResult);\n        // Main rating = total SR');
         res.end(body);
     });
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -171,7 +171,7 @@ const {fixture}=require('./helpers.cjs');
         await paint(precise(1.23411),a,'saved');await paint(precise(1.23412),a,'saved');
         assert.deepEqual(await counts(),beforeRates.map(x=>x+2));
         await paint(precise(1.23411),a,'hit');assert.deepEqual(await counts(),beforeRates.map(x=>x+2));
-        version='1.2.3';await page.reload();await instrument();await paint(makeFrame('A',a),a,'saved');assert.deepEqual(await counts(),[1,1]);assert.equal((await records()).charts.length,1);
+        version='1.2.4';await page.reload();await instrument();await paint(makeFrame('A',a),a,'saved');assert.deepEqual(await counts(),[1,1]);assert.equal((await records()).charts.length,1);
         // Close Chrome entirely, reopen its dedicated profile: true disk persistence.
         await context.close();await open();await paint(makeFrame('A',a),a,'hit');assert.deepEqual(await counts(),[0,0]);
         await context.close();await open(true);await paint(makeFrame('A',a),a,'unavailable');assert.deepEqual(await counts(),[1,1]);

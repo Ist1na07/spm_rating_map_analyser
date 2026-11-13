@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.2
+# SPM Map Analyser v1.2.3
 
 A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
 
@@ -29,7 +29,7 @@ An optional line at the top of the panel tells you what you are looking at: **ar
 
 ### Segment difficulty
 
-While playing, the overlay follows your position and shows the current section's pattern together with its **difficulty** — the SPM star value for that section plus the equivalent dan. It is computed from the raw per-section curve (smoothing never moves the number), so the value always belongs to the section shown next to it; hover it for the section's peak and dan. Available on 4K/6K/7K. Toggle with **Show Segment Difficulty**.
+While playing, the overlay follows your position and shows the current section's pattern together with its **difficulty** — the SPM star value for that section plus the equivalent dan. It is computed from the raw per-section curve (smoothing never moves the number), so the value always belongs to the section shown next to it; hover it for the mean difficulty and dan. Available on 4K/6K/7K. Toggle with **Show Segment Difficulty**.
 
 ### Difficulty curve
 
@@ -45,7 +45,7 @@ What you get from it:
 
 - **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `b311c40`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
 - **Overall 4K/6K tags** — the upstream dominant morphology is solid; secondary classes are outlined. Percentages show normalized local morphology support weighted by duration, relative physical effort and concentration. The five raw shares sum to 100% before rounding; this is a different measure from 7K difficulty-integral burden. These classifiers do not consume the Detailed/Compact rating field
-- **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and an equivalent BPM
+- **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and, for Chordstream / Jack / Speed / Density / Coordination, an equivalent BPM (number first, without a BPM suffix)
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
 **Classifier source:** the pinned [b311c40 snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/src/index.cjs) retains the jointly retuned 56D RC/LN experts, fixed whole-map reference prior, static-hand false chordstream exclusion, LN Wildcard rest exemption and stable tempo plateaus. It includes unreleased changes beyond the published v1.2.4 bundle; `modern` remains a separate opt-in candidate.
@@ -74,17 +74,17 @@ Three palettes, selectable under **Color Scheme**:
 
 | Scheme | What it is |
 |--------|------------|
-| **Default Dark** | The v1.0.0 palette, unchanged |
+| **Default Dark** | Blue RC / orange LN on a neutral dark panel |
 | **Aurora** | Teal/cyan for RC against coral/red for LN — a complementary pair, which separates the two families more strongly than blue/orange at small sizes — on an indigo-tinted panel |
 | **High Contrast** | Near-black panel with Okabe-Ito derived hues, built for readability over bright gameplay |
 
-Every chip and text colour in every scheme is measured against a WCAG 4.5:1 contrast target, over both a bright and a dark gameplay frame.
+The flat panel, paired RC/LN cards and full-width pattern chips keep the same visual hierarchy across all three palettes.
 
-Two layouts under **UI Style**:
+Three layouts under **UI Style**:
 
 | Style | What it is |
 |-------|------------|
-| **Rating first** | The star rating is the headline number; dan sits on its own row below |
+| **Rating first** | The star rating is the headline number; RC/LN ratings and dans share paired cards below |
 | **Dan first** | The dan value is the headline (the metric mania players quote) and the star rating moves next to it |
 | **Minimal** | Just the summary line, the dans (total with the type badge, RC and LN) and the overall pattern tags |
 
@@ -101,13 +101,13 @@ Two layouts under **UI Style**:
 
 ## Usage
 
-1. Download the [v1.2.2 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.2 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
+1. Download the [v1.2.3 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.3 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
 ### Settings errors or small rating differences after upgrading
 
-Use `tosu/static/spm_rating_map_analyser_v1.2.1/index.html`. With a nested installation, tosu v4.26.3 can fail to create the settings-file parent directory (`ENOENT`). Flatten the installation, or, for an existing `static/outer/inner/index.html`, create `tosu/settings/outer/` before opening Settings. Keep existing `.values.json` files.
+Use `tosu/static/spm_rating_map_analyser/index.html`. With a nested installation, tosu v4.26.3 can fail to create the settings-file parent directory (`ENOENT`). Flatten the installation, or, for an existing `static/outer/inner/index.html`, create `tosu/settings/outer/` before opening Settings. Keep existing `.values.json` files.
 
 The overlay now uses the full, fixed relative directory for its settings socket, avoiding `Wrong overlay` when tosu injects `COUNTER_PATH` after startup. A settings-read failure displays whether defaults or previously loaded settings are in use. Hover the star value to check the active Detailed/Compact model. Refresh open overlay pages after updating.
 
@@ -125,6 +125,7 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Default Dark |
 | Dan Display Style | How the dan value is shown: thirds (low/high), signs (-/+) or a decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K) | Thirds |
 | Curve Smoothing | How much the difficulty curve is smoothed: Off, Light, Medium, Strong, Max | Medium |
+| UI Animations | Enable digit rolling, curve morphing, and UI transitions (turn off to reduce GPU/CPU usage) | On |
 | Hide While Playing | Hide the overlay after gameplay starts (shown again on the results screen) | Off |
 | Show Map Summary | Show the song/difficulty/mapper/keys/BPM/objects/length line | On |
 | Show Pattern Tags | Show the overall pattern chips | On |
@@ -134,6 +135,14 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
+
+### v1.2.3
+
+- Refreshed flat frontend with paired RC/LN cards, live tag highlighting, curve hover previews and an optional **UI Animations** switch (on by default).
+- Removed the graph legend and peak readout; live sections show tempo first, then tag and confidence, without dot / BPM / CONF labels.
+- Unified cadence visibility across the live row and timeline: Dense/Fast Chordstream, native 4K/6K Chordstream, Chordjack/Minijack/native Jack, Speed, Density and Coordination only.
+- Idle/paused/hidden/Minimal views stop requesting animation frames. Curve morphs reuse buffers; palette/dan-label changes do not rerun smoothing or analysis.
+- Rating/classifier engines and cache format are unchanged. The version bump invalidates the previous version's cache at startup.
 
 ### v1.2.2
 - Add default-on, gzip-compressed local disk analysis caching with edit detection, version/config invalidation, bounded LRU storage and a settings switch

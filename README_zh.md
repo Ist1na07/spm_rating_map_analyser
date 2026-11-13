@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.2
+# SPM Map Analyser v1.2.3
 
 一个 [tosu](https://tosu.app) 游戏内叠加界面，为 osu!mania **4K / 6K / 7K** 谱面提供实时难度评级、段位映射与键型分类。
 
@@ -29,7 +29,7 @@
 
 ### 分段难度
 
-游玩时界面跟随你的进度，在当前段键型旁显示该段的**难度**——这一段的 SPM 星数及对应段位。数值由未经平滑的原始分段曲线计算（平滑档位不会影响该数值），因此它永远属于旁边的那个键型标签；鼠标悬停可查看该段峰值与段位。支持 4K／6K／7K。由 **Show Segment Difficulty** 开关控制。
+游玩时界面跟随你的进度，在当前段键型旁显示该段的**难度**——这一段的 SPM 星数及对应段位。数值由未经平滑的原始分段曲线计算（平滑档位不会影响该数值），因此它永远属于旁边的那个键型标签；鼠标悬停可查看该段平均难度与段位。支持 4K／6K／7K。由 **Show Segment Difficulty** 开关控制。
 
 ### 难度曲线
 
@@ -45,7 +45,7 @@
 
 - **7K 整体标签** — 使用 **SPMTagClassifier 1.2.4 + `b311c40` 提交**的稳定路径，主标签与次要分支旁均显示连续时间多因子积分得到的整谱负担百分数：**分支贴合度 × 难度负担 × 动作物量**。直接复用当前 Detailed／Compact 评分同次生成的原始逐行难度场，不重复评分。它不是识别置信度或时间占比，各键型允许重叠；Hybrid 的 RC／LN 家族份额按原比例归一化显示，合计 100%（仅显示层变更）。切换评分模型会同步更新标签与百分数，曲线平滑不会影响它们
 - **4K／6K 整体标签** — 上游主导形态显示为实心标签，其余为轮廓标签。百分数是局部形态支持按**时长 × 相对物理负荷 × 集中度**加权后的归一组成，五类原始份额在取整前合计 100%；与 7K 的难度积分负担不是同一口径。这两种分类器不使用 Detailed／Compact 难度场
-- **实时当前段** — 游玩时跟随进度，显示当前段的键型、置信度与等效 BPM
+- **实时当前段** — 游玩时跟随进度，显示当前段的键型、置信度；仅 Chordstream 组、Jack 组、Speed、Density、Coordination 显示等效 BPM，数字放在最前，不附加 BPM 字样
 - **键型时间轴** — 覆盖全谱的彩色条带，带播放游标
 
 **分类器来源：** 固定的 [b311c40 源码](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/src/index.cjs) 保留联合重调的 56 维 RC／LN 专家、固定整谱参考先验、逐手假切换排除、LN Wildcard 休息豁免与同类稳定变速分段。它包含已发布 v1.2.4 包之后的未发布修改；`modern` 仍是另一个显式候选。
@@ -74,17 +74,17 @@
 
 | 方案 | 说明 |
 |------|------|
-| **Default Dark** | v1.0.0 的原配色，完全不变 |
+| **Default Dark** | 中性深灰面板，蓝色 RC／橙色 LN |
 | **Aurora** | RC 用青/蓝绿、LN 用珊瑚红——互补色对，在小字号下比蓝/橙更容易区分两个家族——配靛蓝底面板 |
 | **High Contrast** | 近黑面板 + 由 Okabe-Ito 派生的色相，为亮色游玩画面上可读而设计 |
 
-三套配色中每一个标签与文字颜色都按 WCAG 4.5:1 对比度实测，并在亮、暗两种游玩画面下分别校验。
+扁平面板、RC／LN 双卡片与全宽标签在三套配色中保持一致的视觉层次。
 
-**UI Style** 提供两种版式：
+**UI Style** 提供三种版式：
 
 | 风格 | 说明 |
 |------|------|
-| **Rating first** | 星数为头条数字，段位单独一行在下方 |
+| **Rating first** | 星数为头条数字，下方双卡片同时显示 RC／LN 星数和段位 |
 | **Dan first** | 段位为头条数字（mania 玩家最常引用的指标），星数移到旁边 |
 | **Minimal** | 只保留摘要行、段位（总段位带类型徽章、RC、LN）与整体键型标签 |
 
@@ -101,13 +101,13 @@
 
 ## 使用方法
 
-1. 从本仓库下载 [v1.2.2 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
+1. 从本仓库下载 [v1.2.3 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将**直接包含 `index.html`、`settings.json`、`metadata.txt` 的那一层文件夹**放入 tosu 的 `static` 目录，不要再套一层解压目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
 ### 设置报错或新旧难度相差 0.0几
 
-推荐目录为 `tosu/static/spm_rating_map_analyser_v1.2.1/index.html`。tosu v4.26.3 在嵌套安装时可能无法创建对应的设置文件父目录，报 `ENOENT`。可改为上述单层安装；若保留嵌套结构，例如 `static/外层/内层/index.html`，须先创建 `tosu/settings/外层/`，再打开设置页。不要删除已有 `.values.json` 文件。
+推荐目录为 `tosu/static/spm_rating_map_analyser/index.html`。tosu v4.26.3 在嵌套安装时可能无法创建对应的设置文件父目录，报 `ENOENT`。可改为上述单层安装；若保留嵌套结构，例如 `static/外层/内层/index.html`，须先创建 `tosu/settings/外层/`，再打开设置页。不要删除已有 `.values.json` 文件。
 
 插件已修复嵌套路径和 tosu 延迟注入 `COUNTER_PATH` 导致的 `Wrong overlay`；设置读取失败时会在面板顶部显示正在使用默认设置还是保留上次设置，不再静默忽略。鼠标悬停星数可查看当前 Detailed／Compact 模型。更新后刷新已打开的 overlay 页面。
 
@@ -125,6 +125,7 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Default Dark |
 | Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字（+0.5 偏移：8.5 对应 8dan、11.5 对应 Gamma） | Thirds |
 | Curve Smoothing | 难度曲线的平滑强度：Off、Light、Medium、Strong、Max | Medium |
+| UI Animations | 启用数字翻动、曲线平滑过渡与界面动效（关闭可降低 GPU/CPU 占用） | 开 |
 | Hide While Playing | 开始游玩后隐藏 overlay（结算界面会再次显示） | 关 |
 | Show Map Summary | 显示曲师/曲名/难度名/谱师/键数/BPM/物量/时长摘要行 | 开 |
 | Show Pattern Tags | 显示整体键型标签 | 开 |
@@ -134,6 +135,14 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.3
+
+- 采用新版扁平前端、RC／LN 双卡片、当前段高亮与曲线悬停预览；新增默认开启的 **UI Animations** 动效开关。
+- 移除曲线上方图例和 peak 读数；分段行按速度数字、tag、置信度排列，移除圆点、BPM 与 CONF 字样。
+- 实时行和时间轴统一仅为 Dense／Fast Chordstream、原生 4K／6K Chordstream、Chordjack／Minijack／原生 Jack、Speed、Density、Coordination 显示等效 BPM。
+- 静止、暂停、隐藏与 Minimal 界面停止无效动画帧；曲线过渡复用缓冲区，仅切换配色或段位格式不重跑平滑或分析。
+- 评分器、分类器与缓存格式不变；版本升级会在启动时清除旧版缓存。
 
 ### v1.2.2
 - 新增默认开启的 gzip 本地磁盘分析缓存，含谱面编辑检测、版本／配置失效、LRU 空间限制与设置开关

@@ -1,4 +1,41 @@
-# v1.2.2 cache verification
+# v1.2.3 frontend verification
+
+- `node --test tests/regression.test.cjs tests/cache.test.cjs`: all 16 tests
+  passed. Rating, classifier, dan constants and cache implementation files are
+  unchanged from v1.2.2; the classifier remains pinned to `b311c40`.
+- `node tests/frontend.cjs [local-chart.osu]`: verified the complete cadence
+  whitelist in both live rows and timeline tooltips: Dense/Fast Chordstream,
+  native `stamina` (Chordstream), Chordjack/Minijack/native Jack, Speed, Density
+  and Coordination. Other tags hide cadence even when their data contains it.
+  The readout starts with the number and has no dot/BPM/CONF decoration;
+  graph legend, peak badge, peak markers and peak tooltips are removed.
+- The same frontend test checked hover preview, rolling-digit target text,
+  animation disabling, playback/pause/hide recovery, and 380/430/710 px layouts
+  across all palettes, densities and styles. After settling, paused/static
+  views issued **0 animation callbacks in 300 ms**; a moving clock continued
+  to animate. Palette/dan-format changes caused zero smoothing, rating or
+  classifier calls. Morph buffers are reused between frames.
+- `node tests/browser.cjs <local-7K.osu> ../dataset`: passed real 7K and median
+  local 4K/6K samples, alongside the existing HT/DT, Detailed/Compact, tempo,
+  settings recovery, Hybrid percentages and numeric `< 0.50` checks.
+- `node tests/browser-cache.cjs <local-7K.osu>`: passed disk persistence,
+  version cleanup, edits, variants, races and storage failure recovery. Cold
+  and cached effective curve/rating/tag snapshots matched exactly. Layout
+  dimensions now ignore entry-animation transforms, fixing small smoothed
+  curve differences between first paint and cache hits. The 10,828-object
+  local 7K example measured 998 ms cold / 45 ms hit on this run, including file
+  verification and rendering; compressed payload remained 28,470 bytes.
+- The explicit local epsilon installation was updated and checked against
+  actual tosu: Saved → Cached after reload, with the same 5.48 rating, RC/LN
+  dans and Speed/Tech/Chordjack percentages. No settings warning or page error.
+  Settled real-map screenshots, including hover and narrow/Minimal views,
+  were inspected; README screenshots now show this frontend.
+
+Playwright/Chrome are test-only. Local charts, datasets, browser profiles and
+caches are not part of the Git delivery. The original epsilon draft is backed
+up locally under ignored `_dev/epsilon-original`.
+
+# Historical v1.2.2 cache verification
 
 - `node --test tests/cache.test.cjs`: five tests passed, covering identity,
   response matching, content-edit fingerprints, lossless/pruned snapshots and

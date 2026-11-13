@@ -5,21 +5,24 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-    /* v1.0.1 design tokens — every colour in the panel resolves through these,
-       so a colour scheme is a token set rather than a pile of style overrides.
-       The values here are "Default Dark"; applyColorScheme() rewrites them. */
-    --panel-bg: rgba(13, 15, 18, 0.78);
-    --panel-border: rgba(255, 255, 255, 0.08);
-    --panel-radius: 12px;
+    /* Flat instrument tokens. One font, flat surfaces, hairline rules;
+       colour is reserved for meaning (family, tag, status). Each Colour
+       Scheme rewrites these while keeping WCAG 4.5:1 text contrast. */
+    --panel-bg: rgba(13, 16, 22, 0.84);
+    --panel-border: rgba(255, 255, 255, 0.10);
+    --panel-radius: 10px;
+    --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     --text: #eef1f5;
-    --text-dim: rgba(238, 241, 245, 0.55);
-    --text-faint: rgba(238, 241, 245, 0.35);
-    --rule: rgba(255, 255, 255, 0.07);
-    --surface: rgba(255, 255, 255, 0.035);
-    --surface-border: rgba(255, 255, 255, 0.06);
-    --chip-track: rgba(255, 255, 255, 0.05);
+    --text-dim: rgba(238, 241, 245, 0.64);
+    --text-faint: rgba(238, 241, 245, 0.46);
+    --rule: rgba(255, 255, 255, 0.08);
+    --surface: rgba(255, 255, 255, 0.04);
+    --surface-strong: rgba(255, 255, 255, 0.07);
+    --surface-border: rgba(255, 255, 255, 0.09);
+    --chip-track: rgba(255, 255, 255, 0.055);
     --pill: rgba(255, 255, 255, 0.10);
-    --pill-border: rgba(255, 255, 255, 0.14);
+    --pill-border: rgba(255, 255, 255, 0.15);
+    --grid-line: rgba(255, 255, 255, 0.06);
     --cursor: #ffffff;
     --break: #454b54;
     --break-text: #5b6470;
@@ -30,45 +33,118 @@
     --badge-ink: #14171c;
     --dim-text: #ffffff;
     --segdiff: #eef1f5;
-    /* ui-style tokens */
-    --hero-size: 42px;
-    --sub-size: 20px;
-    --curve-h: 96px;
-    --dan-size: 15px;
+    --bar-s0: 100%;
+    --bar-s1: 100%;
+    --bar-hb-col: rgba(199, 205, 214, 0);
+    /* Single type system: one UI stack for every label and number, with
+       tabular figures so values align and roll without width jitter. */
+    --font-ui: 'Segoe UI Variable Display', 'Segoe UI', 'Inter', 'Yu Gothic UI', 'Meiryo', 'Microsoft YaHei UI', sans-serif;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-roll: cubic-bezier(0.16, 1, 0.3, 1);
+    --hero-size: 44px;
+    --sub-size: 21px;
+    --curve-h: 84px;
+    --dan-size: 13.5px;
+}
+@property --bar-s0 {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 100%;
+}
+@property --bar-s1 {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 100%;
+}
+@property --bar-hb-col {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: rgba(199, 205, 214, 0);
 }
 body {
     background: transparent;
     color: var(--text);
-    font-family: 'Segoe UI', 'Arial', sans-serif;
+    font-family: var(--font-ui);
     overflow: hidden;
     user-select: none;
+    -webkit-font-smoothing: antialiased;
 }
-/* ---------- v0.5.0 design system ----------
-   Two family anchors are used consistently everywhere: RC = cool
-   (default #58a6ff), LN = warm (default #ff8c5a). Sort badge, sub-ratings,
-   dan values, difficulty curves, tag chips and the segment timeline all
-   follow this mapping, so a color always means the same family.
-   v1.0.1 moves the anchors into --rc / --ln so a color scheme can redraw
-   the whole language at once. */
+
+/* ---------- Panel Shell ---------- */
 #container {
+    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 12px 16px 13px;
+    gap: 8px;
+    padding: 13px 16px 14px;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: var(--panel-radius);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--panel-shadow);
     min-width: 380px;
+    transition: background-color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, padding 0.22s ease, gap 0.22s ease;
 }
-/* ---------- v1.0.1: map summary line ---------- */
+/* Top edge = live RC/LN family split (data, not decoration). */
+#container::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background:
+        linear-gradient(90deg,
+            transparent calc(var(--bar-s0) - 9%),
+            var(--bar-hb-col) calc((var(--bar-s0) + var(--bar-s1)) / 2),
+            transparent calc(var(--bar-s1) + 9%)),
+        linear-gradient(90deg,
+            var(--rc) 0%,
+            var(--rc) var(--bar-s0),
+            var(--ln) var(--bar-s1),
+            var(--ln) 100%);
+    pointer-events: none;
+    z-index: 2;
+    transition: --bar-s0 0.45s var(--ease-out),
+                --bar-s1 0.45s var(--ease-out),
+                --bar-hb-col 0.36s ease;
+}
+#container.panel-enter {
+    animation: panel-reveal 0.34s var(--ease-out) both;
+}
+@keyframes panel-reveal {
+    0% { opacity: 0; transform: translateY(7px) scale(0.99); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Recomputing indicator: a solid bar pulsing along the top edge. */
+#container.is-updating::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: var(--rc);
+    transform-origin: center;
+    animation: panel-shimmer 0.85s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 4;
+}
+@keyframes panel-shimmer {
+    0% { opacity: 0.3; transform: scaleX(0.45); }
+    50% { opacity: 1; transform: scaleX(1); }
+    100% { opacity: 0.3; transform: scaleX(0.45); }
+}
+
+/* ---------- Map Summary Line ---------- */
 #summary-row {
+    position: relative;
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    min-height: 15px;
-    line-height: 1.4;
+    gap: 10px;
+    min-height: 17px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+    line-height: 1.35;
     font-size: 12px;
+    transition: border-color 0.26s ease;
 }
 #summary-main {
     flex: 1 1 auto;
@@ -81,11 +157,13 @@ body {
 #summary-main .s-title { color: var(--text); font-weight: 700; }
 #summary-main .s-diff { color: var(--text-dim); font-weight: 600; }
 #summary-main .s-mapper { color: var(--text-faint); font-weight: 500; }
-/* when the main line is wider than its box it scrolls side to side with a
-   dwell at each end, instead of clipping (updateSummaryMarquee measures and
-   sets --mq-dist / --mq-dur; without them the line keeps the ellipsis) */
 #summary-main .mq-track { display: inline-block; }
-#summary-main.mq-run { text-overflow: clip; }
+#summary-main .mq-track > span + span { margin-left: 6px; }
+#summary-main.mq-run {
+    text-overflow: clip;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3px, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 3px, #000 calc(100% - 14px), transparent 100%);
+}
 #summary-main.mq-run .mq-track {
     animation: summary-mq var(--mq-dur, 10s) ease-in-out infinite;
     will-change: transform;
@@ -96,230 +174,422 @@ body {
     86%, 100% { transform: translateX(0); }
 }
 #summary-meta {
-    /* never flex-shrunk: the title truncates first (it has the ellipsis);
-       the fact-fitting loop in renderSummary() drops facts only when the
-       facts alone would exceed the row minus the title's floor */
     flex: 0 0 auto;
-    max-width: calc(100% - 84px);
+    max-width: 62%;
     overflow: hidden;
     display: flex;
     align-items: baseline;
-    gap: 7px;
+    gap: 9px;
     font-size: 11px;
     color: var(--text-faint);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
-#summary-meta .s-sep { opacity: 0.45; }
-#summary-meta .s-keys { color: var(--text-dim); font-weight: 700; }
+#summary-meta .s-keys {
+    color: var(--text);
+    font-weight: 700;
+    font-size: 10.5px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: var(--surface-strong);
+    border: 1px solid var(--surface-border);
+}
+
+/* ---------- Hero Header ---------- */
 #header {
+    position: relative;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
+    row-gap: 5px;
+}
+#header-meta {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
 }
 #rating {
+    flex: none;
+    white-space: nowrap;
     font-size: var(--hero-size);
-    font-weight: 800;
+    font-weight: 700;
     color: var(--dim-text);
     letter-spacing: -0.5px;
-    line-height: 1.05;
+    line-height: 1.02;
     font-variant-numeric: tabular-nums;
     margin-right: 2px;
+    transition: color 0.24s ease, font-size 0.22s ease;
+}
+#rating::after {
+    content: '\2605';
+    font-size: 0.38em;
+    font-weight: 700;
+    opacity: 0.55;
+    margin-left: 4px;
+    vertical-align: 0.46em;
 }
 #type-badge,
 #min-type-badge {
-    font-size: 13px;
-    font-weight: 800;
+    flex: none;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
     padding: 3px 11px;
-    border-radius: 999px;
+    border-radius: 6px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.8px;
     color: var(--badge-ink);
+    transition: background-color 0.26s ease, color 0.26s ease, transform 0.22s var(--ease-out);
 }
 #type-badge.rc,  #min-type-badge.rc  { background: var(--rc); }
 #type-badge.ln,  #min-type-badge.ln  { background: var(--ln); }
 #type-badge.hb,  #min-type-badge.hb  { background: var(--hb); }
 #type-badge.mix, #min-type-badge.mix { background: var(--mix); }
 #min-type-badge { align-self: center; }
+.badge-pop {
+    animation: badge-pop-in 0.26s var(--ease-out) both;
+}
+@keyframes badge-pop-in {
+    0% { transform: scale(0.86); opacity: 0.55; }
+    65% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
 #keys-badge {
-    font-size: 13px;
-    font-weight: 700;
+    flex: none;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 600;
     padding: 2px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--pill-border);
     color: var(--text-dim);
     letter-spacing: 0.5px;
+    transition: border-color 0.24s ease, color 0.24s ease;
 }
 #mod-badge {
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 999px;
+    flex: none;
+    white-space: nowrap;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 6px;
     background: var(--pill);
     border: 1px solid var(--pill-border);
     color: var(--text);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    font-variant-numeric: tabular-nums;
+    transition: background-color 0.24s ease, border-color 0.24s ease, color 0.24s ease;
+}
+
+/* ---------- Cache Status Pill ---------- */
+#cache-status {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 2px 8px 2px 7px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    white-space: nowrap;
+    transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+}
+#cache-status::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: background-color 0.25s ease;
+}
+#container[data-cache-state="saved"] #cache-status::before { background: #34d399; }
+#container[data-cache-state="hit"] #cache-status::before { background: var(--rc); }
+#container[data-cache-state="miss"] #cache-status::before { background: #fbbf24; }
+#container[data-cache-state="unavailable"] #cache-status::before { background: #fb7185; }
+#cache-status:empty { display: none; }
+.cache-pulse {
+    animation: cache-flash 0.36s var(--ease-out) both;
+}
+@keyframes cache-flash {
+    0% { transform: scale(0.94); opacity: 0.55; }
+    60% { transform: scale(1.03); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- RC / LN Unified 2-Card Telemetry ---------- */
+#dan-row {
+    display: block;
 }
 #rc-ln-row {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    line-height: 1.3;
+    align-items: stretch;
+    gap: 8px;
+    line-height: 1.25;
 }
 #rc-ln-row .sub-item {
-    display: flex;
-    flex-direction: column;
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: baseline;
+    column-gap: 8px;
+    row-gap: 3px;
+    padding: 8px 14px 9px 15px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    overflow: hidden;
+    transition: background-color 0.24s ease, border-color 0.24s ease, padding 0.2s ease, opacity 0.28s ease;
 }
+/* Family stripe: the only colour on the card, encoding RC vs LN. */
+#rc-ln-row .sub-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    transition: background-color 0.24s ease;
+}
+#rc-ln-row .sub-item.rc-sub::before { background: var(--rc); }
+#rc-ln-row .sub-item.ln-sub::before { background: var(--ln); }
 #rc-ln-row .sub-label {
+    grid-column: 1;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+}
+#rc-ln-row .rc-sub .sub-label { color: var(--rc); }
+#rc-ln-row .ln-sub .sub-label { color: var(--ln); }
+#rc-ln-row .sub-value {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    font-weight: 700;
+    font-size: var(--sub-size);
+    line-height: 1.02;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.3px;
+    transition: color 0.24s ease, font-size 0.22s ease, opacity 0.22s ease;
+}
+#rc-ln-row .sub-value.rc { color: var(--rc); }
+#rc-ln-row .sub-value.ln { color: var(--ln); }
+#rc-ln-row .dan-value {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    padding-top: 4px;
+    border-top: 1px solid var(--rule);
+    font-weight: 600;
+    font-size: var(--dan-size);
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.24s ease, font-size 0.22s ease, opacity 0.22s ease;
+}
+#rc-ln-row .dan-value.rc-dan { color: var(--rc); }
+#rc-ln-row .dan-value.ln-dan { color: var(--ln); }
+#rc-ln-row .sep { display: none; }
+
+/* Total Dan inline readout inside header */
+#total-dan-wrap {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
     font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+#total-dan-wrap .td-sep {
+    width: 1px;
+    height: 11px;
+    background: var(--rule);
+    align-self: center;
+    margin: 0 2px;
+}
+#total-dan-wrap .td-lbl {
+    font-size: 9px;
     font-weight: 700;
     color: var(--text-faint);
     text-transform: uppercase;
     letter-spacing: 0.8px;
 }
-#rc-ln-row .sub-value {
-    font-weight: 700;
-    font-size: var(--sub-size);
+#total-dan {
+    font-weight: 600;
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
-#rc-ln-row .sub-value.rc { color: var(--rc); }
-#rc-ln-row .sub-value.ln { color: var(--ln); }
-#rc-ln-row .sep {
-    color: rgba(255, 255, 255, 0.12);
-    font-size: 20px;
-    margin: 0 2px;
+.card-swap {
+    animation: card-enter-in 0.34s var(--ease-out) calc(var(--card-i, 0) * 45ms) both;
 }
-#dan-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    line-height: 1.3;
+@keyframes card-enter-in {
+    0% { opacity: 0.4; transform: translateY(5px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
-#dan-row .dan-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-#dan-row .dan-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-#dan-row .dan-value {
-    font-weight: 700;
-    font-size: var(--dan-size);
-}
-#dan-row .dan-value.rc-dan { color: var(--rc); }
-#dan-row .dan-value.ln-dan { color: var(--ln); }
-#dan-row .dan-sep {
-    color: rgba(255, 255, 255, 0.12);
-    font-size: 14px;
-}
-#dan-row.rc-only .dan-item.ln-dan-row { display: none; }
-#dan-row.rc-only .dan-sep { display: none; }
-#dan-row .total-dan-sep,
-#dan-row .total-dan-item { display: none; }
-#dan-row.hb .total-dan-sep,
-#dan-row.hb .total-dan-item { display: inline-flex; }
-#dan-row.mix .total-dan-sep,
-#dan-row.mix .total-dan-item { display: inline-flex; }
+
+/* ---------- Difficulty Curve Graph ---------- */
 #curve-container {
-    margin-top: 2px;
+    margin-top: 1px;
     position: relative;
-}
-#curve-canvas {
-    width: 100%;
-    height: var(--curve-h);
+    display: flex;
+    flex-direction: column;
     border-radius: 8px;
+    overflow: hidden;
     background: var(--surface);
     border: 1px solid var(--surface-border);
+    transition: background-color 0.26s ease, border-color 0.26s ease;
 }
-#curve-legend {
+
+#curve-canvas {
+    display: block;
+    width: 100%;
+    height: var(--curve-h);
+    cursor: crosshair;
+    transition: height 0.22s ease;
+}
+#curve-tooltip {
+    position: absolute;
+    inset: 3px 4px auto;
+    z-index: 1;
+    min-height: 20px;
+    border-radius: 4px;
+    background: var(--panel-bg);
+    width: fit-content;
+    max-width: calc(100% - 8px);
+    margin: 0 auto;
+    padding: 2px 6px;
     display: flex;
-    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     font-size: 11px;
-    color: var(--text-dim);
-    margin-top: 4px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity 0.14s ease;
 }
-#curve-legend span { display: inline-flex; align-items: center; gap: 5px; }
-#curve-legend i {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-}
-#curve-legend .legend-rc i { background: var(--rc); }
-#curve-legend .legend-ln i { background: var(--ln); }
+#curve-tooltip span { flex: none; }
+
+
 .divider {
     height: 1px;
     background: var(--rule);
-    margin: 4px 0 2px;
+    margin: 2px 0 1px;
+    transition: opacity 0.26s ease;
 }
-/* ---- overall pattern tags (chips tinted with family color) ---- */
+
+/* ---------- Overall Pattern Tags ---------- */
 #tags-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     flex-wrap: wrap;
     min-height: 20px;
 }
 .ov-tag {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1 1 auto;
     font-size: 11.5px;
     font-weight: 700;
-    padding: 2px 9px;
-    border-radius: 999px;
+    padding: 2.5px 10px;
+    border-radius: 6px;
     border: 1px solid transparent;
     letter-spacing: 0.2px;
     white-space: nowrap;
+    transition: background-color 0.24s ease, border-color 0.24s ease, color 0.24s ease, box-shadow 0.24s ease, transform 0.2s var(--ease-out);
 }
 .ov-share {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1 1 auto;
     font-size: 11px;
     font-weight: 600;
-    padding: 1px 8px;
-    border-radius: 999px;
+    padding: 2px 9px;
+    border-radius: 6px;
     border: 1px solid transparent;
     background: transparent;
     white-space: nowrap;
+    transition: background-color 0.24s ease, border-color 0.24s ease, color 0.24s ease, box-shadow 0.24s ease, transform 0.2s var(--ease-out);
 }
-.ov-share .pct { opacity: 0.6; margin-left: 3px; }
-/* ---- live segment row ---- */
+.ov-share .pct,
+.ov-tag .pct { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ov-share .pct { opacity: 0.7; margin-left: 4px; }
+/* Live tag ring: a crisp outline, no glow. */
+.ov-tag.is-live-tag,
+.ov-share.is-live-tag {
+    box-shadow: 0 0 0 1px currentColor;
+}
+.chip-enter {
+    animation: chip-rise 0.22s var(--ease-out) calc(var(--chip-i, 0) * 20ms) both;
+}
+@keyframes chip-rise {
+    0% { opacity: 0.3; transform: translateY(3px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---------- Live Segment Row ----------
+   One left-aligned readout: tempo, tag, confidence; pattern and tempo
+   model confidence are read in a single glance. Difficulty and duration
+   are secondary and sit together at the right edge. */
 #seg-row {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    min-height: 27px;
-    margin-top: 2px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px;
+    row-gap: 4px;
+    min-height: 28px;
+    margin-top: 1px;
 }
-#seg-bpm {
-    font-size: 22px;
-    font-weight: 800;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    min-width: 44px;
-    text-align: right;
+/* Secondary readouts stay together and drop to their own right-aligned
+   line when the primary tag/BPM/conf cluster needs the full width. */
+#seg-secondary {
     flex: none;
-    color: var(--text);
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
 }
-#seg-bpm::after {
-    content: 'bpm';
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-faint);
-    margin-left: 3px;
+#seg-row.is-break {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--surface-border);
 }
-#seg-bpm:empty::after { content: ''; }
 #seg-tag {
-    font-size: 17px;
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 16px;
     font-weight: 700;
     line-height: 1.15;
     letter-spacing: 0.2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: opacity 0.2s;
+    transition: color 0.22s ease, opacity 0.22s ease;
 }
 #seg-tag .secondary {
     font-size: 11.5px;
@@ -327,28 +597,56 @@ body {
     color: var(--text-dim);
     margin-left: 6px;
 }
-#seg-conf {
-    font-size: 11px;
-    color: var(--text-faint);
-    font-variant-numeric: tabular-nums;
+#seg-bpm {
     flex: none;
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    transition: color 0.24s ease;
 }
-/* ---------- v1.0.1: current segment difficulty ---------- */
+
+#seg-bpm:empty { display: none; }
+
+#seg-conf {
+    flex: none;
+    display: inline-flex;
+    align-items: baseline;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+#seg-conf:empty { display: none; }
+
+.pill-pop {
+    animation: pill-pop-in 0.22s var(--ease-out) both;
+}
+@keyframes pill-pop-in {
+    0% { opacity: 0.35; transform: scale(0.90); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
 #seg-diff {
     flex: none;
     display: inline-flex;
     align-items: baseline;
     gap: 5px;
-    padding: 1px 8px 2px;
-    border-radius: 999px;
-    background: var(--surface);
+    padding: 2px 9px;
+    border-radius: 6px;
+    background: var(--surface-strong);
     border: 1px solid var(--surface-border);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    transition: border-color 0.24s ease, background-color 0.24s ease;
 }
 #seg-diff .sd-star {
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--segdiff);
 }
 #seg-diff .sd-star::after {
@@ -359,32 +657,34 @@ body {
 }
 #seg-diff .sd-dan {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-dim);
 }
 #seg-diff.rc { border-color: var(--rc); }
 #seg-diff.ln { border-color: var(--ln); }
 #seg-dur {
-    margin-left: auto;
     flex: none;
     font-size: 11.5px;
+    font-weight: 600;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
 }
-/* ---- segment tag timeline ---- */
+#seg-dur:empty { display: none; }
+
+/* ---------- Segment Timeline ---------- */
 #seg-timeline-wrap {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
+    gap: 6px;
+    margin-top: 2px;
 }
 #seg-timeline {
     position: relative;
     height: 14px;
     width: 100%;
     background: var(--chip-track);
-    border: 1px solid var(--rule);
-    border-radius: 7px;
+    border: 1px solid var(--surface-border);
+    border-radius: 4px;
     overflow: hidden;
 }
 .tl-seg {
@@ -392,23 +692,35 @@ body {
     top: 0;
     height: 100%;
     opacity: 0.85;
-    border-right: 1px solid rgba(0, 0, 0, 0.4);
+    border-right: 1px solid rgba(0, 0, 0, 0.26);
+    transition: opacity 0.2s ease, filter 0.2s ease;
 }
-.tl-seg.tl-break { opacity: 0.3; }
+.tl-seg:hover {
+    opacity: 0.98;
+    filter: brightness(1.14);
+}
+.tl-seg.tl-break { opacity: 0.24; }
+.tl-seg.is-active-seg {
+    opacity: 1;
+    filter: brightness(1.2) saturate(1.12);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
 #seg-cursor {
     position: absolute;
-    top: -2px;
+    top: -1px;
     width: 2px;
-    height: 18px;
+    height: 16px;
     background: var(--cursor);
-    box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+    border-radius: 1px;
     z-index: 2;
     left: 0;
+    pointer-events: none;
+    transition: left 0.08s linear;
 }
 #seg-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px 10px;
+    gap: 3px 11px;
     font-size: 10.5px;
     color: var(--text-dim);
 }
@@ -416,40 +728,179 @@ body {
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+#seg-legend .lg-item.is-live-tag {
+    color: var(--text);
+    font-weight: 700;
 }
 #seg-legend .lg-item i {
     display: inline-block;
     width: 7px;
     height: 7px;
     border-radius: 50%;
+    transition: transform 0.2s var(--ease-out);
 }
+#seg-legend .lg-item.is-live-tag i {
+    transform: scale(1.28);
+}
+
+/* ---------- Loading State Card ---------- */
 #loading {
-    font-size: 18px;
-    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 11px;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: var(--text-dim);
     text-align: center;
-    padding: 16px;
+    padding: 18px 22px;
+    min-width: 280px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--panel-shadow);
 }
-/* ---------- v1.0.1: ui style variants ----------
-   Both styles render the same nodes in the same order; the style only moves
-   the emphasis. "Dan first" promotes the dan value to the hero line (the
-   metric mania players actually quote) and demotes the star rating to a
-   supporting value, so it is a different information hierarchy rather than a
-   different layout. */
+#loading::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--surface-border);
+    border-top-color: var(--rc);
+    border-right-color: var(--ln);
+    animation: spm-spin 0.9s linear infinite;
+    flex: none;
+}
+@keyframes spm-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Directional Odometer Digit Rolling & Text Morphing ---------- */
+.d-slot {
+    display: inline-block;
+    position: relative;
+    overflow: hidden;
+    vertical-align: bottom;
+    line-height: inherit;
+}
+.d-slot .d-cur {
+    display: inline-block;
+}
+.d-slot.d-up::before,
+.d-slot.d-down::before {
+    content: attr(data-prev);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    pointer-events: none;
+}
+.d-slot.d-up .d-cur,
+.d-slot.d-up::before,
+.d-slot.d-down .d-cur,
+.d-slot.d-down::before,
+.d-slot.d-enter .d-cur {
+    will-change: transform, opacity;
+}
+.d-slot.d-up .d-cur {
+    animation: d-roll-in-up 0.40s var(--ease-roll) calc(var(--d-i, 0) * 22ms) both;
+}
+.d-slot.d-up::before {
+    animation: d-roll-out-up 0.40s var(--ease-roll) calc(var(--d-i, 0) * 22ms) both;
+}
+.d-slot.d-down .d-cur {
+    animation: d-roll-in-down 0.40s var(--ease-roll) calc(var(--d-i, 0) * 22ms) both;
+}
+.d-slot.d-down::before {
+    animation: d-roll-out-down 0.40s var(--ease-roll) calc(var(--d-i, 0) * 22ms) both;
+}
+.d-slot.d-enter .d-cur {
+    animation: d-roll-in-up 0.36s var(--ease-roll) calc(var(--d-i, 0) * 18ms) both;
+}
+@keyframes d-roll-in-up {
+    0% { transform: translateY(104%); opacity: 0.05; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes d-roll-out-up {
+    0% { transform: translateY(0); opacity: 0.9; }
+    100% { transform: translateY(-104%); opacity: 0; }
+}
+@keyframes d-roll-in-down {
+    0% { transform: translateY(-104%); opacity: 0.05; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes d-roll-out-down {
+    0% { transform: translateY(0); opacity: 0.9; }
+    100% { transform: translateY(104%); opacity: 0; }
+}
+.bpm-bump {
+    animation: bpm-glow 0.44s var(--ease-out) both;
+}
+@keyframes bpm-glow {
+    0% { transform: scale(1); filter: brightness(1); }
+    30% { transform: scale(1.06); filter: brightness(1.22); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+.txt-morph {
+    display: inline-block;
+    animation: txt-flip-in 0.32s var(--ease-out) both;
+}
+@keyframes txt-flip-in {
+    0% { opacity: 0.18; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.seg-enter {
+    animation: seg-slide-in 0.30s var(--ease-out) both;
+}
+@keyframes seg-slide-in {
+    0% { opacity: 0.25; transform: translateX(-7px); }
+    100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ---------- Performance Switch: UI Animations OFF ---------- */
+body.no-motion #container,
+body.no-motion #container::before,
+body.no-motion #container::after,
+body.no-motion #container *,
+body.no-motion #container *::before,
+body.no-motion #container *::after,
+body.no-motion #loading,
+body.no-motion #loading::before {
+    animation: none !important;
+    transition: none !important;
+}
+body.no-motion #summary-main.mq-run {
+    text-overflow: ellipsis;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+/* ---------- UI Style Variants ---------- */
 #hero-dan {
     display: none;
-    font-size: var(--hero-size);
-    font-weight: 800;
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: calc(var(--hero-size) * 0.70);
+    font-weight: 700;
     color: var(--rc);
-    letter-spacing: -0.3px;
-    line-height: 1.05;
-    margin-right: 2px;
+    letter-spacing: -0.4px;
+    line-height: 1.02;
+    margin-right: 1px;
     white-space: nowrap;
 }
-#container.ui-style-dan-first #hero-dan { display: inline-block; }
+#container.ui-style-dan-first #header {
+    gap: 7px;
+    row-gap: 4px;
+}
+#container.ui-style-dan-first #hero-dan { display: inline-flex; align-items: baseline; }
 #container.ui-style-dan-first #rating {
-    font-size: var(--sub-size);
-    font-weight: 700;
+    font-size: calc(var(--sub-size) - 3px);
+    font-weight: 600;
     letter-spacing: 0;
     color: var(--text);
     align-self: center;
@@ -459,88 +910,121 @@ body {
     content: '';
     display: inline-block;
     width: 1px;
-    height: 15px;
-    background: rgba(255, 255, 255, 0.12);
-    margin-right: 10px;
+    height: 13px;
+    background: var(--rule);
+    margin-right: 6px;
     vertical-align: -2px;
 }
-/* the dan row is hidden only when there is a dan value to promote, so charts
-   outside the measured dan range keep a dan readout (in RD/LN Dan labels) */
-#container.ui-style-dan-first.dan-hero #dan-row { display: none; }
+#container.ui-style-dan-first #rating::after {
+    font-size: 0.52em;
+    vertical-align: 0.26em;
+}
+/* In Dan-first mode, promote RC / LN Dan above Rating inside the 2 unified cards */
+#container.ui-style-dan-first #rc-ln-row .sub-item .dan-value {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    padding-top: 0;
+    border-top: none;
+    font-size: calc(var(--sub-size) - 1px);
+    line-height: 1.05;
+    letter-spacing: -0.25px;
+}
+#container.ui-style-dan-first #rc-ln-row .sub-item .sub-value {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    justify-self: start;
+    padding-top: 4px;
+    border-top: 1px solid var(--rule);
+    font-size: var(--dan-size);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: 0;
+    opacity: 0.8;
+}
+#container.ui-style-dan-first #rc-ln-row .sub-item .sub-value::after {
+    content: '\2605';
+    font-size: 0.76em;
+    opacity: 0.65;
+    margin-left: 2px;
+}
+#container.ui-style-dan-first.dan-hero-total #total-dan-wrap { display: none; }
 #container.ui-style-dan-first #hero-dan .hero-dan-suffix {
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.6px;
-    opacity: 0.55;
-    margin-left: 4px;
+    letter-spacing: 0.7px;
+    opacity: 0.6;
+    margin-left: 6px;
     text-transform: uppercase;
 }
-/* ---------- v1.0.1: minimal ui style ----------
-   Only the dans and the overall tags: the total dan leads, RC/LN dans sit in
-   a sub-row, and every other block is hidden. */
-#minimal-block { display: none; flex-direction: column; gap: 2px; }
+
+/* ---------- Minimal UI Style ---------- */
+#minimal-block { display: none; flex-direction: column; gap: 4px; }
 #container.ui-style-minimal #minimal-block { display: flex; }
 #container.ui-style-minimal #header,
-#container.ui-style-minimal #rc-ln-row,
 #container.ui-style-minimal #dan-row,
+#container.ui-style-minimal #rc-ln-row,
 #container.ui-style-minimal #curve-container,
 #container.ui-style-minimal #divider,
 #container.ui-style-minimal #seg-row,
 #container.ui-style-minimal #seg-timeline-wrap { display: none; }
-#min-hero { display: flex; align-items: baseline; gap: 6px; }
+#min-hero { display: flex; align-items: center; gap: 8px; }
 #min-total-dan {
     font-size: var(--hero-size);
-    font-weight: 800;
-    letter-spacing: -0.3px;
-    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    line-height: 1.02;
     color: var(--rc);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 #min-hero-suf {
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.6px;
-    opacity: 0.55;
+    letter-spacing: 0.7px;
+    opacity: 0.6;
     text-transform: uppercase;
 }
-#min-sub-row { display: flex; align-items: baseline; gap: 7px; }
+#min-sub-row { display: flex; align-items: baseline; gap: 8px; }
 #min-sub-row .min-label {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
     color: var(--text-faint);
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.9px;
 }
-#min-sub-row .min-value { font-weight: 700; font-size: var(--dan-size); }
+#min-sub-row .min-value { font-weight: 600; font-size: var(--dan-size); font-variant-numeric: tabular-nums; }
 #min-sub-row .min-value.rc { color: var(--rc); }
 #min-sub-row .min-value.ln { color: var(--ln); }
-#min-sub-row .min-sep { color: var(--text-faint); }
-/* the LN half is one inline span so it can hide as a unit; inside it needs
-   the same spacing the sub-row's flex gap gives the RC half */
-#min-ln-wrap { display: inline-flex; align-items: baseline; gap: 7px; }
-/* ---------- v1.0.1: panel density ----------
-   Compact trades readability for screen space: smaller hero, tighter rows
-   and a shorter curve. Pure token overrides — the markup does not change. */
+#min-ln-wrap { display: inline-flex; align-items: baseline; gap: 8px; margin-left: 6px; }
+
+/* ---------- Panel Density: Compact ---------- */
 #container.compact {
-    gap: 4px;
-    padding: 8px 12px 9px;
-    --hero-size: 32px;
+    gap: 5px;
+    padding: 9px 12px 10px;
+    --hero-size: 33px;
     --sub-size: 17px;
-    --curve-h: 72px;
-    --dan-size: 13px;
+    --curve-h: 62px;
+    --dan-size: 12px;
 }
-#container.compact #seg-row { min-height: 22px; }
-#container.compact #seg-bpm { font-size: 18px; min-width: 36px; }
+#container.compact #summary-row { padding-bottom: 4px; }
+#container.compact #rc-ln-row .sub-item { padding: 5px 11px 6px 12px; }
+#container.compact #seg-row { min-height: 22px; gap: 7px; }
+#container.compact #seg-secondary { gap: 7px; }
+#container.compact #seg-bpm { font-size: 14px; }
 #container.compact #seg-tag { font-size: 14px; }
+#container.compact #seg-conf { font-size: 11px; }
 #container.compact #tags-row { min-height: 0; }
+#container.compact #seg-timeline { height: 12px; }
 #settings-warning {
     font-size: 12px;
     line-height: 1.4;
     color: var(--text);
-    border-left: 2px solid var(--ln);
-    padding-left: 7px;
+    background: var(--surface);
+    border-left: 2.5px solid var(--ln);
+    border-radius: 0 8px 8px 0;
+    padding: 4px 9px;
 }
-#cache-status { margin-left: auto; color: var(--text-dim); font-size: 11px; font-weight: 500; white-space: nowrap; }
 .hidden { display: none !important; }
 </style>
 </head>
@@ -555,50 +1039,38 @@ body {
         <div id="min-hero"><span id="min-total-dan">-</span><span id="min-type-badge" class="rc hidden">RC</span><span id="min-hero-suf"></span></div>
         <div id="min-sub-row">
             <span class="min-label">RC</span><span class="min-value rc" id="min-rc-dan">-</span>
-            <span id="min-ln-wrap"><span class="min-sep">|</span><span class="min-label">LN</span><span class="min-value ln" id="min-ln-dan">-</span></span>
+            <span id="min-ln-wrap"><span class="min-label">LN</span><span class="min-value ln" id="min-ln-dan">-</span></span>
         </div>
     </div>
     <div id="header">
         <span id="hero-dan"></span>
         <span id="rating">0.00</span>
         <span id="type-badge" class="rc">RC</span>
-        <span id="keys-badge" class="hidden"></span>
-        <span id="mod-badge" class="hidden"></span>
-        <span id="cache-status" role="status"></span>
-    </div>
-    <div id="rc-ln-row">
-        <div class="sub-item">
-            <span class="sub-label">RC</span>
-            <span class="sub-value rc" id="rc-rating">--</span>
-        </div>
-        <span class="sep" id="ln-sep">|</span>
-        <div class="sub-item" id="ln-sub-item">
-            <span class="sub-label">LN</span>
-            <span class="sub-value ln" id="ln-rating">--</span>
+        <div id="header-meta">
+            <span id="total-dan-wrap" class="hidden"><span class="td-sep" aria-hidden="true"></span><span class="td-lbl">Total</span><span id="total-dan">-</span></span>
+            <span id="keys-badge" class="hidden"></span>
+            <span id="mod-badge" class="hidden"></span>
+            <span id="cache-status" role="status"></span>
         </div>
     </div>
     <div id="dan-row">
-        <div class="dan-item rc-dan-row">
-            <span class="dan-label">RC Dan</span>
-            <span class="dan-value rc-dan" id="rc-dan">-</span>
-        </div>
-        <span class="dan-sep" id="ln-dan-sep">|</span>
-        <div class="dan-item ln-dan-row" id="ln-dan-item">
-            <span class="dan-label">LN Dan</span>
-            <span class="dan-value ln-dan" id="ln-dan">-</span>
-        </div>
-        <span class="dan-sep total-dan-sep">|</span>
-        <div class="dan-item total-dan-item">
-            <span class="dan-label">Total</span>
-            <span class="dan-value" id="total-dan">-</span>
+        <div id="rc-ln-row">
+            <div class="sub-item rc-sub" id="rc-sub-item">
+                <span class="sub-label">RC</span>
+                <span class="sub-value rc" id="rc-rating">--</span>
+                <span class="dan-value rc-dan" id="rc-dan">-</span>
+            </div>
+            <span class="sep" id="ln-sep">|</span>
+            <div class="sub-item ln-sub" id="ln-sub-item">
+                <span class="sub-label">LN</span>
+                <span class="sub-value ln" id="ln-rating">--</span>
+                <span class="dan-value ln-dan" id="ln-dan">-</span>
+            </div>
         </div>
     </div>
     <div id="curve-container">
+        <span id="curve-tooltip" class="hidden"></span>
         <canvas id="curve-canvas"></canvas>
-        <div id="curve-legend">
-            <span class="legend-rc"><i></i>RC</span>
-            <span class="legend-ln" id="legend-ln"><i></i>LN</span>
-        </div>
     </div>
     <div class="divider" id="divider"></div>
     <div id="tags-row"></div>
@@ -606,8 +1078,10 @@ body {
         <span id="seg-bpm"></span>
         <span id="seg-tag">—</span>
         <span id="seg-conf"></span>
-        <span id="seg-diff" class="hidden"><span class="sd-star"></span><span class="sd-dan"></span></span>
-        <span id="seg-dur"></span>
+        <span id="seg-secondary">
+            <span id="seg-diff" class="hidden"><span class="sd-star"></span><span class="sd-dan"></span></span>
+            <span id="seg-dur"></span>
+        </span>
     </div>
     <div id="seg-timeline-wrap">
         <div id="seg-timeline"><div id="seg-cursor"></div></div>
@@ -636,17 +1110,6 @@ body {
     }
     const counterPath = window.COUNTER_PATH;
 
-    // v0.5.0 design system: two family anchors reused across badges,
-    // sub-ratings, dan values, difficulty curves, tag chips and the
-    // segment timeline — a hue always means the same family.
-    // RC = cool hues (the "clean" family), LN = warm hues, composites
-    // blend their family, hybrid/break are neutral.
-    // (tag set mirrors tagclassifier src/config.ts)
-    //
-    // v1.0.1: the anchors and the whole tag palette moved into COLOR_SCHEMES.
-    // FAMILY / TAG_COLORS stay as the *live* lookup tables the render code
-    // reads, and applyColorScheme() swaps their contents, so nothing below
-    // needs to know that themes exist.
     const TAG_LABELS = {
         'chordjack': 'Chordjack', 'minijack': 'Minijack',
         'dense chordstream': 'Dense Chordstream', 'fast chordstream': 'Fast Chordstream',
@@ -659,22 +1122,20 @@ body {
     const TAG_KEYS = Object.keys(TAG_LABELS);
 
     /** Colour schemes.
-     *  "Default Dark" matches the v1.0.0 palette (panel, family and tag hues,
-     *  dim-text hierarchy), so the upgrade changes nothing for existing users.
-     *  "Aurora" is the new v1.0.1 scheme: cyan-teal RC ramp against an
-     *  orange-red LN ramp — a complementary pair, which separates the two
-     *  families more strongly than blue/orange does at small sizes, and an
-     *  indigo-tinted panel instead of neutral black.
-     *  "High Contrast" is built for readability over bright gameplay: near
-     *  black panel, Okabe-Ito derived hues that stay distinguishable with
-     *  deuteranopia/protanopia. */
+     *  Preserves the v1.0.1 WCAG 4.5:1 calibrated hues on flat surfaces;
+     *  only meaning-bearing colour (family, tags, status) varies. */
     const COLOR_SCHEMES = {
         'Default Dark': {
-            panel: { bg: 'rgba(13, 15, 18, 0.78)', border: 'rgba(255, 255, 255, 0.08)', radius: '12px' },
-            text: '#eef1f5', textDim: 'rgba(238, 241, 245, 0.55)', textFaint: 'rgba(238, 241, 245, 0.45)',
-            rule: 'rgba(255, 255, 255, 0.07)', surface: 'rgba(255, 255, 255, 0.035)',
-            surfaceBorder: 'rgba(255, 255, 255, 0.06)', chipTrack: 'rgba(255, 255, 255, 0.05)',
-            pill: 'rgba(255, 255, 255, 0.10)', pillBorder: 'rgba(255, 255, 255, 0.14)',
+            panel: {
+                bg: 'rgba(13, 16, 22, 0.84)', border: 'rgba(255, 255, 255, 0.10)', radius: '10px',
+                shadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
+            },
+            text: '#eef1f5', textDim: 'rgba(238, 241, 245, 0.62)', textFaint: 'rgba(238, 241, 245, 0.46)',
+            rule: 'rgba(255, 255, 255, 0.08)', surface: 'rgba(255, 255, 255, 0.04)',
+            surfaceStrong: 'rgba(255, 255, 255, 0.068)', surfaceBorder: 'rgba(255, 255, 255, 0.08)',
+            chipTrack: 'rgba(255, 255, 255, 0.055)', pill: 'rgba(255, 255, 255, 0.10)',
+            pillBorder: 'rgba(255, 255, 255, 0.15)',
+            gridLine: 'rgba(255, 255, 255, 0.06)',
             cursor: '#ffffff', badgeInk: '#14171c', dimText: '#ffffff',
             family: { rc: '#58a6ff', ln: '#ff8c5a', hb: '#c7cdd6', mix: '#8f97a3' },
             tags: {
@@ -691,11 +1152,16 @@ body {
             },
         },
         'Aurora': {
-            panel: { bg: 'rgba(11, 13, 22, 0.80)', border: 'rgba(150, 200, 255, 0.12)', radius: '12px' },
+            panel: {
+                bg: 'rgba(10, 13, 24, 0.84)', border: 'rgba(150, 200, 255, 0.15)', radius: '10px',
+                shadow: '0 10px 30px rgba(4, 7, 18, 0.40)',
+            },
             text: '#e9eef8', textDim: 'rgba(233, 238, 248, 0.80)', textFaint: 'rgba(233, 238, 248, 0.63)',
-            rule: 'rgba(150, 200, 255, 0.10)', surface: 'rgba(150, 200, 255, 0.05)',
-            surfaceBorder: 'rgba(150, 200, 255, 0.09)', chipTrack: 'rgba(150, 200, 255, 0.07)',
-            pill: 'rgba(150, 200, 255, 0.12)', pillBorder: 'rgba(150, 200, 255, 0.20)',
+            rule: 'rgba(150, 200, 255, 0.11)', surface: 'rgba(150, 200, 255, 0.055)',
+            surfaceStrong: 'rgba(150, 200, 255, 0.09)', surfaceBorder: 'rgba(150, 200, 255, 0.11)',
+            chipTrack: 'rgba(150, 200, 255, 0.075)', pill: 'rgba(150, 200, 255, 0.12)',
+            pillBorder: 'rgba(150, 200, 255, 0.22)',
+            gridLine: 'rgba(165, 212, 255, 0.07)',
             cursor: '#bff3ff', badgeInk: '#06121a', dimText: '#ffffff',
             family: { rc: '#22d3ee', ln: '#fb7185', hb: '#c4b5fd', mix: '#94a3b8' },
             tags: {
@@ -712,11 +1178,16 @@ body {
             },
         },
         'High Contrast': {
-            panel: { bg: 'rgba(0, 0, 0, 0.86)', border: 'rgba(255, 255, 255, 0.22)', radius: '10px' },
+            panel: {
+                bg: 'rgba(4, 5, 7, 0.90)', border: 'rgba(255, 255, 255, 0.26)', radius: '10px',
+                shadow: '0 10px 30px rgba(0, 0, 0, 0.55)',
+            },
             text: '#ffffff', textDim: 'rgba(255, 255, 255, 0.85)', textFaint: 'rgba(255, 255, 255, 0.72)',
-            rule: 'rgba(255, 255, 255, 0.20)', surface: 'rgba(255, 255, 255, 0.08)',
-            surfaceBorder: 'rgba(255, 255, 255, 0.16)', chipTrack: 'rgba(255, 255, 255, 0.12)',
-            pill: 'rgba(255, 255, 255, 0.16)', pillBorder: 'rgba(255, 255, 255, 0.30)',
+            rule: 'rgba(255, 255, 255, 0.22)', surface: 'rgba(255, 255, 255, 0.085)',
+            surfaceStrong: 'rgba(255, 255, 255, 0.13)', surfaceBorder: 'rgba(255, 255, 255, 0.20)',
+            chipTrack: 'rgba(255, 255, 255, 0.12)', pill: 'rgba(255, 255, 255, 0.16)',
+            pillBorder: 'rgba(255, 255, 255, 0.30)',
+            gridLine: 'rgba(255, 255, 255, 0.12)',
             cursor: '#ffe600', badgeInk: '#000000', dimText: '#ffffff',
             family: { rc: '#56b4e9', ln: '#e69f00', hb: '#f0e442', mix: '#bbbbbb' },
             tags: {
@@ -734,7 +1205,6 @@ body {
         },
     };
 
-    // live lookup tables — swapped by applyColorScheme()
     const FAMILY = Object.assign({}, COLOR_SCHEMES['Default Dark'].family);
     const TAG_COLORS = Object.assign({}, COLOR_SCHEMES['Default Dark'].tags);
 
@@ -777,33 +1247,21 @@ body {
         const ch = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
         return '#' + ch.map((v) => Math.round(v + (255 - v) * k).toString(16).padStart(2, '0')).join('');
     }
-    // chip geometry: a translucent tint of the tag hue, the hue as the border,
-    // and an ink that has to clear CHIP_MIN_CONTRAST both against the chip's
-    // own tint AND against the panel underneath it. Measured across all three
-    // schemes that needs a lifted ink for part of the palette: a raw mid
-    // luminance hue (chordjack blue, vibro violet) falls in a dead zone where
-    // it reads against neither. The hue stays on the border, so identity is
-    // preserved even when the ink has been lightened.
     const CHIP_TINT_ALPHA = 0.20;
     const CHIP_BORDER_ALPHA = 0.55;
     const CHIP_MIN_CONTRAST = 4.5;
     const CHIP_INK_LIFT = 0.14;
     const BREAK_LIGHTEN = 0.52;
-    // the effective panel colour under the panel's own alpha, over a bright
-    // gameplay frame — the worst case for text contrast. Refreshed by
-    // applyColorScheme. The text colour is a fixed token, so it does not move.
     let chipBackdrop = '#2a2c30';
     function updateChipBackdrop(panelBg) {
         const m = String(panelBg).match(/rgba?\(([^)]+)\)/);
         if (!m) { chipBackdrop = typeof panelBg === 'string' && panelBg[0] === '#' ? panelBg : chipBackdrop; return; }
         const p = m[1].split(',').map(parseFloat);
         const a = p.length > 3 ? p[3] : 1;
-        const bg = [64, 62, 58];   // representative mid-bright gameplay pixel
+        const bg = [64, 62, 58];
         chipBackdrop = '#' + [0, 1, 2].map((i) =>
             Math.round(p[i] * a + bg[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
     }
-    // also the worst case over a bright frame, so the ink chosen here is safe
-    // over any gameplay behind the translucent panel
     let chipBackdropBright = '#3a3a38';
     function updateChipBackdropBright(panelBg) {
         const m = String(panelBg).match(/rgba?\(([^)]+)\)/);
@@ -814,8 +1272,6 @@ body {
         chipBackdropBright = '#' + [0, 1, 2].map((i) =>
             Math.round(p[i] * a + bg[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
     }
-    /** Ink for a tag chip: the hue itself when it is dark enough, otherwise the
-     *  hue lifted towards white until it measures on both backdrops. */
     function chipInk(hex) {
         const fills = [chipBackdrop, chipBackdropBright].map((bd) => compositeOver(hex, CHIP_TINT_ALPHA, bd));
         let ink = hex;
@@ -828,6 +1284,50 @@ body {
         return '#ffffff';
     }
 
+    function computeFamilySplitPct(result, tagRes) {
+        const fm = tagRes && tagRes.overall && tagRes.overall.familyMass;
+        const fmTotal = fm ? (Number(fm.rc || 0) + Number(fm.ln || 0)) : 0;
+        if (fmTotal > 0) {
+            return Math.max(0, Math.min(100, (Number(fm.rc || 0) / fmTotal) * 100));
+        }
+        const mt = result && result.mapType;
+        if (mt === 'LN') return 0;
+        if (mt === 'RC') return 100;
+        if (result && Number.isFinite(result.lnRatio)) {
+            return Math.max(0, Math.min(100, (1 - result.lnRatio) * 100));
+        }
+        return 50;
+    }
+
+    /** Reflect both map family (RC/LN/HB/Mix) and TagClassifier RC/LN mass
+     *  share on the top edge accent bar. */
+    function updateTopAccent(mapType, result, tagRes) {
+        const root = document.documentElement.style;
+        const rcPct = computeFamilySplitPct(result || (mapType ? { mapType } : null), tagRes);
+        const rcShare = rcPct / 100;
+        const lnShare = 1 - rcShare;
+
+        let s0, s1;
+        if (rcPct >= 99.5) {
+            s0 = 100;
+            s1 = 100;
+        } else if (rcPct <= 0.5) {
+            s0 = 0;
+            s1 = 0;
+        } else {
+            s0 = Math.max(0, rcPct - 2.5);
+            s1 = Math.min(100, rcPct + 2.5);
+        }
+        root.setProperty('--bar-s0', s0.toFixed(1) + '%');
+        root.setProperty('--bar-s1', s1.toFixed(1) + '%');
+        const hbCol = mapType === 'HB'
+            ? hexA(FAMILY.hb, 0.72)
+            : mapType === 'Mix'
+                ? hexA(FAMILY.mix, 0.45)
+                : hexA(FAMILY.hb, 0);
+        root.setProperty('--bar-hb-col', hbCol);
+    }
+
     /** Push a scheme's tokens onto :root and swap the live palettes. */
     function applyColorScheme(name) {
         const s = COLOR_SCHEMES[name] || COLOR_SCHEMES['Default Dark'];
@@ -835,15 +1335,18 @@ body {
         root.setProperty('--panel-bg', s.panel.bg);
         root.setProperty('--panel-border', s.panel.border);
         root.setProperty('--panel-radius', s.panel.radius);
+        root.setProperty('--panel-shadow', s.panel.shadow);
         root.setProperty('--text', s.text);
         root.setProperty('--text-dim', s.textDim);
         root.setProperty('--text-faint', s.textFaint);
         root.setProperty('--rule', s.rule);
         root.setProperty('--surface', s.surface);
+        root.setProperty('--surface-strong', s.surfaceStrong);
         root.setProperty('--surface-border', s.surfaceBorder);
         root.setProperty('--chip-track', s.chipTrack);
         root.setProperty('--pill', s.pill);
         root.setProperty('--pill-border', s.pillBorder);
+        root.setProperty('--grid-line', s.gridLine);
         root.setProperty('--cursor', s.cursor);
         root.setProperty('--badge-ink', s.badgeInk);
         root.setProperty('--dim-text', s.dimText);
@@ -852,28 +1355,25 @@ body {
         root.setProperty('--hb', s.family.hb);
         root.setProperty('--mix', s.family.mix);
         root.setProperty('--break', s.tags['break']);
-        // the "Break" label is muted on purpose, but the raw break hue is far
-        // too dark to read as text — lift it towards the scheme's ink
         root.setProperty('--break-text', lighten(s.tags['break'], BREAK_LIGHTEN));
         root.setProperty('--segdiff', s.dimText);
         for (const k of Object.keys(FAMILY)) FAMILY[k] = s.family[k];
         for (const k of TAG_KEYS) TAG_COLORS[k] = s.tags[k] || '#9aa1ac';
         updateChipBackdrop(s.panel.bg);
         updateChipBackdropBright(s.panel.bg);
-        // the canvas cannot read CSS variables, so mirror the few values it
-        // draws with (cursor colour, legend ink) into a plain object
         CANVAS_INK.cursor = s.cursor;
-        CANVAS_INK.cursorGlow = hexA(s.cursor, 0.6);
+        CANVAS_INK.grid = s.gridLine;
+        updateTopAccent(cachedResult ? cachedResult.mapType : 'RC', cachedResult, cachedTagResult);
+        offscreenValid = false;
     }
 
-    // canvas-only mirrors of the token values (see applyColorScheme)
-    const CANVAS_INK = { cursor: '#ffffff', cursorGlow: 'rgba(255,255,255,0.6)' };
+    const CANVAS_INK = {
+        cursor: '#ffffff',
+        grid: 'rgba(255,255,255,0.055)',
+        baseline: 'rgba(255,255,255,0.14)',
+    };
 
     let settings = {
-        // Rating algorithm = SPM Rating v1.2.0 model variant. The stored value
-        // is the settings-panel label; algorithmModel() maps it to the engine
-        // variant id. A stale pre-1.2.0 value ("SPM Rating v1.2.0") keeps the
-        // detailed model.
         algorithm: 'SPM Rating v1.2.0-Detailed',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
         enableAnalysisCache: true,
@@ -882,6 +1382,7 @@ body {
         uiStyle: 'Rating first',
         panelDensity: 'Standard',
         curveSmoothing: 'Medium',
+        enableAnimations: true,
         hideOnPlay: false,
         showSummary: true,
         showTags: true,
@@ -891,20 +1392,14 @@ body {
         showBreak: true,
     };
 
-    /** Rating-algorithm setting -> engine model variant id ("detail" | "compact").
-     *  Only the compact label selects the compact model; unknown or stale
-     *  values keep the detailed model. */
     function algorithmModel() {
         return /compact/i.test(String(settings.algorithm || '')) ? 'compact' : 'detail';
     }
 
-    /** Sub-difficulty scheme option -> processMap scheme id. Both labels are
-     *  named explicitly so a stale stored value falls back to the default. */
     function currentSubScheme() {
         return settings.subDifficultyScheme === 'Legacy v0.5.1' ? 'v051' : 'direct';
     }
 
-    // dan label style key from the settings option string
     function danStyleKey() {
         switch (settings.danDisplayStyle) {
             case 'Signs (-/+)': return 'pm';
@@ -914,7 +1409,6 @@ body {
         }
     }
 
-    // ui style key, same idea
     function uiStyleKey() {
         switch (settings.uiStyle) {
             case 'Dan first': return 'dan-first';
@@ -924,8 +1418,6 @@ body {
         }
     }
 
-    // curve smoothing key -> the sigma in drawn pixels it stands for; the
-    // engine owns the numbers (SPMEngine.CURVE_SIGMA_PX)
     function smoothPx() {
         switch (settings.curveSmoothing) {
             case 'Off': return 0;
@@ -942,13 +1434,13 @@ body {
     let currentModSignature = null;
     let currentSpeedRate = 1.0;
     let cachedResult = null;
-    let cachedRawCurves = null;   // v1.0.1: unsmoothed series, so the smoothing setting can be re-applied without re-analysis
-    let cachedTagResult = null;   // native 4K/6K coarse or stable 7K classifier result
-    let cachedSegStats = null;    // v1.0.1: per-segment difficulty, aligned to cachedTagResult.segments
-    let curveScaleMax = 0;        // v1.0.1: y-scale anchor = RAW curve max (smoothing never moves the scale)
-    let cachedMeta = null;        // v1.0.1: beatmap metadata for the summary line
-    let cachedPayloadMeta = null; // v1.0.1: metadata from the tosu frame, if any
-    let segmentDiffFloor = 0;     // v1.0.1: below this a section is treated as a rest
+    let cachedRawCurves = null;
+    let cachedTagResult = null;
+    let cachedSegStats = null;
+    let curveScaleMax = 0;
+    let cachedMeta = null;
+    let cachedPayloadMeta = null;
+    let segmentDiffFloor = 0;
     let cachedKeyCount = 7;
     let cachedOsuContent = null;
     let cacheStore = null, cacheUnavailableReason = '';
@@ -959,8 +1451,26 @@ body {
     let reconnectTimer = null;
     let animFrameId = null;
     let lastSegIndex = -2;
+    let lastCursorPct = -1;
+    let lastTagSig = '';
+    let lastMapTypeBadge = '';
     let hideOnPlayActive = false;
-    let isPaused = false;         // v1.0.1: game.paused from the tosu frame, drives the pause marker
+    let isPaused = false;
+    let delayedLoadingTimer = null;
+
+    // Offscreen curve layer + morph animation state
+    let offscreenCanvas = null;
+    let offscreenValid = false;
+    let lastDrawnCursorX = -999;
+    let lastDrawnPaused = false;
+    let hoverRatioX = null;
+    let lastSmoothedSnapshot = null;
+    let curveMorphFrom = null;
+    let curveMorphStartTs = 0;
+    const CURVE_MORPH_MS = 400;
+    let lastRenderedChartKey = '';
+    let lastUiStyleKey = '';
+    let curvesDirty = false;
 
     let songTimeMs = null;
     let prevSongTimeMs = null;
@@ -988,14 +1498,13 @@ body {
     const elModBadge = document.getElementById('mod-badge');
     const elRcRating = document.getElementById('rc-rating');
     const elLnRating = document.getElementById('ln-rating');
+    const elRcSubItem = document.getElementById('rc-sub-item');
     const elLnSubItem = document.getElementById('ln-sub-item');
     const elLnSep = document.getElementById('ln-sep');
     const elRcLnRow = document.getElementById('rc-ln-row');
     const elRcDan = document.getElementById('rc-dan');
     const elLnDan = document.getElementById('ln-dan');
-    const elLnDanItem = document.getElementById('ln-dan-item');
-    const elLnDanSep = document.getElementById('ln-dan-sep');
-    const elLegendLn = document.getElementById('legend-ln');
+    const elTotalDanWrap = document.getElementById('total-dan-wrap');
     const elTotalDan = document.getElementById('total-dan');
     const elDanRow = document.getElementById('dan-row');
     const elDivider = document.getElementById('divider');
@@ -1008,12 +1517,95 @@ body {
     const elSegDiffStar = elSegDiff.querySelector('.sd-star');
     const elSegDiffDan = elSegDiff.querySelector('.sd-dan');
     const elSegDur = document.getElementById('seg-dur');
+    const elCurveContainer = document.getElementById('curve-container');
     const elCanvas = document.getElementById('curve-canvas');
-    const elCurveLegend = document.getElementById('curve-legend');
+    const elCurveTooltip = document.getElementById('curve-tooltip');
     const elTimelineWrap = document.getElementById('seg-timeline-wrap');
     const elTimeline = document.getElementById('seg-timeline');
     const elSegCursor = document.getElementById('seg-cursor');
     const elSegLegend = document.getElementById('seg-legend');
+
+    /** Directional odometer digit roller.
+     *  Keeps element.textContent equal to the raw target string at all times
+     *  by storing outgoing digits in data-prev on ::before pseudo-elements. */
+    function setRollingDigits(el, nextStr) {
+        const s = nextStr == null ? '' : String(nextStr);
+        const prev = el.dataset.rawVal ?? el.textContent ?? '';
+        if (prev === s) return;
+        el.dataset.rawVal = s;
+        if (!settings.enableAnimations || !s) {
+            el.textContent = s;
+            return;
+        }
+        const numeric = str => parseFloat(str.replace(/[^0-9.-]/g, ''));
+        const nNext = numeric(s);
+        const prevHadNum = !!(prev && prev !== '--' && prev !== '-');
+        const refPrev = prevHadNum ? prev : (el.dataset.lastNumVal || '');
+        const refNum = numeric(refPrev);
+        if (!Number.isFinite(nNext) || (prevHadNum && !Number.isFinite(refNum))) {
+            // Restore the previous value so setMorphText can detect the change.
+            el.dataset.rawVal = prev;
+            setMorphText(el, s);
+            return;
+        }
+        el.dataset.lastNumVal = s;
+        const direction = Number.isFinite(refNum)
+            ? (nNext >= refNum ? 'd-up' : 'd-down') : 'd-enter';
+        const fragment = document.createDocumentFragment();
+        let rollIdx = 0;
+        for (let i = 0; i < s.length; i++) {
+            const ch = s[i], prevIdx = refPrev.length - (s.length - i);
+            const prevCh = prevIdx >= 0 ? refPrev[prevIdx] : '';
+            const slot = document.createElement('span');
+            const cur = document.createElement('span');
+            cur.className = 'd-cur';
+            cur.textContent = ch;
+            slot.className = 'd-slot';
+            if (/[0-9]/.test(ch) && (!prevHadNum || prevCh !== ch)) {
+                slot.classList.add(direction);
+                if (direction !== 'd-enter') slot.dataset.prev = /[0-9]/.test(prevCh) ? prevCh : '0';
+                slot.style.setProperty('--d-i', String(rollIdx++));
+            }
+            slot.appendChild(cur);
+            fragment.appendChild(slot);
+        }
+        el.replaceChildren(fragment);
+        if (el === elSegBpm) {
+            el.classList.remove('bpm-bump');
+            void el.offsetWidth;
+            el.classList.add('bpm-bump');
+        }
+    }
+
+    /** Vertical flip-in text morph for non-numeric readouts (dan labels, etc.). */
+    function setMorphText(el, nextStr) {
+        const s = nextStr == null ? '' : String(nextStr);
+        const prev = el.dataset.rawVal ?? el.textContent ?? '';
+        if (prev === s) return;
+        el.dataset.rawVal = s;
+        el.textContent = s;
+        if (settings.enableAnimations && prev && prev !== '-' && prev !== '--' && prev !== s) {
+            el.classList.remove('txt-morph');
+            void el.offsetWidth;
+            el.classList.add('txt-morph');
+        }
+    }
+
+    function applyMotionSetting() {
+        const off = !settings.enableAnimations;
+        document.body.classList.toggle('no-motion', off);
+        elContainer.classList.toggle('no-motion', off);
+        if (off) {
+            curveMorphFrom = null;
+            curveMorphStartTs = 0;
+            // Flatten any active rolling-digit DOM spans down to raw text
+            for (const el of [elRating, elRcRating, elLnRating, elSegBpm, elSegDiffStar, elSegConf, elSegDur]) {
+                if (el && el.dataset.rawVal != null && el.children.length > 0) {
+                    el.textContent = el.dataset.rawVal;
+                }
+            }
+        }
+    }
 
     function getModData(data) {
         const client = String(data?.client || '').toLowerCase();
@@ -1025,13 +1617,13 @@ body {
         for (const mods of validMods) {
             if (typeof mods?.name === 'string') {
                 const s = mods.name.toUpperCase().replace(/[^A-Z]/g, '');
-                for (const [code, bit] of Object.entries(MOD_BIT_FLAGS)) {
+                for (const [code] of Object.entries(MOD_BIT_FLAGS)) {
                     if (s.includes(code)) modCodes.add(code);
                 }
             }
             if (typeof mods?.str === 'string') {
                 const s = mods.str.toUpperCase().replace(/[^A-Z]/g, '');
-                for (const [code, bit] of Object.entries(MOD_BIT_FLAGS)) {
+                for (const [code] of Object.entries(MOD_BIT_FLAGS)) {
                     if (s.includes(code)) modCodes.add(code);
                 }
             }
@@ -1103,6 +1695,7 @@ body {
 
     function getInterpolatedTime() {
         if (songTimeMs === null || songTimeReceiveTs <= 0) return null;
+        if (isPaused) return songTimeMs;
         const now = performance.now();
         const receiveDelta = songTimeReceiveTs - prevSongTimeReceiveTs;
         const songDelta = songTimeMs - prevSongTimeMs;
@@ -1122,36 +1715,83 @@ body {
         return Math.round(v);
     }
 
-    /** Finite max that tolerates a non-finite series (a single NaN would
-     *  otherwise poison every y and blank the whole curve). */
     function safeMax(arr) {
         let m = 0;
         for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i];
         return m;
     }
 
-    function drawCurve(sectionDiffs, rcSectionDiffs, mapType, cursorTimeMs, sectionTimes, firstNoteTime, lastNoteTime, lnSectionDiffs) {
-        const canvas = elCanvas;
-        const rect = canvas.getBoundingClientRect();
-        // while "Hide While Playing" has the panel display:none there is nothing
-        // to draw, and a 0-width canvas would produce an inverted x mapping
-        if (!(rect.width > 8)) return;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        const ctx = canvas.getContext('2d');
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, rect.width, rect.height);
+    /** Linearly resampled interpolation between two curves of arbitrary lengths. */
+    const morphBuffers = {};
+    function lerpSeries(a, b, t, key) {
+        if (!b || !b.length) return b;
+        if (t >= 1) return b;
+        const len = b.length;
+        const out = morphBuffers[key]?.length === len ? morphBuffers[key]
+            : (morphBuffers[key] = new Float64Array(len));
+        if (!a || !a.length) {
+            for (let i = 0; i < len; i++) out[i] = b[i] * t;
+            return out;
+        }
+        const prevLen = a.length;
+        for (let i = 0; i < len; i++) {
+            let v0;
+            if (prevLen === len) {
+                v0 = a[i];
+            } else {
+                const pos = (i / Math.max(1, len - 1)) * (prevLen - 1);
+                const lo = Math.floor(pos), hi = Math.min(prevLen - 1, lo + 1);
+                const f = pos - lo;
+                const aLo = Number.isFinite(a[lo]) ? a[lo] : 0;
+                const aHi = Number.isFinite(a[hi]) ? a[hi] : aLo;
+                v0 = aLo + (aHi - aLo) * f;
+            }
+            if (!Number.isFinite(v0)) v0 = b[i];
+            out[i] = v0 + (b[i] - v0) * t;
+        }
+        return out;
+    }
 
-        const w = rect.width;
-        const h = rect.height;
-        const pad = 3;
+    function sampleSeriesAtTime(data, sectionTimes, tMs, mapStart, mapEndT) {
+        if (!data || !data.length) return 0;
+        const len = data.length;
+        if (!sectionTimes || !sectionTimes.length) {
+            const frac = Math.max(0, Math.min(1, (tMs - mapStart) / Math.max(1, mapEndT - mapStart)));
+            const pos = frac * (len - 1);
+            const lo = Math.floor(pos), hi = Math.min(len - 1, lo + 1);
+            return data[lo] + (data[hi] - data[lo]) * (pos - lo);
+        }
+        const n = Math.min(len, sectionTimes.length);
+        if (tMs <= sectionTimes[0]) return data[0];
+        if (tMs >= sectionTimes[n - 1]) return data[n - 1];
+        let lo = 0, hi = n - 1;
+        while (lo + 1 < hi) {
+            const m = (lo + hi) >> 1;
+            if (sectionTimes[m] <= tMs) lo = m;
+            else hi = m;
+        }
+        const dt = sectionTimes[hi] - sectionTimes[lo];
+        const f = dt > 0 ? Math.max(0, Math.min(1, (tMs - sectionTimes[lo]) / dt)) : 0;
+        return data[lo] + (data[hi] - data[lo]) * f;
+    }
 
+    function drawStaticCurveLayer(targetCanvas, w, h, dpr, sectionDiffs, rcSectionDiffs, lnSectionDiffs, mapType, sectionTimes, firstNoteTime, lastNoteTime, scaleMax) {
+        const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+        if (targetCanvas.width !== bw || targetCanvas.height !== bh) {
+            targetCanvas.width = bw;
+            targetCanvas.height = bh;
+        }
+        const ctx = targetCanvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        const pad = 4;
+        const yTop = 12;
+        const yBot = h - 5;
+        const plotH = Math.max(8, yBot - yTop);
         const isMix = mapType === 'Mix';
         const showBoth = rcSectionDiffs && rcSectionDiffs.length > 0 && lnSectionDiffs && lnSectionDiffs.length > 0;
 
-        // plot x from the bucket time when the time base is known, so the trace
-        // and the playhead share one time -> x mapping; fall back to the index
         const mapStart = firstNoteTime != null ? firstNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[0] : 0);
         const mapEndT = lastNoteTime != null ? lastNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[sectionTimes.length - 1] + 400 : 0);
         const timeSpan = Math.max(1, mapEndT - mapStart);
@@ -1164,116 +1804,270 @@ body {
             return pad + (i / Math.max(len - 1, 1)) * (w - 2 * pad);
         }
 
-        if (showBoth) {
-            // RC line = cool family anchor, LN line = warm family anchor —
-            // same colors as the sort badge and the RC/LN sub-ratings
-            // scale anchored to the raw max so the smoothing setting changes
-            // the curve's shape, never its height
-            const allMax = curveScaleMax > 0 ? curveScaleMax
-                : Math.max(safeMax(rcSectionDiffs), safeMax(lnSectionDiffs), 0.01);
-
-            function drawLine(data, color, alpha) {
-                if (!data || data.length === 0) return;
-                const len = data.length;
-                ctx.beginPath();
-                ctx.strokeStyle = color;
-                ctx.globalAlpha = alpha;
-                ctx.lineWidth = 2;
-                for (let i = 0; i < len; i++) {
-                    const x = xAt(i, len);
-                    const y = h - pad - (data[i] / allMax) * (h - 2 * pad);
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
-
-                ctx.beginPath();
-                ctx.globalAlpha = alpha * 0.10;
-                ctx.fillStyle = color;
-                ctx.moveTo(xAt(0, len), h - pad);
-                for (let i = 0; i < len; i++) {
-                    ctx.lineTo(xAt(i, len), h - pad - (data[i] / allMax) * (h - 2 * pad));
-                }
-                ctx.lineTo(xAt(len - 1, len), h - pad);
-                ctx.closePath();
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
-
-            drawLine(rcSectionDiffs, FAMILY.rc, 0.85);       // RC-equiv D (full) — cool
-            if (lnSectionDiffs && lnSectionDiffs.length > 0) {
-                drawLine(lnSectionDiffs, FAMILY.ln, 0.9);    // LN-masked D — warm
-            }
-            elLegendLn.classList.toggle('hidden', !lnSectionDiffs || lnSectionDiffs.length === 0);
-            elCurveLegend.classList.remove('hidden');
-        } else if (sectionDiffs && sectionDiffs.length > 0) {
-            const maxVal = curveScaleMax > 0 ? curveScaleMax
-                : Math.max(safeMax(sectionDiffs), 0.01);
-            // single-line fallback follows the map's family
-            const curveColor = mapType === 'LN' ? FAMILY.ln : (isMix ? FAMILY.mix : FAMILY.rc);
-            const len = sectionDiffs.length;
+        // Solid hairline reference grid + baseline
+        ctx.save();
+        ctx.lineWidth = 1;
+        for (const frac of [0.25, 0.50, 0.75]) {
+            const gy = Math.round(yTop + frac * plotH) + 0.5;
+            ctx.strokeStyle = CANVAS_INK.grid;
             ctx.beginPath();
-            ctx.strokeStyle = curveColor;
-            ctx.globalAlpha = 0.9;
-            ctx.lineWidth = 2;
+            ctx.moveTo(pad, gy);
+            ctx.lineTo(w - pad, gy);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = CANVAS_INK.baseline;
+        ctx.beginPath();
+        ctx.moveTo(pad, Math.round(yBot) + 0.5);
+        ctx.lineTo(w - pad, Math.round(yBot) + 0.5);
+        ctx.stroke();
+        ctx.restore();
+
+        function paintSeries(data, color, alpha, maxRef) {
+            if (!data || data.length === 0) return;
+            const len = data.length;
+
+            ctx.beginPath();
+            ctx.moveTo(xAt(0, len), yBot);
+            for (let i = 0; i < len; i++) {
+                const y = yBot - Math.min(1, Math.max(0, data[i] / maxRef)) * plotH;
+                ctx.lineTo(xAt(i, len), y);
+            }
+            ctx.lineTo(xAt(len - 1, len), yBot);
+            ctx.closePath();
+            ctx.fillStyle = hexA(color, alpha * 0.10);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 1.6;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
             for (let i = 0; i < len; i++) {
                 const x = xAt(i, len);
-                const y = h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad);
+                const y = yBot - Math.min(1, Math.max(0, data[i] / maxRef)) * plotH;
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
             ctx.globalAlpha = 1.0;
-
-            ctx.beginPath();
-            ctx.globalAlpha = 0.10;
-            ctx.fillStyle = curveColor;
-            ctx.moveTo(xAt(0, len), h - pad);
-            for (let i = 0; i < len; i++) {
-                ctx.lineTo(xAt(i, len), h - pad - (sectionDiffs[i] / maxVal) * (h - 2 * pad));
-            }
-            ctx.lineTo(xAt(len - 1, len), h - pad);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-
-            elLegendLn.classList.add('hidden');
-            elCurveLegend.classList.add('hidden');
         }
 
-        // Cursor position
-        if (cursorTimeMs !== null && sectionTimes && sectionTimes.length > 0) {
-            // cursorTimeMs is already scaled (divided by speedRate) in onmessage handler
-            const clampedTime = Math.max(mapStart, Math.min(cursorTimeMs, mapEndT));
-            const cursorX = pad + ((clampedTime - mapStart) / timeSpan) * (w - 2 * pad);
+        if (showBoth) {
+            const allMax = scaleMax > 0 ? scaleMax
+                : Math.max(safeMax(rcSectionDiffs), safeMax(lnSectionDiffs), 0.01);
+            paintSeries(rcSectionDiffs, FAMILY.rc, 0.88, allMax);
+            if (lnSectionDiffs && lnSectionDiffs.length > 0) {
+                paintSeries(lnSectionDiffs, FAMILY.ln, 0.92, allMax);
+            }
+        } else if (sectionDiffs && sectionDiffs.length > 0) {
+            const maxVal = scaleMax > 0 ? scaleMax : Math.max(safeMax(sectionDiffs), 0.01);
+            const curveColor = mapType === 'LN' ? FAMILY.ln : (isMix ? FAMILY.mix : FAMILY.rc);
+            paintSeries(sectionDiffs, curveColor, 0.92, maxVal);
+        }
 
+    }
+
+    function drawCurve(sectionDiffs, rcSectionDiffs, mapType, cursorTimeMs, sectionTimes, firstNoteTime, lastNoteTime, lnSectionDiffs) {
+        const canvas = elCanvas;
+        // Layout dimensions stay stable while the panel animates with transforms.
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        if (!(w > 8)) return;
+        const dpr = window.devicePixelRatio || 1;
+        const pad = 4;
+        const yTop = 12;
+        const yBot = h - 5;
+        const plotH = Math.max(8, yBot - yTop);
+
+        const showBoth = rcSectionDiffs && rcSectionDiffs.length > 0 && lnSectionDiffs && lnSectionDiffs.length > 0;
+
+        const mapStart = firstNoteTime != null ? firstNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[0] : 0);
+        const mapEndT = lastNoteTime != null ? lastNoteTime : (sectionTimes && sectionTimes.length ? sectionTimes[sectionTimes.length - 1] + 400 : 0);
+        const timeSpan = Math.max(1, mapEndT - mapStart);
+
+        let cursorX = -1;
+        let clampedTime = mapStart;
+        if (cursorTimeMs !== null && sectionTimes && sectionTimes.length > 0) {
+            clampedTime = Math.max(mapStart, Math.min(cursorTimeMs, mapEndT));
+            cursorX = pad + ((clampedTime - mapStart) / timeSpan) * (w - 2 * pad);
+        }
+
+        let morphT = 1;
+        if (settings.enableAnimations && curveMorphFrom && curveMorphStartTs > 0) {
+            const elapsed = performance.now() - curveMorphStartTs;
+            if (elapsed < CURVE_MORPH_MS) {
+                const u = Math.max(0, Math.min(1, elapsed / CURVE_MORPH_MS));
+                morphT = 1 - Math.pow(1 - u, 3);
+                offscreenValid = false;
+            } else {
+                curveMorphFrom = null;
+                curveMorphStartTs = 0;
+            }
+        } else {
+            curveMorphFrom = null;
+            curveMorphStartTs = 0;
+        }
+
+        const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
+        if (canvas.width !== bw || canvas.height !== bh) {
+            canvas.width = bw;
+            canvas.height = bh;
+            offscreenValid = false;
+        }
+
+        if (offscreenValid && morphT >= 1 && hoverRatioX === null
+            && Math.abs(cursorX - lastDrawnCursorX) < 0.15 && isPaused === lastDrawnPaused) {
+            return;
+        }
+        lastDrawnCursorX = cursorX;
+        lastDrawnPaused = isPaused;
+
+        const drawSec = morphT < 1 ? lerpSeries(curveMorphFrom.sec, sectionDiffs, morphT, 'sec') : sectionDiffs;
+        const drawRc = morphT < 1 ? lerpSeries(curveMorphFrom.rc, rcSectionDiffs, morphT, 'rc') : rcSectionDiffs;
+        const drawLn = morphT < 1 && lnSectionDiffs ? lerpSeries(curveMorphFrom.ln, lnSectionDiffs, morphT, 'ln') : lnSectionDiffs;
+        const drawScale = morphT < 1 && curveMorphFrom.scale > 0
+            ? curveMorphFrom.scale + (curveScaleMax - curveMorphFrom.scale) * morphT
+            : curveScaleMax;
+
+        if (!offscreenCanvas) offscreenCanvas = document.createElement('canvas');
+        if (!offscreenValid) {
+            drawStaticCurveLayer(offscreenCanvas, w, h, dpr, drawSec, drawRc, drawLn, mapType, sectionTimes, firstNoteTime, lastNoteTime, drawScale);
+            if (morphT >= 1) offscreenValid = true;
+        }
+
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.drawImage(offscreenCanvas, 0, 0, w, h);
+
+        // Hover scrubbing crosshair
+        if (hoverRatioX !== null && sectionTimes && sectionTimes.length > 0) {
+            const hx = pad + hoverRatioX * (w - 2 * pad);
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.38)';
+            ctx.setLineDash([2, 3]);
+            ctx.lineWidth = 1;
+            ctx.moveTo(hx, yTop);
+            ctx.lineTo(hx, yBot);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Playhead beam, intersection dots & status cap
+        if (cursorX >= 0) {
+            ctx.save();
             ctx.beginPath();
             ctx.strokeStyle = CANVAS_INK.cursor;
-            ctx.globalAlpha = 0.7;
+            ctx.globalAlpha = 0.78;
             ctx.lineWidth = 1.5;
-            ctx.moveTo(cursorX, pad);
-            ctx.lineTo(cursorX, h - pad);
+            ctx.moveTo(cursorX, yTop);
+            ctx.lineTo(cursorX, yBot);
             ctx.stroke();
-            ctx.globalAlpha = 1.0;
+
+            // Live curve intersection nodes
+            const maxRef = drawScale > 0 ? drawScale
+                : Math.max(showBoth ? Math.max(safeMax(drawRc || []), safeMax(drawLn || [])) : safeMax(drawSec || []), 0.01);
+            function drawDot(series, color) {
+                if (!series || !series.length) return;
+                const val = sampleSeriesAtTime(series, sectionTimes, clampedTime, mapStart, mapEndT);
+                if (val <= 0.01 && series === drawLn) return;
+                const y = yBot - Math.min(1, Math.max(0, val / maxRef)) * plotH;
+                ctx.beginPath();
+                ctx.globalAlpha = 0.95;
+                ctx.fillStyle = color;
+                ctx.arc(cursorX, y, 3.6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.fillStyle = '#ffffff';
+                ctx.arc(cursorX, y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            if (showBoth) {
+                drawDot(drawRc, FAMILY.rc);
+                drawDot(drawLn, FAMILY.ln);
+            } else if (drawSec && drawSec.length) {
+                const curveColor = mapType === 'LN' ? FAMILY.ln : (mapType === 'Mix' ? FAMILY.mix : FAMILY.rc);
+                drawDot(drawSec, curveColor);
+            }
 
             if (isPaused) {
-                // pause marker instead of the dot while the game is paused
                 ctx.fillStyle = CANVAS_INK.cursor;
-                ctx.globalAlpha = 0.9;
-                ctx.fillRect(cursorX - 4, pad - 1, 2.5, 11);
-                ctx.fillRect(cursorX + 1.5, pad - 1, 2.5, 11);
-                ctx.globalAlpha = 1.0;
+                ctx.globalAlpha = 0.94;
+                ctx.fillRect(cursorX - 3.4, 2, 2.1, 6);
+                ctx.fillRect(cursorX + 1.3, 2, 2.1, 6);
             } else {
                 ctx.beginPath();
                 ctx.fillStyle = CANVAS_INK.cursor;
-                ctx.globalAlpha = 0.9;
-                ctx.arc(cursorX, pad + 4, 4, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.96;
+                ctx.arc(cursorX, 4.8, 2.5, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.globalAlpha = 1.0;
             }
+            ctx.restore();
         }
     }
+
+    // Hover scrubbing preview on curve canvas
+    elCanvas.addEventListener('mousemove', (ev) => {
+        if (!cachedResult || !cachedResult.sectionTimes || !cachedResult.sectionTimes.length) return;
+        const rect = elCanvas.getBoundingClientRect();
+        if (!(rect.width > 8)) return;
+        const pad = 4;
+        const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left - pad) / Math.max(1, rect.width - 2 * pad)));
+        hoverRatioX = ratio;
+        const st = cachedResult.sectionTimes;
+        const mapStart = cachedResult.firstNoteTime != null ? cachedResult.firstNoteTime : st[0];
+        const mapEndT = cachedResult.lastNoteTime != null ? cachedResult.lastNoteTime : st[st.length - 1] + 400;
+        const tMs = mapStart + ratio * Math.max(1, mapEndT - mapStart);
+        let bIdx = 0, hi = st.length - 1;
+        while (bIdx < hi) {
+            const mid = (bIdx + hi + 1) >> 1;
+            if (st[mid] <= tMs) bIdx = mid;
+            else hi = mid - 1;
+        }
+        const rcV = cachedResult.rcSectionDifficulties && cachedResult.rcSectionDifficulties[bIdx];
+        const lnV = cachedResult.lnSectionDifficulties && cachedResult.lnSectionDifficulties[bIdx];
+        const secV = cachedResult.sectionDifficulties && cachedResult.sectionDifficulties[bIdx];
+        const parts = [fmtTimeShort(Math.max(0, tMs))];
+        if (rcV != null && lnV != null && cachedResult.lnSectionDifficulties.length > 0) {
+            parts.push('RC ' + rcV.toFixed(2) + '\u2605');
+            if (lnV > 0.05) parts.push('LN ' + lnV.toFixed(2) + '\u2605');
+        } else if (secV != null) {
+            parts.push(secV.toFixed(2) + '\u2605');
+        }
+        if (cachedTagResult && cachedTagResult.segments) {
+            const sIdx = findSegment(cachedTagResult.segments, tMs);
+            if (sIdx >= 0) parts.push(tagLabel(cachedTagResult.segments[sIdx].tag));
+        }
+        elCurveTooltip.innerHTML = '';
+        for (const p of parts) {
+            const s = document.createElement('span');
+            s.textContent = p;
+            elCurveTooltip.appendChild(s);
+        }
+        elCurveTooltip.classList.remove('hidden');
+        elCurveContainer.classList.add('is-hovering');
+        drawCurve(
+            cachedResult.sectionDifficulties, cachedResult.rcSectionDifficulties,
+            cachedResult.mapType, getInterpolatedTime(), cachedResult.sectionTimes,
+            cachedResult.firstNoteTime, cachedResult.lastNoteTime, cachedResult.lnSectionDifficulties
+        );
+    });
+    elCanvas.addEventListener('mouseleave', () => {
+        if (hoverRatioX === null) return;
+        hoverRatioX = null;
+        elCurveTooltip.classList.add('hidden');
+        elCurveContainer.classList.remove('is-hovering');
+        lastDrawnCursorX = -999;
+        if (cachedResult) {
+            drawCurve(
+                cachedResult.sectionDifficulties, cachedResult.rcSectionDifficulties,
+                cachedResult.mapType, getInterpolatedTime(), cachedResult.sectionTimes,
+                cachedResult.firstNoteTime, cachedResult.lastNoteTime, cachedResult.lnSectionDifficulties
+            );
+        }
+    });
 
     // ---- v0.5.0: segment classification rendering ----
 
@@ -1283,8 +2077,6 @@ body {
         return m + ':' + String(s).padStart(2, '0');
     }
 
-    /** Compact duration for the summary line: "3:12" under an hour, "1h 02m"
-     *  above it. Avoids the ambiguous "9:00" / "10:00" pair in a cramped line. */
     function fmtDuration(ms) {
         const total = Math.max(0, Math.round(ms / 1000));
         const m = Math.floor(total / 60);
@@ -1299,16 +2091,22 @@ body {
         const overall = tagRes && tagRes.overall;
         if (!overall) return;
         const coarse = tagRes.modelInfo.taxonomy === 'coarse5';
-        // 4K/6K exposes a normalized composition, NOT the 7K integral fields.
-        // Adapt units for presentation without mutating the classifier result.
         const percentages = coarse
             ? Object.fromEntries(Object.entries(overall.composition).map(([tag, share]) => [tag, 100 * share]))
             : overall.percentages;
         const labelPercentages = coarse ? percentages : overall.labelPercentages;
         if (!percentages) return;
+
+        const sig = JSON.stringify([settings.colorScheme, overall.tags, percentages, overall.familyMass]);
+        const animateEnter = settings.enableAnimations && sig !== lastTagSig;
+        lastTagSig = sig;
+
+        let chipIdx = 0;
         for (const tag of overall.tags || []) {
             const c = tagColor(tag), chip = document.createElement('span');
-            chip.className = 'ov-tag';
+            chip.className = 'ov-tag' + (animateEnter ? ' chip-enter' : '');
+            if (animateEnter) chip.style.setProperty('--chip-i', String(chipIdx++));
+            chip.dataset.tagKey = tag;
             chip.style.background = hexA(c, CHIP_TINT_ALPHA);
             chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
             chip.style.color = chipInk(c);
@@ -1335,8 +2133,6 @@ body {
             pct.className = 'pct'; pct.style.marginLeft = '5px';
             if (tag === 'hybrid') {
                 const total = overall.familyMass.rc + overall.familyMass.ln;
-                // Normalize only this display pair. Complementary rounding
-                // keeps the two integer percentages at exactly 100 in total.
                 if (total > 0) {
                     const rcPct = Math.round(100 * overall.familyMass.rc / total);
                     pct.textContent = 'RC ' + rcPct + '% / LN ' + (100 - rcPct) + '%';
@@ -1357,7 +2153,10 @@ body {
             if (shown >= 4) break;
             if (tags.includes(tag) || share < 1) continue;
             const c = tagColor(tag), chip = document.createElement('span');
-            chip.className = 'ov-share'; chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
+            chip.className = 'ov-share' + (animateEnter ? ' chip-enter' : '');
+            if (animateEnter) chip.style.setProperty('--chip-i', String(chipIdx++));
+            chip.dataset.tagKey = tag;
+            chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
             chip.style.color = chipInk(c); chip.textContent = tagLabel(tag);
             chip.title = coarse ? 'Secondary weighted morphology composition; not the dominant class'
                 : 'Secondary branch burden share; not selected by the prior-aware whole-map tag gates';
@@ -1367,14 +2166,12 @@ body {
         }
     }
 
-    /** Solid tag chips for the timeline legend. */
     function makeLegendDot(color) {
         const dot = document.createElement('i');
         dot.style.background = color;
         return dot;
     }
     function renderSegTimeline(tagRes) {
-        // keep the cursor node; strip segment nodes only
         elTimeline.querySelectorAll('.tl-seg').forEach((n) => n.remove());
         elSegLegend.innerHTML = '';
         if (!tagRes) return;
@@ -1385,11 +2182,12 @@ body {
             const seg = tagRes.segments[i];
             const d = document.createElement('div');
             d.className = 'tl-seg' + (seg.tag === 'break' ? ' tl-break' : '');
+            d.dataset.segIdx = String(i);
             d.style.left = (((seg.start - first) / span) * 100) + '%';
             d.style.width = Math.max(0.15, ((seg.end - seg.start) / span) * 100) + '%';
             d.style.background = tagColor(seg.tag);
             d.title = fmtTimeShort(seg.start) + ' ' + tagLabel(seg.tag)
-                + (seg.equivBpm ? ' @' + seg.equivBpm : '')
+                + (segmentBpm(seg) ? ' @' + segmentBpm(seg) : '')
                 + segDifficultyTip(i);
             elTimeline.appendChild(d);
             if (seg.tag !== 'break' && !used.includes(seg.tag)) used.push(seg.tag);
@@ -1398,20 +2196,29 @@ body {
         for (const t of used) {
             const item = document.createElement('span');
             item.className = 'lg-item';
+            item.dataset.tagKey = t;
             item.appendChild(makeLegendDot(tagColor(t)));
             item.appendChild(document.createTextNode(tagLabel(t)));
             elSegLegend.appendChild(item);
         }
     }
 
-    /** " — 6.42★ (peak 7.10)" for a timeline tooltip, or '' when unavailable. */
+    const CADENCE_TAGS = new Set([
+        'dense chordstream', 'fast chordstream', 'stamina',
+        'chordjack', 'minijack', 'jack', 'speed', 'density', 'coordination',
+    ]);
+    function segmentBpm(seg) {
+        return CADENCE_TAGS.has(seg.tag) && Number.isFinite(seg.equivBpm) && seg.equivBpm > 0
+            ? String(seg.equivBpm) : '';
+    }
+
     function segDifficultyTip(idx) {
         if (!settings.showSegmentDiff || !cachedSegStats || !cachedSegStats[idx]) return '';
         const seg = cachedTagResult && cachedTagResult.segments[idx];
         if (seg && seg.tag === 'break') return '';
         const s = cachedSegStats[idx];
         if (!(s.mean > segmentDiffFloor)) return '';
-        return ' — ' + s.mean.toFixed(2) + '\u2605 (peak ' + s.peak.toFixed(2) + ')';
+        return ' — ' + s.mean.toFixed(2) + '\u2605';
     }
 
     function findSegment(segments, t) {
@@ -1425,11 +2232,6 @@ body {
         return ans;
     }
 
-    /** v1.0.1: current-segment difficulty chip. The value is the mean of the
-        difficulty curve over this segment — the same series the graph draws
-        and the playhead points into, so the number always belongs to the tag
-        shown beside it. Rest sections are skipped: a near-zero average would
-        render as a meaningless "0th". The tooltip carries peak and dan. */
     function renderSegDiff(idx) {
         const stat = cachedSegStats && idx >= 0 ? cachedSegStats[idx] : null;
         const seg = cachedTagResult && idx >= 0 ? cachedTagResult.segments[idx] : null;
@@ -1443,17 +2245,35 @@ body {
         const danTxt = stat.dan != null
             ? SPMEngine.danLevelToLabel(stat.dan, cachedKeyCount, kind, danStyleKey())
             : '';
+        const wasHidden = elSegDiff.classList.contains('hidden');
         elSegDiff.className = kind === 'LN' ? 'ln' : 'rc';
-        elSegDiffStar.textContent = stat.mean.toFixed(2);
-        elSegDiffDan.textContent = danTxt;
+        setRollingDigits(elSegDiffStar, stat.mean.toFixed(2));
+        setMorphText(elSegDiffDan, danTxt);
+        if (settings.enableAnimations && wasHidden) {
+            elSegDiff.classList.add('pill-pop');
+        }
         elSegDiff.title = 'Segment difficulty (mean of the section curve: '
-            + stat.mean.toFixed(2) + '\u2605, peak ' + stat.peak.toFixed(2) + '\u2605)'
+            + stat.mean.toFixed(2) + '\u2605)'
             + (danTxt ? '\n' + kind + ' dan: ' + danTxt : '');
     }
 
     function segKind(idx) {
         const seg = cachedTagResult && cachedTagResult.segments[idx];
         return seg && seg.family === 'ln' ? 'LN' : 'RC';
+    }
+
+    /** Highlight overall tag chips, legend items and timeline bar matching the active segment. */
+    function syncActiveSegmentHighlight(idx, activeTag) {
+        const tag = activeTag && activeTag !== 'break' ? activeTag : '';
+        elTagsRow.querySelectorAll('[data-tag-key]').forEach((n) => {
+            n.classList.toggle('is-live-tag', !!tag && n.dataset.tagKey === tag);
+        });
+        elSegLegend.querySelectorAll('.lg-item').forEach((n) => {
+            n.classList.toggle('is-live-tag', !!tag && n.dataset.tagKey === tag);
+        });
+        elTimeline.querySelectorAll('.tl-seg').forEach((n) => {
+            n.classList.toggle('is-active-seg', idx >= 0 && n.dataset.segIdx === String(idx));
+        });
     }
 
     /** Per-frame: current segment row + timeline cursor. */
@@ -1463,23 +2283,30 @@ body {
         const idx = findSegment(segments, cursorTime);
 
         if (idx !== lastSegIndex) {
+            const hadPrev = lastSegIndex >= -1;
             lastSegIndex = idx;
+            let activeTag = '';
             if (idx < 0) {
+                elSegRow.classList.remove('is-break');
                 elSegTag.textContent = '—';
                 elSegTag.style.color = 'var(--text-faint)';
                 elSegTag.style.opacity = '1';
-                elSegBpm.textContent = '';
-                elSegConf.textContent = '';
-                elSegDur.textContent = '';
+                setRollingDigits(elSegBpm, '');
+                setRollingDigits(elSegConf, '');
+                setRollingDigits(elSegDur, '');
             } else {
                 const seg = segments[idx];
+                activeTag = seg.tag;
                 if (seg.tag === 'break') {
+                    elSegRow.classList.add('is-break');
                     elSegTag.textContent = settings.showBreak ? 'Break' : '—';
                     elSegTag.style.color = 'var(--break-text)';
                     elSegTag.style.opacity = '1';
-                    elSegBpm.textContent = '';
-                    elSegConf.textContent = '';
+                    setRollingDigits(elSegBpm, '');
+                    setRollingDigits(elSegConf, '');
                 } else {
+                    elSegRow.classList.remove('is-break');
+                    const c = tagColor(seg.tag);
                     elSegTag.textContent = tagLabel(seg.tag);
                     if (seg.secondary) {
                         const sec = document.createElement('span');
@@ -1487,31 +2314,30 @@ body {
                         sec.textContent = '+ ' + tagLabel(seg.secondary);
                         elSegTag.appendChild(sec);
                     }
-                    elSegTag.style.color = tagColor(seg.tag);
+                    elSegTag.style.color = c;
                     elSegTag.style.opacity = seg.confidence < 0.45 ? '0.6' : '1';
-                    elSegBpm.textContent = seg.equivBpm ? String(seg.equivBpm) : '';
-                    elSegConf.textContent = Math.round(seg.confidence * 100) + '%';
+                    setRollingDigits(elSegBpm, segmentBpm(seg));
+                    setRollingDigits(elSegConf, Math.round(seg.confidence * 100) + '%');
                 }
-                elSegDur.textContent = ((seg.end - seg.start) / 1000).toFixed(1) + 's';
+                setRollingDigits(elSegDur, ((seg.end - seg.start) / 1000).toFixed(1) + 's');
+                if (settings.enableAnimations && hadPrev) {
+                    elSegTag.classList.remove('seg-enter');
+                    void elSegTag.offsetWidth;
+                    elSegTag.classList.add('seg-enter');
+                }
             }
+            syncActiveSegmentHighlight(idx, activeTag);
             renderSegDiff(idx);
         }
 
         const first = cachedTagResult.map.firstNote, last = cachedTagResult.map.lastNote;
         const pct = Math.max(0, Math.min(100, ((cursorTime - first) / Math.max(1, last - first)) * 100));
-        elSegCursor.style.left = pct + '%';
+        if (Math.abs(pct - lastCursorPct) >= 0.03) {
+            lastCursorPct = pct;
+            elSegCursor.style.left = pct + '%';
+        }
     }
 
-    /** v1.0.1: map summary line — "Artist - Title [Version]" on the left and
-        the factual chips (mapper, keys, BPM, objects, length) on the right.
-        Values come from the tosu frame when the client exposes them and fall
-        back to the parsed .osu header, so the line is complete in every client
-        and every key count. */
-    /** v1.0.1: side-to-side scroll when the summary's main line overflows.
-        Constant scroll speed (~45 px/s) with a dwell at each end; the scroll
-        legs each take ~32% of the cycle, so the duration scales with the
-        overflow. Falls back to the ellipsis when the panel has no layout yet
-        (hidden) — showResult re-renders and re-measures once visible. */
     function updateSummaryMarquee() {
         const track = elSummaryMain.firstChild;
         elSummaryMain.classList.remove('mq-run');
@@ -1522,7 +2348,7 @@ body {
         if (box === 0) return;
         const overflow = track.scrollWidth - box;
         if (overflow <= 2) return;
-        const dist = Math.ceil(overflow) + 6; // pad so the tail clears the edge
+        const dist = Math.ceil(overflow) + 6;
         const dur = Math.min(30, Math.max(6, dist / 45 / 0.32));
         elSummaryMain.style.setProperty('--mq-dist', dist + 'px');
         elSummaryMain.style.setProperty('--mq-dur', dur.toFixed(2) + 's');
@@ -1543,39 +2369,25 @@ body {
 
         elSummaryMain.innerHTML = '';
         elSummaryMeta.innerHTML = '';
-        // the parts live in an inline-block track: the summary box clips it,
-        // and updateSummaryMarquee() scrolls the track when it overflows
         const track = document.createElement('span');
         track.className = 'mq-track';
         elSummaryMain.appendChild(track);
         let mainParts = 0;
-        const add = (cls, text, sep) => {
+        const add = (cls, text) => {
             if (!text) return;
-            if (sep && mainParts) {
-                const d = document.createElement('span');
-                d.className = 's-sep';
-                d.textContent = sep;
-                track.appendChild(d);
-            }
             const s = document.createElement('span');
             s.className = cls;
             s.textContent = text;
             track.appendChild(s);
             mainParts++;
         };
-        add('s-artist', artist, '');
-        add('s-title', title, artist ? ' \u2013 ' : '');
-        add('s-diff', version ? '[' + version + ']' : '', title || artist ? ' ' : '');
-        // mapper rides the truncating left zone: it is the first thing to go
-        // when the song name is long, and the diff name identifies the chart
-        add('s-mapper', mapper ? 'by ' + mapper : '', title || artist || version ? ' \u00b7 ' : '');
+        add('s-artist', artist);
+        add('s-title', title);
+        add('s-diff', version ? '[' + version + ']' : '');
+        add('s-mapper', mapper ? 'by ' + mapper : '');
 
         const keys = frame.keyCount || meta.keyCount;
         const objects = frame.objects || meta.objects;
-        // Mod-aware values: the parsed .osu BPM is the map's original, so it
-        // scales with the speed rate (DT/HT), and the played length is the
-        // engine's note span, which is already rate-scaled. The tosu payload
-        // values are only fallbacks for clients where the parse found nothing.
         const rate = currentSpeedRate || 1;
         const bpmSrc = meta.bpm ? { bpm: meta.bpm, min: meta.bpmMin, max: meta.bpmMax, scale: rate }
             : { bpm: frame.bpm, min: frame.bpmMin, max: frame.bpmMax, scale: 1 };
@@ -1591,32 +2403,21 @@ body {
             const bpm = Math.round(bpmSrc.bpm * bpmSrc.scale);
             const bpmMin = bpmSrc.min && Math.round(bpmSrc.min * bpmSrc.scale);
             const bpmMax = bpmSrc.max && Math.round(bpmSrc.max * bpmSrc.scale);
-            // a range only when the chart's BPM actually moves; when the common
-            // BPM is already one of the extremes the range would read "157-157"
             const varies = bpmMin && bpmMax && bpmMax - bpmMin >= 2
                 && bpm !== bpmMin && bpm !== bpmMax;
             facts.push({ text: varies ? bpmMin + '\u2013' + bpmMax + ' BPM' : bpm + ' BPM' });
         }
         if (durationMs > 0) facts.push({ text: fmtDuration(durationMs) });
         if (objects) {
-            // LN share tells the player how hold-heavy the chart is at a glance
             const lnPct = cachedResult && cachedResult.lnCount > 0
                 ? Math.round((cachedResult.lnRatio || 0) * 100) : 0;
             facts.push({ text: objects + ' obj' + (lnPct > 0 ? ' (' + lnPct + '% LN)' : '') });
         }
         const od = meta.od != null ? meta.od : (cachedResult ? cachedResult.od : null);
         if (Number.isFinite(od)) facts.push({ text: 'OD ' + (Math.round(od * 10) / 10) });
-        // fit the row: while the facts overflow their share, drop the
-        // rightmost (least important) one and rebuild
         while (facts.length) {
             elSummaryMeta.innerHTML = '';
-            facts.forEach((f, i) => {
-                if (i) {
-                    const sep = document.createElement('span');
-                    sep.className = 's-sep';
-                    sep.textContent = '\u00b7';
-                    elSummaryMeta.appendChild(sep);
-                }
+            facts.forEach((f) => {
                 const s = document.createElement('span');
                 if (f.cls) s.className = f.cls;
                 s.textContent = f.text;
@@ -1630,7 +2431,6 @@ body {
         elSummaryRow.classList.toggle('hidden', facts.length === 0 && mainParts === 0);
     }
 
-    /** Show/hide the classification-related blocks (sort badge, tags, segment UI). */
     function applyClassificationVisibility() {
         const classified = !!(cachedResult && cachedResult.classified);
         elTypeBadge.classList.toggle('hidden', !classified);
@@ -1644,17 +2444,11 @@ body {
         if (!classified || !settings.showSegmentTag) {
             elSegDiff.classList.add('hidden');
         }
-        // the divider separates the difficulty zone from the pattern zone —
-        // hide it when classification is unavailable or all pattern blocks are off
         const anyPatternVisible = classified &&
             (settings.showTags || settings.showSegmentTag || settings.showTimeline);
         elDivider.classList.toggle('hidden', !anyPatternVisible);
     }
 
-    /** v1.0.1: read the summary-line facts out of a tosu frame. Everything is
-        optional — capturePayloadMeta keeps the previous value when a client
-        does not populate a field, and renderSummary() falls back to the parsed
-        .osu header per field. */
     function capturePayloadMeta(data) {
         const bm = data && data.beatmap;
         if (!bm) return;
@@ -1682,11 +2476,9 @@ body {
         if (Number.isFinite(objs) && objs > 0) next.objects = objs;
         const t = bm.time || {};
         const first = Number(t.firstObject), last = Number(t.lastObject);
-        // note-to-note span; not mp3Length, which includes the lead-out
         if (Number.isFinite(first) && Number.isFinite(last) && last > first) {
             next.durationMs = last - first;
         }
-        // only redraw when something actually changed (this runs per frame)
         const merged = Object.assign({}, prev, next);
         if (JSON.stringify(merged) !== JSON.stringify(prev)) {
             cachedPayloadMeta = merged;
@@ -1694,166 +2486,212 @@ body {
         }
     }
 
-    /** v1.0.1: push the ui-style / density / theme settings onto the container. */
+    function triggerCardSwap() {
+        const cards = [elRcSubItem, elLnSubItem];
+        for (let i = 0; i < cards.length; i++) {
+            const c = cards[i];
+            if (!c || c.classList.contains('hidden')) continue;
+            c.style.setProperty('--card-i', String(i));
+            c.classList.remove('card-swap');
+            void c.offsetWidth;
+            c.classList.add('card-swap');
+        }
+    }
+
     function applyUiStyle() {
         const styleKey = uiStyleKey();
+        const prevStyleKey = lastUiStyleKey;
+        lastUiStyleKey = styleKey;
         const first = styleKey === 'dan-first';
         elContainer.classList.toggle('ui-style-dan-first', first);
         elContainer.classList.toggle('ui-style-minimal', styleKey === 'minimal');
         elContainer.classList.toggle('compact', settings.panelDensity === 'Compact');
-        // the dan row is redundant when it would show exactly the promoted
-        // value (pure RC charts); when it still carries the secondary dans
-        // (LN/HB/Mix charts) it stays visible under the hero
-        const lnItemShown = !elLnDanItem.classList.contains('hidden');
-        const totalItemShown = elDanRow.classList.contains('hb') || elDanRow.classList.contains('mix');
-        const rowRedundant = !lnItemShown && !totalItemShown;
-        // no dan value to promote (outside the measured range) -> keep the row
-        elContainer.classList.toggle('dan-hero',
-            first && elHeroDan.dataset.hasDan === '1' && rowRedundant);
+        applyMotionSetting();
+        const totalItemShown = !elTotalDanWrap.classList.contains('hidden');
+        elContainer.classList.toggle('dan-hero-total',
+            first && elHeroDan.dataset.hasDan === '1' && totalItemShown);
+        if (settings.enableAnimations && prevStyleKey && prevStyleKey !== styleKey
+            && !elContainer.classList.contains('hidden')) {
+            triggerCardSwap();
+        }
     }
 
     function showResult(result) {
-        // While "Hide While Playing" has hidden the overlay, only update the
-        // cached result — rendering would un-hide the overlay mid-play.
+        if (delayedLoadingTimer) {
+            clearTimeout(delayedLoadingTimer);
+            delayedLoadingTimer = null;
+        }
+        elContainer.classList.remove('is-updating');
         if (hideOnPlayActive) {
             cachedResult = result;
             return;
         }
+        const wasHidden = elContainer.classList.contains('hidden');
         elLoading.classList.add('hidden');
         elContainer.classList.remove('hidden');
-        // the curves are pre-computed against a nominal plot width while the
-        // panel is still hidden; now that it has been laid out, redo them with
-        // the real width if it differs
-        maybeResizeCurves();
-
-        // Main rating = total SR
-        elRating.textContent = result.rating.toFixed(2);
-        elRating.title = 'SPM Rating v1.2.0-' + result.modelLabel;
-        elTypeBadge.textContent = result.mapType;
-        elTypeBadge.className = result.mapType.toLowerCase();
-
-        // RC/LN sub-ratings; pure RC maps (no LNs at all) hide the LN column
-        const hasLnDisplay = result.lnRating != null;
-        elRcRating.textContent = result.rcRating != null ? result.rcRating.toFixed(2) : '--';
-        elLnRating.textContent = hasLnDisplay ? result.lnRating.toFixed(2) : '--';
-        elLnSubItem.classList.toggle('hidden', !hasLnDisplay);
-        elLnSep.classList.toggle('hidden', !hasLnDisplay);
-
-        // 4K/6K: per-keycount dan node tables are applied inside the engine;
-        // the keys badge shows the frame if classification is unavailable.
-        // Dan labels using per-keycount node tables + the configured style
-        const style = danStyleKey();
-        elRcDan.textContent = result.rcDan != null ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
-        elLnDan.textContent = result.lnDan != null ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-';
-        elTotalDan.textContent = result.totalDan != null ? SPMEngine.danLevelToLabel(result.totalDan, result.keyCount, 'RC', style) : '-';
-        elLnDanItem.classList.toggle('hidden', result.lnDan == null);
-        elLnDanSep.classList.toggle('hidden', result.lnDan == null);
-
-        // Per-type row visibility
-        elRcLnRow.classList.remove('mix-only');
-        elDanRow.classList.remove('rc-only', 'mix-only', 'hb', 'mix');
-
-        if (result.mapType === 'RC' && result.lnCount === 0) {
-            elDanRow.classList.add('rc-only');
-        } else if (result.mapType === 'RC') {
-            // RC with LNs: show both RC and LN dan rows
-        } else if (result.mapType === 'HB') {
-            elDanRow.classList.add('hb');
-        } else if (result.mapType === 'Mix') {
-            elDanRow.classList.add('mix');
+        const chartKey = (currentSelectionKey || '') + '|' + (currentModSignature || '');
+        const chartChanged = chartKey !== lastRenderedChartKey;
+        lastRenderedChartKey = chartKey;
+        if (wasHidden && settings.enableAnimations) {
+            elContainer.classList.remove('panel-enter');
+            void elContainer.offsetWidth;
+            elContainer.classList.add('panel-enter');
         }
 
-        // v1.0.1: primary dan for the "Dan first" ui style. The hero carries
-        // the skill the map is dominated by; the data-dan flag lets
-        // applyUiStyle() fall back to the labelled dan row when the chart sits
-        // outside the measured dan range.
+        hoverRatioX = null;
+        elCurveTooltip.classList.add('hidden');
+        elCurveContainer.classList.remove('is-hovering');
+        updateTopAccent(result.mapType, result, cachedTagResult);
+
+        const cw = curveInnerWidth();
+        if (curvesDirty || Math.abs(cw - lastCurveWidth) >= 1) {
+            curvesDirty = false;
+            lastCurveWidth = cw;
+            rebuildCurves();
+            lastSegIndex = -2;
+        }
+
+        // Main rating = total SR (directional odometer digit roll)
+        setRollingDigits(elRating, result.rating.toFixed(2));
+        elRating.title = 'SPM Rating v1.2.0-' + result.modelLabel;
+
+        const badgeChanged = lastMapTypeBadge && lastMapTypeBadge !== result.mapType;
+        lastMapTypeBadge = result.mapType;
+        elTypeBadge.textContent = result.mapType;
+        elTypeBadge.className = result.mapType.toLowerCase()
+            + (settings.enableAnimations && badgeChanged ? ' badge-pop' : '');
+
+        const hasLnDisplay = result.lnRating != null;
+        const hasLnCard = hasLnDisplay || result.lnDan != null;
+        setRollingDigits(elRcRating, result.rcRating != null ? result.rcRating.toFixed(2) : '--');
+        setRollingDigits(elLnRating, hasLnDisplay ? result.lnRating.toFixed(2) : '--');
+        elLnSubItem.classList.toggle('hidden', !hasLnCard);
+        elLnSep.classList.toggle('hidden', !hasLnCard);
+
+        const style = danStyleKey();
+        setMorphText(elRcDan, result.rcDan != null ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-');
+        setMorphText(elLnDan, result.lnDan != null ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-');
+        setMorphText(elTotalDan, result.totalDan != null ? SPMEngine.danLevelToLabel(result.totalDan, result.keyCount, 'RC', style) : '-');
+
+        const showInlineTotal = (result.mapType === 'HB' || result.mapType === 'Mix') && result.totalDan != null;
+        elTotalDanWrap.classList.toggle('hidden', !showInlineTotal);
+
+        if (settings.enableAnimations && (wasHidden || chartChanged)) {
+            triggerCardSwap();
+        }
+
         const heroKind = result.mapType === 'LN' ? 'LN' : 'RC';
         const heroDan = result.mapType === 'LN' ? result.lnDan : result.totalDan;
         const heroTxt = heroDan != null
             ? SPMEngine.danLevelToLabel(heroDan, result.keyCount, heroKind, style) : '';
-        // HB/Mix promote the Total dan; labelling it "RC dan" would be wrong
         const heroSuf = (result.mapType === 'HB' || result.mapType === 'Mix')
             ? 'Total dan' : heroKind + ' dan';
+        const prevHeroTxt = elHeroDan.dataset.rawVal ?? '';
         elHeroDan.dataset.hasDan = heroTxt && heroTxt !== '-' ? '1' : '0';
+        elHeroDan.dataset.rawVal = heroTxt || '';
         elHeroDan.innerHTML = '';
-        elHeroDan.appendChild(document.createTextNode(heroTxt || ''));
+        const heroValSpan = document.createElement('span');
+        heroValSpan.className = 'hero-dan-val';
+        heroValSpan.textContent = heroTxt || '';
+        elHeroDan.appendChild(heroValSpan);
         if (heroTxt) {
             const suf = document.createElement('span');
             suf.className = 'hero-dan-suffix';
             suf.textContent = heroSuf;
             elHeroDan.appendChild(suf);
         }
-        // hero colour follows the value it shows: the LN dan is warm, the RC
-        // dan cool; the Total dan (HB/Mix charts) stays neutral, matching the
-        // standard Total readout — the type badge carries the family colour
+        if (settings.enableAnimations && prevHeroTxt && prevHeroTxt !== heroTxt) {
+            heroValSpan.classList.add('txt-morph');
+        }
         const heroColor = result.mapType === 'LN' ? 'var(--ln)'
             : result.mapType === 'RC' ? 'var(--rc)' : 'var(--text)';
         elHeroDan.style.color = heroColor;
 
-        // v1.0.1: "Minimal" ui style content — total dan hero + type badge +
-        // RC/LN sub-row; the ui-style-minimal CSS hides every other block
-        elMinTotalDan.textContent = heroTxt || '-';
+        setMorphText(elMinTotalDan, heroTxt || '-');
         elMinTotalDan.style.color = heroColor;
         elMinTypeBadge.textContent = result.mapType;
         elMinTypeBadge.className = result.mapType.toLowerCase()
-            + (result.classified ? '' : ' hidden');
-        // the family suffix is only needed where the badge cannot show
-        // (charts without classification)
+            + (result.classified ? '' : ' hidden')
+            + (settings.enableAnimations && badgeChanged ? ' badge-pop' : '');
         elMinHeroSuf.textContent = heroTxt && !result.classified ? heroSuf : '';
-        elMinRcDan.textContent = result.rcDan != null
-            ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-';
-        elMinLnDan.textContent = result.lnDan != null
-            ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-';
+        setMorphText(elMinRcDan, result.rcDan != null
+            ? SPMEngine.danLevelToLabel(result.rcDan, result.keyCount, 'RC', style) : '-');
+        setMorphText(elMinLnDan, result.lnDan != null
+            ? SPMEngine.danLevelToLabel(result.lnDan, result.keyCount, 'LN', style) : '-');
         elMinLnWrap.classList.toggle('hidden', result.lnDan == null);
-        // pure RC charts: the sub-row would only repeat the hero — drop it
         elMinSubRow.classList.toggle('hidden', result.mapType === 'RC' && result.lnCount === 0);
         applyUiStyle();
 
-        // v1.0.1: map summary line
         renderSummary();
-
-        // Classification blocks for each supported native key count.
         applyClassificationVisibility();
         if (result.classified && cachedTagResult) {
             renderOverallTags(cachedTagResult);
             renderSegTimeline(cachedTagResult);
-            lastSegIndex = -2; // force refresh of the live row
+            lastSegIndex = -2;
+            lastCursorPct = -1;
             updateSegmentLive(getInterpolatedTime());
         }
 
+        lastDrawnCursorX = -999;
         const cursorTime = getInterpolatedTime();
         drawCurve(
             result.sectionDifficulties, result.rcSectionDifficulties, result.mapType,
             cursorTime, result.sectionTimes, result.firstNoteTime, result.lastNoteTime,
             result.lnSectionDifficulties
         );
+        startAnimationLoop();
     }
 
     function showLoading(msg) {
-        // While hidden for gameplay, don't surface loading states either
-        // (the overlay stays fully hidden until the play session ends).
         if (hideOnPlayActive) return;
+        elLoading.textContent = msg || 'SPM Map Analyser';
+        if (cachedResult && msg === 'Loading analysis...') {
+            elContainer.classList.add('is-updating');
+            if (delayedLoadingTimer) clearTimeout(delayedLoadingTimer);
+            delayedLoadingTimer = setTimeout(() => {
+                if (analysisPending && cachedResult) {
+                    elContainer.classList.add('hidden');
+                    elLoading.classList.remove('hidden');
+                }
+            }, 140);
+            return;
+        }
+        if (delayedLoadingTimer) {
+            clearTimeout(delayedLoadingTimer);
+            delayedLoadingTimer = null;
+        }
+        elContainer.classList.remove('is-updating');
         elContainer.classList.add('hidden');
         elLoading.classList.remove('hidden');
-        elLoading.textContent = msg || 'SPM Map Analyser';
     }
 
-    /** v1.0.1: rebuild the smoothed series from the cached raw series and
-        re-derive the per-segment difficulty. Runs whenever the smoothing
-        setting changes or the curve is resized — never per animation frame. */
     function rebuildCurves() {
         if (!cachedRawCurves || !cachedResult) return;
+        const morphActive = curveMorphFrom && (performance.now() - curveMorphStartTs) < 40;
+        if (settings.enableAnimations && !morphActive) {
+            if (lastSmoothedSnapshot) {
+                curveMorphFrom = lastSmoothedSnapshot;
+                curveMorphStartTs = performance.now();
+            } else if (cachedRawCurves.sectionDifficulties && cachedRawCurves.sectionDifficulties.length) {
+                const n = cachedRawCurves.sectionDifficulties.length;
+                curveMorphFrom = {
+                    sec: new Float64Array(n),
+                    rc: cachedRawCurves.rcSectionDifficulties ? new Float64Array(cachedRawCurves.rcSectionDifficulties.length) : null,
+                    ln: cachedRawCurves.lnSectionDifficulties ? new Float64Array(cachedRawCurves.lnSectionDifficulties.length) : null,
+                    scale: 0,
+                };
+                curveMorphStartTs = performance.now();
+            }
+        }
+        offscreenValid = false;
         const px = smoothPx();
         const w = curveInnerWidth();
         cachedResult.sectionDifficulties = SPMEngine.smoothCurve(
             cachedRawCurves.sectionDifficulties, px, w, SPMEngine.CURVE_FILL_RUN_MAX);
         cachedResult.rcSectionDifficulties = SPMEngine.smoothCurve(
             cachedRawCurves.rcSectionDifficulties, px, w, SPMEngine.CURVE_FILL_RUN_MAX);
-        // the LN line's zeros are structural ("nothing held"), so no gap fill
         cachedResult.lnSectionDifficulties = cachedRawCurves.lnSectionDifficulties
             ? SPMEngine.smoothCurve(cachedRawCurves.lnSectionDifficulties, px, w, 0) : null;
-        // stats come from the RAW series, not the drawn one: the smoothing
-        // setting is display-only and must not move the reported numbers
         cachedSegStats = cachedTagResult
             ? SPMEngine.computeSegmentStats(cachedTagResult.segments, {
                 sectionTimes: cachedResult.sectionTimes,
@@ -1861,18 +2699,20 @@ body {
                 keyCount: cachedResult.keyCount,
             })
             : null;
-        // a section whose average sits far below the map's own typical level is
-        // effectively a rest, and its star value would print as a pointless "0th"
         segmentDiffFloor = 0.35 * medianOfPositive(cachedRawCurves.sectionDifficulties);
-        // y-scale anchor for drawCurve (raw max over every drawn series)
         curveScaleMax = Math.max(
             safeMax(cachedRawCurves.sectionDifficulties),
             safeMax(cachedRawCurves.rcSectionDifficulties),
             cachedRawCurves.lnSectionDifficulties ? safeMax(cachedRawCurves.lnSectionDifficulties) : 0,
             0.01);
+        lastSmoothedSnapshot = {
+            sec: cachedResult.sectionDifficulties,
+            rc: cachedResult.rcSectionDifficulties,
+            ln: cachedResult.lnSectionDifficulties,
+            scale: curveScaleMax,
+        };
     }
 
-    /** Median of the strictly positive values, or 0 when there are none. */
     function medianOfPositive(arr) {
         if (!arr || !arr.length) return 0;
         const pos = [];
@@ -1882,15 +2722,11 @@ body {
         return pos[pos.length >> 1];
     }
 
-    /** Inner plot width in CSS pixels; falls back to the design width before
-     *  the canvas has been laid out. */
     function curveInnerWidth() {
-        const w = elCanvas.getBoundingClientRect().width - 6;
+        const w = elCanvas.clientWidth - 8;
         return w > 8 ? w : SPMEngine.CURVE_INNER_W;
     }
 
-    /** Re-run the (cheap) smoothing when the plot width changed, e.g. after the
-     *  panel becomes visible for the first time or the overlay is resized. */
     let lastCurveWidth = 0;
     function maybeResizeCurves() {
         if (!cachedResult || !cachedRawCurves) return;
@@ -1900,9 +2736,11 @@ body {
         rebuildCurves();
         lastSegIndex = -2;
         if (cachedTagResult) renderSegTimeline(cachedTagResult);
+        startAnimationLoop();
     }
 
     function cacheIndicator(state, reason='') {
+        const prevState = elContainer.dataset.cacheState;
         elContainer.dataset.cacheState = state;
         elCacheStatus.textContent = ({hit:'Cached', saved:'Saved', miss:'Calculated', off:'Cache off', ready:'Cache on', unavailable:'No cache'})[state] || '';
         elCacheStatus.title = reason || ({
@@ -1912,6 +2750,11 @@ body {
             off:'Local analysis cache is disabled; existing cache data has been cleared',
             ready:'Local analysis cache is enabled for the next selection',
         })[state] || cacheUnavailableReason;
+        if (settings.enableAnimations && prevState && prevState !== state && elCacheStatus.textContent) {
+            elCacheStatus.classList.remove('cache-pulse');
+            void elCacheStatus.offsetWidth;
+            elCacheStatus.classList.add('cache-pulse');
+        }
     }
     function cacheUnavailable(error) {
         cacheUnavailableReason = String(error?.message || error);
@@ -1929,8 +2772,7 @@ body {
             && options.subDifficultyScheme === currentSubScheme();
         analysisPending = true; pendingOptions = options;
         try {
-            // Even a hit re-reads the file: tosu's checksum can lag edits.
-            // Never rely on the HTTP browser cache for freshness.
+            // Re-read even on hits: tosu's checksum can lag edits.
             const resp = await fetch(`http://localhost:${TOSU_PORT}/files/beatmap/file`, {cache:'no-store'});
             if (!isCurrent()) return;
             if (!resp.ok) throw Error('Failed to fetch .osu');
@@ -1952,9 +2794,10 @@ body {
             if (!analysis) analysis = calculateAnalysis(content,speedRate,options);
             if (!analysis.result) {
                 cachedResult = cachedRawCurves = cachedTagResult = cachedSegStats = null;
+                lastSmoothedSnapshot = null;
                 showLoading('No notes found'); return;
             }
-            // Take an immutable RAW snapshot before smoothing mutates result.
+            // Snapshot raw data before the renderer prepares smoothed curves.
             const toStore = !hit && digest && analysis.tags
                 ? SPMAnalysisCache.snapshot(analysis.result,analysis.tags) : null;
             cachedOsuContent = content;
@@ -1962,15 +2805,14 @@ body {
             cachedMeta = SPMEngine.parseOsuMeta(content);
             cachedTagResult = analysis.tags;
             cachedResult = analysis.result;
-            // processMap normally selects the implicit dan table. A disk hit
-            // skips that call, so restore its model before segment/dan rendering.
+            // Disk hits skip processMap, which normally selects the dan table.
             SPMEngine.setDanVariant(options.model);
             cachedRawCurves = {
                 sectionDifficulties: cachedResult.sectionDifficulties,
                 rcSectionDifficulties: cachedResult.rcSectionDifficulties,
                 lnSectionDifficulties: cachedResult.lnSectionDifficulties,
             };
-            rebuildCurves();
+            curvesDirty = true;
             showResult(cachedResult);
             cacheIndicator(!settings.enableAnalysisCache ? 'off' : hit ? 'hit'
                 : !digest || !cacheStore?.available ? 'unavailable' : 'miss',
@@ -2016,22 +2858,26 @@ body {
     }
 
     function startAnimationLoop() {
-        if (animFrameId) return;
-        function tick() {
-            if (cachedResult) {
-                const cursorTime = getInterpolatedTime();
-                drawCurve(
-                    cachedResult.sectionDifficulties, cachedResult.rcSectionDifficulties,
-                    cachedResult.mapType,
-                    cursorTime, cachedResult.sectionTimes,
-                    cachedResult.firstNoteTime, cachedResult.lastNoteTime,
-                    cachedResult.lnSectionDifficulties
-                );
-                updateSegmentLive(cursorTime);
-            }
-            animFrameId = requestAnimationFrame(tick);
-        }
-        animFrameId = requestAnimationFrame(tick);
+        if (animFrameId || document.hidden || hideOnPlayActive
+            || elContainer.classList.contains('hidden') || settings.uiStyle === 'Minimal') return;
+        animFrameId = requestAnimationFrame(() => {
+            animFrameId = null;
+            if (!cachedResult || document.hidden || hideOnPlayActive
+                || elContainer.classList.contains('hidden') || settings.uiStyle === 'Minimal') return;
+            const cursorTime = getInterpolatedTime();
+            drawCurve(
+                cachedResult.sectionDifficulties, cachedResult.rcSectionDifficulties,
+                cachedResult.mapType, cursorTime, cachedResult.sectionTimes,
+                cachedResult.firstNoteTime, cachedResult.lastNoteTime,
+                cachedResult.lnSectionDifficulties
+            );
+            updateSegmentLive(cursorTime);
+            const moving = !isPaused && songTimeMs !== null
+                && (prevSongTimeMs === null || songTimeMs !== prevSongTimeMs)
+                && performance.now() - songTimeReceiveTs < 1000
+                && cursorTime < cachedResult.lastNoteTime;
+            if (moving || curveMorphFrom) startAnimationLoop();
+        });
     }
 
     function stopAnimationLoop() {
@@ -2082,8 +2928,20 @@ body {
         }
         if (typeof d.curveSmoothing === 'string') {
             changed = changed || settings.curveSmoothing !== d.curveSmoothing;
+            if (settings.curveSmoothing !== d.curveSmoothing) curvesDirty = true;
             settings.curveSmoothing = d.curveSmoothing;
-        }        if ('hideOnPlay' in d) {
+        }
+        if ('enableAnimations' in d) {
+            const ea = !!d.enableAnimations;
+            if (settings.enableAnimations !== ea) {
+                changed = true;
+                settings.enableAnimations = ea;
+                applyMotionSetting();
+                offscreenValid = false;
+                lastDrawnCursorX = -999;
+            }
+        }
+        if ('hideOnPlay' in d) {
             changed = changed || settings.hideOnPlay !== !!d.hideOnPlay;
             settings.hideOnPlay = !!d.hideOnPlay;
         }
@@ -2111,7 +2969,6 @@ body {
             changed = changed || settings.showBreak !== !!d.showBreak;
             settings.showBreak = !!d.showBreak;
         }
-        // turning the option off mid-play must un-hide immediately
         if (!settings.hideOnPlay && hideOnPlayActive) {
             hideOnPlayActive = false;
             changed = true;
@@ -2119,8 +2976,6 @@ body {
         return changed;
     }
 
-    /** True when the cached rating came from a different algorithm/scheme than
-     *  the one selected now (those settings need a fresh evaluation). */
     function ratingSettingsChanged() {
         if (pendingOptions) return pendingOptions.model !== algorithmModel()
             || pendingOptions.subDifficultyScheme !== currentSubScheme();
@@ -2134,27 +2989,18 @@ body {
         applyColorScheme(settings.colorScheme);
         applyUiStyle();
         applyClassificationVisibility();
-        // Numerical settings get their own cache variant. Re-read the file
-        // before lookup so an edit cannot reuse stale in-memory text either.
         if ((cachedOsuContent || analysisPending) && ratingSettingsChanged()) {
             showLoading('Loading analysis...');
             void fetchAndRate(currentSpeedRate || 1.0);
             return;
         }
         if (analysisPending) return;
-        // the smoothing setting re-derives the curves from the cached raw
-        // series; everything else is a pure re-render
-        rebuildCurves();
         if (cachedResult) {
             lastSegIndex = -2;
             showResult(cachedResult);
         }
     }
 
-    /** tosu counter settings via the websocket "commands" channel.
-     *  The socket URL carries the counter path (?l=...) — without it tosu
-     *  rejects the request with "Wrong overlay". tosu does not push setting
-     *  changes, so getSettings is re-sent on an interval. */
     let settingsWs = null;
     let settingsPollTimer = null;
     let lastSettingsJson = null;
@@ -2176,7 +3022,6 @@ body {
         }
         hasReceivedSettings = true;
         elSettingsWarning.classList.add('hidden');
-        // dict shape: {danDisplayStyle: "...", showTags: true, ...}
         const next = JSON.stringify(message);
         if (next === lastSettingsJson) return;
         const firstLoad = lastSettingsJson === null;
@@ -2207,7 +3052,7 @@ body {
         if (settingsPollTimer) return;
         settingsPollTimer = setInterval(() => {
             if (!settingsWs || settingsWs.readyState > 1) {
-                lastSettingsJson = null; // fresh socket → force a first apply
+                lastSettingsJson = null;
                 connectSettings();
             } else if (settingsWs.readyState === 1) {
                 sendGetSettings();
@@ -2235,12 +3080,7 @@ body {
             currentBeatmapFrame = frame;
             const mode = data.beatmap?.mode?.number;
 
-            // v1.0.1: summary-line facts straight from the frame; the parsed
-            // .osu header fills in whatever the client does not expose
             capturePayloadMeta(data);
-
-            // pause marker state; the beatmap clock freezes on its own, this
-            // only swaps the playhead dot for the pause glyph
             isPaused = !!(data && data.game && data.game.paused);
 
             const modData = getModData(data);
@@ -2264,28 +3104,24 @@ body {
                     cachedSegStats = null;
                     cachedMeta = null;
                     cachedPayloadMeta = null;
+                    lastSmoothedSnapshot = null;
                     stopAnimationLoop();
                     showLoading('Not Mania');
                 }
                 return;
             }
 
-            // "Hide While Playing": state 2 = play, 7 = resultScreen.
             const stateName = String(data?.state?.name || '').toLowerCase();
             const returnedFromEditor = /edit/i.test(lastStateName) && !/edit/i.test(stateName);
             lastStateName = stateName;
             const isPlay = stateName === 'play';
-            const isResults = stateName === 'resultScreen';
             if (settings.hideOnPlay && isPlay) {
                 elContainer.classList.add('hidden');
                 elLoading.classList.add('hidden');
                 hideOnPlayActive = true;
             } else if (hideOnPlayActive && !isPlay) {
-                // play session over (result screen, menu, …) — restore
                 hideOnPlayActive = false;
             }
-            // while hideOnPlayActive, showLoading/showResult stay no-ops;
-            // the recover branch below must not un-hide either
 
             const needsRecalc = checksum && (
                 (selectionKey !== currentSelectionKey && (selectionKey !== failedSelectionKey || performance.now() >= retryAfter))
@@ -2300,23 +3136,27 @@ body {
                 currentSpeedRate = modData.speedRate;
 
                 if (modData.speedRate !== 1.0) {
-                    // NC implies DT in osu! — show NC standalone, not DT+NC
                     const displayCodes = modData.modCodes.includes('NC')
                         ? modData.modCodes.filter(c => c !== 'DT')
                         : modData.modCodes;
-                    elModBadge.textContent = displayCodes.length > 0
+                    const modText = displayCodes.length > 0
                         ? displayCodes.join('+') + ' ' + modData.speedRate.toFixed(2) + 'x'
                         : modData.speedRate.toFixed(2) + 'x';
+                    setMorphText(elModBadge, modText);
                     elModBadge.classList.remove('hidden');
                 } else {
+                    elModBadge.dataset.rawVal = '';
                     elModBadge.classList.add('hidden');
                 }
 
                 showLoading('Loading analysis...');
-                void fetchAndRate(modData.speedRate,frame);
+                void fetchAndRate(modData.speedRate, frame);
                 startAnimationLoop();
             } else if (cachedResult && !analysisPending && elContainer.classList.contains('hidden') && !hideOnPlayActive) {
                 showResult(cachedResult);
+                startAnimationLoop();
+            } else if (cachedResult && !hideOnPlayActive && Number.isFinite(liveTimeMs)) {
+                updateSegmentLive(getInterpolatedTime());
                 startAnimationLoop();
             }
         };
@@ -2336,7 +3176,6 @@ body {
         };
     }
 
-    // Optional dan node override (defaults are inlined in spm_algorithm.js)
     async function loadDanConstants() {
         try {
             const res = await fetch('dan_constants.json', {cache:'no-store'});
@@ -2359,22 +3198,20 @@ body {
         } catch (e) { cacheUnavailable(e); }
     }
 
-    // paint the default scheme before the first frame arrives, so the panel
-    // never flashes the wrong palette while settings are still loading
     applyColorScheme(settings.colorScheme);
     applyUiStyle();
 
-    // overlay resized (OBS browser source, tosu layout change): redo the
-    // pixel-space smoothing against the new plot width
     window.addEventListener('resize', maybeResizeCurves);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopAnimationLoop();
+        else startAnimationLoop();
+    });
 
     showLoading('Connecting to tosu...');
     connectSettings();
     startSettingsPolling();
     const runtimeReady = initializeCache();
     connect();
-    // Returning from an editor or refocusing the overlay revalidates the file
-    // even if tosu has not refreshed its checksum yet.
     window.addEventListener('focus', () => {
         if (currentBeatmapFrame && cachedResult && !analysisPending) void fetchAndRate(currentSpeedRate || 1);
     });

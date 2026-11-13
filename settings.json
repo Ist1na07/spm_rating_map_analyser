@@ -12,7 +12,10 @@
     "type": "options",
     "title": "Rating Algorithm",
     "description": "SPM Rating v1.2.0 model variant: SPM Rating v1.2.0-Detailed is the full model, SPM Rating v1.2.0-Compact the lighter one. Both use the same RC/LN sub-model and their own dan tables; changing this updates the current chart, reusing a matching local cache entry when available",
-    "options": ["SPM Rating v1.2.0-Detailed", "SPM Rating v1.2.0-Compact"],
+    "options": [
+      "SPM Rating v1.2.0-Detailed",
+      "SPM Rating v1.2.0-Compact"
+    ],
     "value": "SPM Rating v1.2.0-Detailed"
   },
   {
@@ -20,7 +23,10 @@
     "type": "options",
     "title": "Sub Difficulty Scheme",
     "description": "RC/LN sub-ratings source: Direct uses the new RC/LN sub-algorithms for every chart; Legacy v0.5.1 shows LN difficulty = total",
-    "options": ["Direct (RC/LN sub-model)", "Legacy v0.5.1"],
+    "options": [
+      "Direct (RC/LN sub-model)",
+      "Legacy v0.5.1"
+    ],
     "value": "Direct (RC/LN sub-model)"
   },
   {
@@ -44,7 +50,11 @@
     "type": "options",
     "title": "UI Style",
     "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: only the dans (total, RC, LN) and the overall pattern tags",
-    "options": ["Rating first", "Dan first", "Minimal"],
+    "options": [
+      "Rating first",
+      "Dan first",
+      "Minimal"
+    ],
     "value": "Rating first"
   },
   {
@@ -52,7 +62,10 @@
     "type": "options",
     "title": "Panel Density",
     "description": "Standard is the full-size layout; Compact shrinks fonts, spacing and the curve to cover less of the screen",
-    "options": ["Standard", "Compact"],
+    "options": [
+      "Standard",
+      "Compact"
+    ],
     "value": "Standard"
   },
   {
@@ -60,7 +73,11 @@
     "type": "options",
     "title": "Color Scheme",
     "description": "Overlay palette. Aurora is the new v1.0.1 theme; High Contrast is tuned for readability over bright gameplay",
-    "options": ["Default Dark", "Aurora", "High Contrast"],
+    "options": [
+      "Default Dark",
+      "Aurora",
+      "High Contrast"
+    ],
     "value": "Default Dark"
   },
   {
@@ -68,7 +85,11 @@
     "type": "options",
     "title": "Dan Display Style",
     "description": "Within-dan position: three segments (low/high), signs (-/+) or decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K)",
-    "options": ["Thirds (low/high)", "Signs (-/+)", "Number"],
+    "options": [
+      "Thirds (low/high)",
+      "Signs (-/+)",
+      "Number"
+    ],
     "value": "Thirds (low/high)"
   },
   {
@@ -76,8 +97,22 @@
     "type": "options",
     "title": "Curve Smoothing",
     "description": "Softens the difficulty curve. Off draws the raw per-400ms values; higher settings remove more jaggedness while keeping the peaks",
-    "options": ["Off", "Light", "Medium", "Strong", "Max"],
+    "options": [
+      "Off",
+      "Light",
+      "Medium",
+      "Strong",
+      "Max"
+    ],
     "value": "Medium"
+  },
+  {
+    "uniqueID": "enableAnimations",
+    "type": "checkbox",
+    "title": "UI Animations",
+    "description": "Enable smooth digit rolling (BPM, ratings, segment stats), curve morphing, and UI transitions. Turn off to minimize GPU/CPU usage",
+    "options": [],
+    "value": true
   },
   {
     "uniqueID": "hVisibility",
