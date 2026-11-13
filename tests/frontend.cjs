@@ -7,9 +7,9 @@ const {fixture}=require('./helpers.cjs');
  const root=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'spm-frontend-'));
  const probe=`window.__front={
   bpm:segmentBpm,
-  install(tags){
-   cachedTagResult.segments=tags.map((tag,i)=>({tag,start:1000+i*1000,end:2000+i*1000,equivBpm:180,confidence:.87,family:'rc'}));
-   cachedTagResult.map.firstNote=1000;cachedTagResult.map.lastNote=1000+tags.length*1000;
+  install(tags,duration=1000){
+   cachedTagResult.segments=tags.map((tag,i)=>({tag,start:1000+i*duration,end:1000+(i+1)*duration,equivBpm:180,confidence:.87,family:'rc'}));
+   cachedTagResult.map.firstNote=1000;cachedTagResult.map.lastNote=1000+tags.length*duration;
    rebuildCurves();showResult(cachedResult);
   },
   at(t){stopAnimationLoop();songTimeMs=t;isPaused=true;lastSegIndex=-2;updateSegmentLive(t);},
@@ -112,6 +112,31 @@ const {fixture}=require('./helpers.cjs');
    await page.screenshot({path:path.join(out,`${width}-${style.replace(' ','-')}-${density}.png`)});
    assert.equal(await idle(),0);
   }
+  // Break is an inset surface, not edge-aligned text. Check the attached 4.3s case
+  // with and without digit motion, at narrow/compact and wide/standard sizes.
+  for(const [width,density] of [[380,'Compact'],[430,'Standard'],[710,'Standard']]){
+   for(const motion of [false,true]){
+    await page.setViewportSize({width,height:650});
+    await change({uiStyle:'Rating first',panelDensity:density,enableAnimations:motion});
+    await page.evaluate(()=>{__front.install(['break'],4300);__front.at(2000);});
+    await page.waitForTimeout(500);
+    const geometry=await page.evaluate(()=>{
+     const row=document.querySelector('#seg-row').getBoundingClientRect();
+     const tag=document.querySelector('#seg-tag').getBoundingClientRect();
+     const dur=document.querySelector('#seg-dur').getBoundingClientRect();
+     return {left:tag.left-row.left,right:row.right-dur.right,
+      tagCenter:(tag.top+tag.bottom-row.top-row.bottom)/2,
+      durCenter:(dur.top+dur.bottom-row.top-row.bottom)/2,
+      overflow:document.documentElement.scrollWidth>innerWidth};
+    });
+    assert(geometry.left>=8&&geometry.right>=8,JSON.stringify(geometry));
+    assert(Math.abs(geometry.tagCenter)<1&&Math.abs(geometry.durCenter)<1,JSON.stringify(geometry));
+    assert(!geometry.overflow);assert.equal(await page.locator('#seg-dur').textContent(),'4.3s');
+    await page.screenshot({path:path.join(out,`break-${width}-${motion?'motion':'static'}.png`)});
+   }
+  }
+  await page.evaluate(()=>{__front.install(['speed'],4300);__front.at(2000);});
+  assert.equal(await page.locator('#seg-row').evaluate(n=>getComputedStyle(n).paddingLeft),'0px');
   await change({uiStyle:'Rating first',panelDensity:'Standard',enableAnimations:false});
   // A moving stream wakes RAF; pausing and hiding stop it without waiting for socket updates.
   game.send(JSON.stringify(frame(2000,false)));await page.waitForTimeout(30);

@@ -15,6 +15,9 @@
   views issued **0 animation callbacks in 300 ms**; a moving clock continued
   to animate. Palette/dan-format changes caused zero smoothing, rating or
   classifier calls. Morph buffers are reused between frames.
+- Break-row follow-up: checked the 4.3s case at 380/430/710 px with motion
+  on/off. Both text edges now have 9 px inset padding and both readouts remain
+  vertically centered; returning to an active tag restores the original layout.
 - `node tests/browser.cjs <local-7K.osu> ../dataset`: passed real 7K and median
   local 4K/6K samples, alongside the existing HT/DT, Detailed/Compact, tempo,
   settings recovery, Hybrid percentages and numeric `< 0.50` checks.
