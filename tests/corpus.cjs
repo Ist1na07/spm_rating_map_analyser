@@ -5,7 +5,7 @@ const {performance} = require('node:perf_hooks'), {execFileSync} = require('node
 const {loadRating, loadTags, filesUnder, fixture} = require('./helpers.cjs');
 const root = path.resolve(__dirname, '..');
 const dataset = process.argv[2], maps = process.argv[3], upstream = process.argv[4];
-if (!dataset || !maps) throw Error('Usage: node tests/corpus.cjs <dataset> <maps> [SPMTagClassifier-b311c40-source]');
+if (!dataset || !maps) throw Error('Usage: node tests/corpus.cjs <dataset> <maps> [SPMTagClassifier-d2bbb90-source]');
 const old = loadRating(execFileSync('git', ['show', '1e99e4d:spm_algorithm.js'], {cwd: root, encoding: 'utf8'})).engine;
 const current = loadRating(fs.readFileSync(path.join(root, 'spm_algorithm.js'), 'utf8')).engine;
 const bundle = fs.readFileSync(path.join(root, 'tag_engine.js'), 'utf8'), tags = loadTags(bundle);
@@ -50,6 +50,8 @@ for (let i=0;i<files.length;i++) {
             if (b.keyCount===7) {
                 assert.equal(r.modelInfo.perception.profile,model);
                 assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
+                assert.equal(r.modelInfo.segmentation.id,'meter-aware-snap-r1');
+                assert(r.modelInfo.cadencePolicy.includes('type-conditional observed action periods'));
                 assert.equal(r.modelInfo.breakPolicy.id,'sustained-native-demand-r1');
                 assert.equal(r.modelInfo.breakPolicy.ratingUsed,true);
                 if (r.modelInfo.breakPolicy.protectedParents>0) {

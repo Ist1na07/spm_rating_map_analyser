@@ -1,4 +1,57 @@
-# v1.2.3 frontend verification
+# v1.2.4 / d2bbb90 verification
+
+- The vendored `tag_engine.js` equals the exact `dist/tag-engine.js` from
+  `d2bbb90e7ea685e5345cecf91e176c64dbed0e80`. A small ignored runtime checkout
+  was extracted from that commit; no working files in the upstream research
+  checkout were changed. No research data is shipped.
+- All **18** rating/classifier/cache regression tests passed: exact rating/dan
+  and curve preservation, one-pass native rating evidence, action-clock
+  metadata and supported/omitted BPM, meter/omit-first-bar parsing, pressure
+  protection, classic/modern/legacy compatibility and native 4K/6K morphology.
+  Parser metadata additions are checked separately from numeric compatibility;
+  unrated stable 7K is intentionally affected by the new mechanisms.
+- The exact upstream action-clock, musical-segmentation, cadence, readout,
+  perception API and Break-pressure suites passed **36** tests. Includes
+  opposite-hand interleaving, same-finger rolls, Anchor embellishment,
+  independent secondary cadence, unsupported scalar omission, physical gaps,
+  missing timing, shared original-prior windows and fractional downbeat
+  ownership.
+- `node tests/corpus.cjs ../dataset ../maps <exact-runtime-checkout>` passed
+  **371 local charts**: 334 7K, 19 4K and 18 6K. Ratings, dans and raw curve
+  buckets exactly matched the pre-upgrade rating engine. All 334 rated 7K
+  calls used the new musical segmentation and the supplied raw pressure;
+  133 exercised pressure protection. Twelve complete outputs (four per key
+  count) matched the upstream Node API exactly. This is integration coverage,
+  not an annotated accuracy evaluation.
+- The browser suite passed real 7K and median local 4K/6K charts, both models,
+  rate mods, percentage semantics, current sections, tempo transitions,
+  settings recovery and numeric `< 0.50`. On the local upstream example at
+  source time 136 s, **both Detailed and Compact displayed Chordjack with
+  133 at NM, 100 at HT and 200 at DT**. The old NM output was 263. Settled
+  actual-renderer screenshots were inspected. No special-case map rule or
+  halving was added to the analyser.
+- The real IndexedDB suite passed cold/hit parity, browser restart, variants,
+  edits, version cleanup, race rejection and storage-failure recovery with
+  the new engine. The example took 247 ms cold / 18 ms hit on this run;
+  payload was 6,473 compressed bytes. These are local example latencies,
+  including file verification/rendering, not a cross-version benchmark.
+- The frontend suite additionally checks that an unsupported BPM clears the
+  previous number while retaining its tag. Existing layout, Break padding,
+  animation/idle and show/hide checks remain active.
+
+The existing installed folder `spm_rating_map_analyser_v1.2.3` was updated
+in place without renaming it or changing its frontend/settings. The live tosu
+endpoint served version 1.2.4 and the page connected without errors, but no
+game frames arrived. A live selection/cold-hit check could not complete in
+that state; it can resume when the game supplies frames. The offline actual
+renderer and real browser-storage checks above passed.
+
+The analyser version is **1.2.4** and the cache identity is **tag-d2bbb90**;
+startup clears earlier cached classifications. `index.html`, settings defaults,
+SPM Rating and dan constants are unchanged. Upstream mechanism/results and
+remaining tradeoffs are explained in [CLASSIFIER.md](CLASSIFIER.md).
+
+# Historical v1.2.3 frontend verification
 
 - `node --test tests/regression.test.cjs tests/cache.test.cjs`: all 16 tests
   passed. Rating, classifier, dan constants and cache implementation files are

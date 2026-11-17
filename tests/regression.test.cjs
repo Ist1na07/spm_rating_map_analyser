@@ -49,6 +49,9 @@ test('reused raw rating evidence matches native fractional-rate clocks for both 
         assert.equal(r.modelInfo.perception.profile, model);
         assert.equal(r.modelInfo.breakPolicy.id, 'sustained-native-demand-r1');
         assert.equal(r.modelInfo.breakPolicy.ratingUsed, true);
+        assert.equal(r.modelInfo.segmentation.id, 'meter-aware-snap-r1');
+        assert.equal(r.modelInfo.segmentation.maxMoveBeats, 1);
+        assert(r.modelInfo.cadencePolicy.includes('type-conditional observed action periods'));
         assert.equal(r.overall.perception.difficultyAvailable, true);
         assert.equal(tagEvidence.query[0], 1000 / rate);
         assert.equal(r.map.firstNote, Math.round(1000 / rate));
@@ -108,7 +111,7 @@ test('vendored standalone API retains native 4K/6K, legacy and modern entry poin
 });
 
 
-test('pinned b311c40 retains the retuned local expert and keeps classic explicit', () => {
+test('pinned d2bbb90 retains the retuned local expert and keeps classic explicit', () => {
     const text = fixture(7, true);
     const stable = tags.analyzeMap(text), classic = tags.analyzeMap(text, {aggregation: 'classic'});
     assert.equal(stable.modelInfo.localExpert, 'original56-joint-fixed-ridge01');
@@ -134,17 +137,21 @@ test('sustained raw demand reaches the pre-classification Break gate in both pro
     }
 });
 
-test('b311c40 preserves the previous unrated, classic, modern and native 4K/6K paths', () => {
-    const previous = loadTags(execFileSync('git', ['show', '7fd451e:tag_engine.js'], {cwd:root, encoding:'utf8'}));
+test('d2bbb90 retains classic/modern/legacy behavior and native 4K/6K morphology', () => {
+    const previous = loadTags(execFileSync('git', ['show', 'b074e0f:tag_engine.js'], {cwd:root, encoding:'utf8'}));
     for (const [text, options] of [
-        [pressureFixture(), {}], [fixture(7,true), {aggregation:'classic'}],
+        [fixture(7,true), {aggregation:'classic'}],
         [fixture(7,true), {algorithm:'modern'}], [fixture(7,true), {algorithm:'legacy'}],
         [fixture(4,true), {}], [fixture(6,true), {speedRate:1.5}],
     ]) {
         const r = tags.analyzeMap(text, options), before = previous.analyzeMap(text, options);
-        if (r.modelInfo?.breakPolicy) {
-            assert.equal(r.modelInfo.breakPolicy.ratingUsed, false);
-            delete r.modelInfo.breakPolicy;
+        // The maintained parser additionally preserves meter/omit-first-bar metadata.
+        // Classification, boundaries, cadence and all prior numeric fields stay exact.
+        for (const p of r.map.timingPoints || []) {
+            if ('meter' in p) {
+                assert.equal(p.meter,4); assert.equal(p.omitFirstBarLine,false);
+                delete p.meter; delete p.omitFirstBarLine;
+            }
         }
         assert.deepEqual(r, before);
     }
@@ -169,4 +176,32 @@ test('same-type cadence plateaus retain 150/200 BPM and DT225/300', () => {
             assert(s.evidence.cadence);
         }
     }
+});
+
+
+test('d2bbb90 public API uses supported hand clocks and omits an unresolved scalar', () => {
+    const text = patternFixture([[0,1,4],[0],[1,2,5,6],[4]]);
+    for (const rate of [.75,1,1.5]) {
+        const r = tags.analyzeMap(text,{speedRate:rate});
+        const jack = r.segments.find(s=>s.tag==='chordjack' && Number.isFinite(s.equivBpm));
+        assert(jack); assert(Math.abs(jack.equivBpm-75*rate)<=.5);
+        assert.equal(jack.evidence.cadence.source,'hand-strike-interval-mode');
+        assert.equal(jack.evidence.actions.thumbAssignments.length,2);
+        if (rate===1) {
+            const unresolved = r.segments.find(s=>s.tag==='minijack' && !s.equivBpm);
+            assert(unresolved); assert(unresolved.evidence.cadenceUnresolved);
+        }
+    }
+});
+
+test('d2bbb90 stable path preserves timing meter and omit-first-bar evidence', () => {
+    const text = fixture(7,true).replace('0,500,4,2,1,100,1,0',
+        '0,500,3,2,1,100,1,0\n1600,-50,7,1,0,100,0,0\n6000,400,7,1,0,100,1,8');
+    const r = tags.analyzeMap(text);
+    assert.deepEqual(r.map.timingPoints,[
+        {t:0,beatLength:500,meter:3,omitFirstBarLine:false},
+        {t:6000,beatLength:400,meter:7,omitFirstBarLine:true},
+    ]);
+    assert.equal(r.modelInfo.segmentation.id,'meter-aware-snap-r1');
+    assert.equal(r.modelInfo.segmentation.referencePrior,'original boundaries retained');
 });

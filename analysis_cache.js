@@ -2,7 +2,7 @@
 (function(root) {
     'use strict';
     const DB_NAME = 'SPMMapAnalyser.Analysis';
-    const MODEL_REVISION = 'schema1|rating-v1.2.0|tag-b311c40';
+    const MODEL_REVISION = 'schema1|rating-v1.2.0|tag-d2bbb90';
     const request = r => new Promise((resolve, reject) => {
         r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
     });

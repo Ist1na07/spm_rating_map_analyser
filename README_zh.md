@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.3
+# SPM Map Analyser v1.2.4
 
 一个 [tosu](https://tosu.app) 游戏内叠加界面，为 osu!mania **4K / 6K / 7K** 谱面提供实时难度评级、段位映射与键型分类。
 
@@ -43,12 +43,14 @@
 
 由此提供：
 
-- **7K 整体标签** — 使用 **SPMTagClassifier 1.2.4 + `b311c40` 提交**的稳定路径，主标签与次要分支旁均显示连续时间多因子积分得到的整谱负担百分数：**分支贴合度 × 难度负担 × 动作物量**。直接复用当前 Detailed／Compact 评分同次生成的原始逐行难度场，不重复评分。它不是识别置信度或时间占比，各键型允许重叠；Hybrid 的 RC／LN 家族份额按原比例归一化显示，合计 100%（仅显示层变更）。切换评分模型会同步更新标签与百分数，曲线平滑不会影响它们
+- **7K 整体标签** — 使用 **SPMTagClassifier 1.2.4 + `d2bbb90` 提交**的稳定路径，主标签与次要分支旁均显示连续时间多因子积分得到的整谱负担百分数：**分支贴合度 × 难度负担 × 动作物量**。直接复用当前 Detailed／Compact 评分同次生成的原始逐行难度场，不重复评分。它不是识别置信度或时间占比，各键型允许重叠；Hybrid 的 RC／LN 家族份额按原比例归一化显示，合计 100%（仅显示层变更）。切换评分模型会同步更新标签与百分数，曲线平滑不会影响它们
 - **4K／6K 整体标签** — 上游主导形态显示为实心标签，其余为轮廓标签。百分数是局部形态支持按**时长 × 相对物理负荷 × 集中度**加权后的归一组成，五类原始份额在取整前合计 100%；与 7K 的难度积分负担不是同一口径。这两种分类器不使用 Detailed／Compact 难度场
 - **实时当前段** — 游玩时跟随进度，显示当前段的键型、置信度；仅 Chordstream 组、Jack 组、Speed、Density、Coordination 显示等效 BPM，数字放在最前，不附加 BPM 字样
 - **键型时间轴** — 覆盖全谱的彩色条带，带播放游标
 
-**分类器来源：** 固定的 [b311c40 源码](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/src/index.cjs) 保留联合重调的 56 维 RC／LN 专家、固定整谱参考先验、逐手假切换排除、LN Wildcard 休息豁免与同类稳定变速分段。它包含已发布 v1.2.4 包之后的未发布修改；`modern` 仍是另一个显式候选。
+**分类器来源：** 固定的 [d2bbb90 源码](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/src/index.cjs) 保留联合重调的 56 维 RC／LN 专家、固定整谱参考先验、逐手假切换排除、LN Wildcard 休息豁免与同类稳定变速分段。它包含已发布 v1.2.4 包之后的未发布修改；`modern` 仍是另一个显式候选。
+
+**动作 BPM 与音乐边界：** 7K 按类型测量同手叠骨干、同指再打或手内替换流，修复交错／夹杂单键造成的虚高速度；不能支持单一周期时不显示 BPM，不拿歌曲 BPM 或旧网格补值。分类前将合适的变化候选吸附到一拍以内的有效小节线，再重算局部特征附加量与分类，保留旧整谱参考的原分段。类型权重与难度积分公式未改，4K／6K 粗分类保持不变。边界、段落 tag 和整谱百分数可能随之变化，详见 [接入与取舍](CLASSIFIER.md)。
 
 **持续压力 Break 修补：** 同次 Detailed／Compact 原始难度场现在会在聚合前参与软休息判断，因此切换评分模型也可能改变局部 Break 边界，平滑则不会；长头部空隙及最后头部之后不延拓压力证据，不增加评分次数。详见 [接入约定](CLASSIFIER.md)。
 
@@ -101,7 +103,7 @@
 
 ## 使用方法
 
-1. 从本仓库下载 [v1.2.3 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
+1. 从本仓库下载 [v1.2.4 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将**直接包含 `index.html`、`settings.json`、`metadata.txt` 的那一层文件夹**放入 tosu 的 `static` 目录，不要再套一层解压目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
 
@@ -135,6 +137,12 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.4
+
+- 完整升级至分类器 `d2bbb90`：按类型测量动作 BPM，缺少周期支持时留空；稳定 7K 分类前采用小节边界弱先验。
+- 保留评分器、段位、前端 BPM 显示范围、主 tag 选择及百分数展示口径，不重训类型权重、不增加评分次数。
+- 更新缓存模型修订号，启动时清除旧版结果；复核双模型、NM／HT／DT 与 4K／6K／7K。
 
 ### v1.2.3
 
@@ -237,7 +245,7 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 
 ```sh
 node --test tests/regression.test.cjs tests/cache.test.cjs
-# 可选：读取本地数据集／谱面及固定到 `b311c40` 的分类器运行源码。
+# 可选：读取本地数据集／谱面及固定到 `d2bbb90` 的分类器运行源码。
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```
 
@@ -249,7 +257,7 @@ node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 
 - [tosu](https://tosu.app) — 本 overlay 的运行环境
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — 难度算法
-- [SPMTagClassifier b311c40](https://github.com/Ist1na07/SPMTagClassifier/tree/b311c408ef02d6705d30b51a4ea789d3e86d2976) — 键型分类与整谱负担积分
+- [SPMTagClassifier d2bbb90](https://github.com/Ist1na07/SPMTagClassifier/tree/d2bbb90e7ea685e5345cecf91e176c64dbed0e80) — 键型分类与整谱负担积分
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — RC / 长键子模型
 
 ## License

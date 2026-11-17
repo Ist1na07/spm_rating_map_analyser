@@ -8,12 +8,15 @@ const {features,windows,FEATURE_KEYS}=load(3);
 const {coarseResult}=load(4),{lnResult}=load(7);
 const geometry=load(9),{version}=load(6);
 const {correctCadenceDisplay}=load(10);
-const {refine:refineSegments}=load(11);
-const overlay7=load(12),overlayProfile=load(13);
-const profile4=load(14),profile7=load(15);
-const native4=load(16),native6=load(17),native7=load(18);
-const perception=load(19),perceptionProfiles=load(20).profiles;
-const {createPressureGuard}=load(21),breakProfile=load(22);
+const {describeActions}=load(11);
+const {musicalSegments}=load(13);
+const musicalProfile=load(14);
+const {refine:refineSegments}=load(15);
+const overlay7=load(16),overlayProfile=load(17);
+const profile4=load(18),profile7=load(19);
+const native4=load(20),native6=load(21),native7=load(22);
+const perception=load(23),perceptionProfiles=load(24).profiles;
+const {createPressureGuard}=load(25),breakProfile=load(26);
 function profile(key){return key===4?profile4:profile7;}
 function evidenceMap(osuText,opts={}) {
   const map=parseOsu(osuText,opts),ctx=prepare(map,10);
@@ -38,11 +41,15 @@ function stable7(osuText,opts,e) {
     perception.validateRating(e.map,opts.ratingEvidence,{speedRate:opts.speedRate??1,modelIdentity:p.modelIdentity});
     pressure=createPressureGuard(opts.ratingEvidence,policy,breakProfile.gapMs);
   }
+  let musicCuts=[];
+  const musicSegmenter=!perceptual||opts._musicalSegmenter===false?undefined:input=>{
+    musicCuts=opts._musicalSegmenter?opts._musicalSegmenter(input):musicalSegments(e.ctx,input,musicalProfile);return musicCuts;
+  };
   const breakPolicy=perceptual?{...policy,protects:(start,end,stage)=>{
     if(!pressure||!policy.target.split('+').includes(stage))return false;
     const result=pressure.measure(start,end);if(result.protected)protectedParents.add(start+':'+end);return result.protected;
   }}:undefined;
-  const r=overlay7.analyzeMap(osuText,{...opts,_rawEvidence:true,_archivedExpert:!perceptual,_breakPolicy:breakPolicy,_segmentReadout:(raw,resolveBpm)=>refineSegments(e.ctx,raw,p.classes,{resolveBpm,speedRate:opts.speedRate??1,supportPower:p.supportPower??1})}),geometryContext=geometry.prepare(e.ctx);
+  const r=overlay7.analyzeMap(osuText,{...opts,_rawEvidence:true,_archivedExpert:!perceptual,_musicalSegmenter:musicSegmenter,_breakPolicy:breakPolicy,_segmentReadout:(raw,resolveBpm)=>refineSegments(e.ctx,raw,p.classes,{resolveBpm,speedRate:opts.speedRate??1,supportPower:p.supportPower??1,actionClocks:perceptual})}),geometryContext=geometry.prepare(e.ctx);
   const classicPrior=r.debug.classicPrior,branchSupport=r.debug.readoutSupport,cutExclusions=r.debug.cutExclusions;
   delete r.debug.classicPrior;delete r.debug.readoutSupport;delete r.debug.cutExclusions;
   const raw=r.debug.rawSegments;delete r.debug.rawSegments;
@@ -57,7 +64,9 @@ function stable7(osuText,opts,e) {
     s.distribution=distribution;
     const archivedEquivBpm=s._archivedEquivBpm;delete s._archivedEquivBpm;
     const cadence=s.evidence?.cadence;
-    s.evidence={...(cadence?{cadence}:{}),...(archivedEquivBpm===undefined?{}:{archivedEquivBpm}),normalizedEntropy:ranked.length>1?-ranked.reduce((a,v)=>v>0?a+v*Math.log(v):a,0)/Math.log(ranked.length):0,
+    s.evidence={...(perceptual?{actions:describeActions(e.ctx,s.start,s.end)}:{}),
+      ...(musicCuts.find(c=>c.start===s.start)?.musicalStart?{musicalStart:musicCuts.find(c=>c.start===s.start).musicalStart}:{}),
+      ...(musicCuts.find(c=>c.end===s.end)?.musicalEnd?{musicalEnd:musicCuts.find(c=>c.end===s.end).musicalEnd}:{}),...(cadence?{cadence}:{}),...(archivedEquivBpm===undefined?{}:{archivedEquivBpm}),normalizedEntropy:ranked.length>1?-ranked.reduce((a,v)=>v>0?a+v*Math.log(v):a,0)/Math.log(ranked.length):0,
       margin:(ranked[0]||0)-(ranked[1]||0),effort:w.metrics.effort,occupancy:w.metrics.occupancy,
       featureWindows:1,contextNoteObservations:w.notes,legacyConfidence:s.confidence,
       geometry:geometry.describeInterval(geometryContext,s.start,Math.max(s.start+1,s.end))};
@@ -72,6 +81,8 @@ function stable7(osuText,opts,e) {
     overlayPolicy:{regularityRestRelativeNps:overlayProfile.gate.ratio,regularityRestRowRateMax:overlayProfile.gate.rowRateMax,
       rowRateUnit:'rows per converted second',aggregation:'unchanged legacy policy'}};
   if(perceptual){
+    r.map.timingPoints=e.map.timingPoints;
+    r.modelInfo.segmentation={id:musicalProfile.id,maxMoveBeats:musicalProfile.maxMoveBeats,movedBoundaries:musicCuts.filter(s=>s.musicalEnd).length,referencePrior:'original boundaries retained'};
     r.modelInfo.breakPolicy={id:breakProfile.id,ratingUsed:!!pressure,confidenceFloor:policy.confidenceFloor,lowNpsScale:policy.lowNpsScale,quantile:policy.quantile,fraction:policy.fraction,referenceDemand:pressure?.reference??null,protectedParents:protectedParents.size};
     const rating=opts.ratingEvidence;
     const a=perception.infer(e.map,raw,rating,p,{speedRate:opts.speedRate??1,context:e.ctx,baseline:classicPrior??r.overall,_branchSupport:branchSupport});
@@ -95,7 +106,7 @@ function analyzeMap(osuText,opts={}) {
   // profiles. classic retains its previous local expert and aggregation path.
   if(map.keys===7){
     const r=opts.algorithm==='modern'?lnResult(osuText,native7,opts,e):stable7(osuText,opts,e);
-    return correctCadenceDisplay(r,e.ctx,opts.speedRate??1);
+    return correctCadenceDisplay(r,e.ctx,opts.speedRate??1,{actionClocks:opts.algorithm!=='modern'&&opts.aggregation!=='classic'});
   }
   return coarseResult(osuText,map.keys===4?native4:native6,opts);
 }
@@ -2218,7 +2229,9 @@ function parseOsu(text, { speedRate = 1 } = {}) {
       const p = line.split(','), t = Number(p[0]), beatLength = Number(p[1]);
       if(!Number.isFinite(t)||!Number.isFinite(beatLength)){warnings.push('IgnoredNonfiniteTimingPoint');continue;}
       if (beatLength > 0 && (p[6] === undefined || p[6].trim() !== '0'))
-        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate });
+        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate,
+          meter: Number.isInteger(Number(p[2])) && Number(p[2]) > 0 ? Number(p[2]) : 4,
+          omitFirstBarLine: (Number(p[7]) & 8) !== 0 });
     } else if (section === 'events') {
       const p = line.split(/\s*,\s*|\s+/);
       if (p[0] === '2' || p[0] === 'Break') {
@@ -2584,7 +2597,9 @@ function parseOsu(text, { speedRate = 1 } = {}) {
       const p = line.split(','), t = Number(p[0]), beatLength = Number(p[1]);
       if(!Number.isFinite(t)||!Number.isFinite(beatLength)){warnings.push('IgnoredNonfiniteTimingPoint');continue;}
       if (beatLength > 0 && (p[6] === undefined || p[6].trim() !== '0'))
-        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate });
+        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate,
+          meter: Number.isInteger(Number(p[2])) && Number(p[2]) > 0 ? Number(p[2]) : 4,
+          omitFirstBarLine: (Number(p[7]) & 8) !== 0 });
     } else if (section === 'events') {
       const p = line.split(/\s*,\s*|\s+/);
       if (p[0] === '2' || p[0] === 'Break') {
@@ -5286,7 +5301,9 @@ function parseOsu(text, { speedRate = 1 } = {}) {
       const p = line.split(','), t = Number(p[0]), beatLength = Number(p[1]);
       if(!Number.isFinite(t)||!Number.isFinite(beatLength)){warnings.push('IgnoredNonfiniteTimingPoint');continue;}
       if (beatLength > 0 && (p[6] === undefined || p[6].trim() !== '0'))
-        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate });
+        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate,
+          meter: Number.isInteger(Number(p[2])) && Number(p[2]) > 0 ? Number(p[2]) : 4,
+          omitFirstBarLine: (Number(p[7]) & 8) !== 0 });
     } else if (section === 'events') {
       const p = line.split(/\s*,\s*|\s+/);
       if (p[0] === '2' || p[0] === 'Break') {
@@ -5821,7 +5838,9 @@ function parseOsu(text, { speedRate = 1 } = {}) {
       const p = line.split(','), t = Number(p[0]), beatLength = Number(p[1]);
       if(!Number.isFinite(t)||!Number.isFinite(beatLength)){warnings.push('IgnoredNonfiniteTimingPoint');continue;}
       if (beatLength > 0 && (p[6] === undefined || p[6].trim() !== '0'))
-        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate });
+        timingPoints.push({ t: t / speedRate, beatLength: beatLength / speedRate,
+          meter: Number.isInteger(Number(p[2])) && Number(p[2]) > 0 ? Number(p[2]) : 4,
+          omitFirstBarLine: (Number(p[7]) & 8) !== 0 });
     } else if (section === 'events') {
       const p = line.split(/\s*,\s*|\s+/);
       if (p[0] === '2' || p[0] === 'Break') {
@@ -5963,6 +5982,7 @@ return load(0);})();
 function(module,exports,load){
 'use strict';
 const { lowerBound } = load(2);
+const {jackCadence,switchCadence,intervalMode}=load(11);
 
 // A display measurement, not a replacement for the archived model's features.
 // Round-to-ms timestamps on a uniform sequence can deviate from the line
@@ -5989,42 +6009,254 @@ function regularRowCadence(ctx, start, end, speedRate = 1) {
 
 const DISPLAY_TAGS = new Set(['chordjack', 'minijack', 'dense chordstream', 'fast chordstream',
   'speed', 'tech', 'wildcard', 'coordination', 'density']);
-function jackClockMatchesRows(ctx, start, end) {
-  const lo = lowerBound(ctx.rows, start, r => r.t), hi = lowerBound(ctx.rows, end, r => r.t);
-  if (lo === hi) return false;
-  const firstMask = ctx.rows[lo].mask;
-  let allChords = true, sameGrip = true;
-  for (let i = lo; i < hi; i++) {
-    const mask = ctx.rows[i].mask;
-    allChords &&= (mask & (mask - 1)) !== 0;
-    sameGrip &&= mask === firstMask;
-  }
-  // The archive measures chord-row cadence for Jack, falling back to
-  // same-column repetition. Do not replace either by an interleaved row clock.
-  return allChords || sameGrip;
+function measureCadence(ctx,start,end,tag,speedRate=1){
+  if(!DISPLAY_TAGS.has(tag))return null;
+  if(['chordjack','minijack'].includes(tag))return jackCadence(ctx,start,end,tag,speedRate);
+  if(['dense chordstream','fast chordstream'].includes(tag))return switchCadence(ctx,start,end,speedRate);
+  const uniform=regularRowCadence(ctx,start,end,speedRate);if(uniform)return uniform;
+  const rows=ctx.rows.slice(lowerBound(ctx.rows,start,r=>r.t),lowerBound(ctx.rows,end,r=>r.t));
+  const pairs=rows.slice(1).map((r,i)=>({dt:r.t-rows[i].t,width:1})),m=intervalMode(pairs,1/speedRate);
+  return m?{...m,source:'head-articulation-interval-mode',resolutionMs:1/speedRate,rowCount:rows.length,equivBpm:Math.round(15000/m.spacingMs)}:null;
 }
-function correctCadenceDisplay(result, ctx, speedRate = 1) {
+function legacyRowClockAllowed(ctx,start,end,tag){
+  if(!['chordjack','minijack'].includes(tag))return true;
+  const rows=ctx.rows.slice(lowerBound(ctx.rows,start,r=>r.t),lowerBound(ctx.rows,end,r=>r.t));
+  return rows.length>0&&(rows.every(r=>(r.mask&(r.mask-1))!==0)||rows.every(r=>r.mask===rows[0].mask));
+}
+function correctCadenceDisplay(result, ctx, speedRate = 1, {actionClocks=true}={}) {
   for (const segment of result.segments) {
     if (!DISPLAY_TAGS.has(segment.tag)) continue;
     const start = segment.evidence?.sourceStart ?? segment.start;
     const end = segment.evidence?.sourceEnd ?? segment.end;
-    if (['chordjack', 'minijack'].includes(segment.tag) && !jackClockMatchesRows(ctx, start, end)) continue;
-    const measured = regularRowCadence(ctx, start, end, speedRate);
-    if (!measured) continue;
+    delete segment.evidence.secondaryCadence;
+    const measured=actionClocks?measureCadence(ctx,start,end,segment.tag,speedRate):
+      legacyRowClockAllowed(ctx,start,end,segment.tag)?regularRowCadence(ctx,start,end,speedRate):null;
+    if(!actionClocks&&!measured)continue;
+    if(actionClocks&&segment.secondary){
+      const secondary=measureCadence(ctx,start,end,segment.secondary,speedRate);
+      if(secondary)segment.evidence.secondaryCadence={tag:segment.secondary,...secondary,measuredStart:start,measuredEnd:end};
+    }
+    if(!measured){delete segment.equivBpm;segment.evidence.cadenceUnresolved='no dominant, type-appropriate action period';delete segment.evidence.cadence;continue;}
+    delete segment.evidence.cadenceUnresolved;
     const { equivBpm, ...evidence } = measured;
     segment.evidence.cadence = { ...evidence, measuredStart:start,measuredEnd:end,legacyEquivBpm: segment.evidence.archivedEquivBpm??segment.equivBpm };
     segment.equivBpm = equivBpm;
   }
-  result.modelInfo.cadencePolicy = 'uniform rows measured directly; other archived cadence unchanged';
+  result.modelInfo.cadencePolicy = !actionClocks?'uniform rows measured directly; other archived cadence unchanged':'type-conditional observed action periods: per-hand strikes, same-finger rearticulation, within-hand substitution, or head articulation; unsupported scalar tempo omitted';
   return result;
 }
-module.exports = { regularRowCadence, correctCadenceDisplay };
+module.exports = { regularRowCadence, measureCadence, correctCadenceDisplay };
 
 },
 function(module,exports,load){
 'use strict';
+const {lowerBound,popcount}=load(2);
+const MODEL=load(12);
+
+// Observed articulations, NOT a reconstruction of wrist position. Both
+// admissible 7K thumb assignments are retained; the busier hand is not
+// confused with the union of two alternating hand clocks.
+function handViews(ctx,start,end){
+  const rows=ctx.rows.slice(lowerBound(ctx.rows,start,r=>r.t),lowerBound(ctx.rows,end,r=>r.t));
+  const K=ctx.map?.keys??7,left=(1<<Math.floor(K/2))-1;
+  return [0,1].map(thumb=>[0,1].map(side=>{
+    const mask=K===7?(side===0?left|(thumb===0?8:0):112|(thumb===1?8:0)):(side===0?left:((1<<K)-1)^left);
+    return rows.filter(r=>r.mask&mask).map(r=>({t:r.t,mask:r.mask&mask,width:popcount(r.mask&mask),coactive:popcount(r.mask)>=2}));
+  }));
+}
+function intervalMode(pairs,resolutionMs,{minimumShare=MODEL.minimumShare,widthPower=MODEL.widthPower}={}){
+  if(pairs.length<3)return null;
+  const sorted=pairs.filter(p=>p.dt>0).map(p=>({...p,w:p.width**widthPower})).sort((a,b)=>a.dt-b.dt);
+  let total=sorted.reduce((s,p)=>s+p.w,0),best=null;
+  // A cluster spans no more than two source milliseconds: two rounded
+  // adjacent event intervals can differ by at most two source milliseconds.
+  let hi=0,mass=0;
+  for(let lo=0;lo<sorted.length;lo++){
+    if(hi<lo){hi=lo;mass=0;}
+    while(hi<sorted.length&&sorted[hi].dt-sorted[lo].dt<=2*resolutionMs+1e-7)mass+=sorted[hi++].w;
+    if(!best||mass>best.mass+1e-10)best={lo,hi,mass};
+    mass-=sorted[lo].w;
+  }
+  if(!best||best.hi-best.lo<3||best.mass/total<=minimumShare+1e-10)return null;
+  const selected=sorted.slice(best.lo,best.hi);
+  // Fit the supported interval cluster, rather than inheriting the bias of
+  // its most frequent rounded millisecond (e.g.112/113ms for133BPM).
+  const spacingMs=selected.reduce((sum,p)=>sum+p.w*p.dt,0)/best.mass;
+  return {spacingMs,pairCount:selected.length,totalPairs:sorted.length,intervalShare:best.mass/total,
+    coveredMs:selected.reduce((sum,p)=>sum+p.dt,0),minSpacingMs:selected[0].dt,maxSpacingMs:selected.at(-1).dt};
+}
+function jackCadence(ctx,start,end,tag,speedRate=1,config={}){
+  const views=handViews(ctx,start,end),resolutionMs=1/speedRate,measurements=[];
+  for(let thumb=0;thumb<views.length;thumb++){
+    const sides=[];
+    for(let side=0;side<2;side++){
+      const rows=views[thumb][side],events=rows,pairs=[];
+      if(tag==='chordjack'){
+        let last=null,between=0;
+        for(const b of events){
+          if(!b.coactive){between|=b.mask;continue;}
+          // The coactive backbone may carry extra retriggers of fingers
+          // shared by its two grips (an overlapping Anchor/Minijack role).
+          // A changing same-hand roll outside those common fingers cannot
+          // certify a slower whole-hand rebound from its sparse accents.
+          if(last&&!(between&~(last.mask&b.mask)))pairs.push({dt:b.t-last.t,width:Math.min(last.width,b.width)});
+          last=b;between=0;
+        }
+      }else for(let i=1;i<events.length;i++){
+        const a=events[i-1],b=events[i],overlap=popcount(a.mask&b.mask);
+        if(overlap)pairs.push({dt:b.t-a.t,width:overlap});
+      }
+      const m=intervalMode(pairs,resolutionMs,config);
+      if(m)sides.push({...m,side,eventCount:events.length});
+    }
+    // A sustained faster hand may determine the jack rate; simultaneous and
+    // alternating other-hand events never double this rate.
+    const maximumCoverage=Math.max(0,...sides.map(s=>s.coveredMs));
+    const sustained=sides.filter(s=>s.coveredMs>=maximumCoverage*(config.handSupportRatio??MODEL.handSupportRatio));
+    sustained.sort((a,b)=>a.spacingMs-b.spacingMs);
+    measurements.push({thumb,sides,selected:sustained[0]??null});
+  }
+  const candidates=measurements.map(m=>m.selected).filter(Boolean);
+  if(candidates.length!==2||Math.abs(candidates[0].spacingMs-candidates[1].spacingMs)>2*resolutionMs+1e-7)return null;
+  const m=candidates[0],spacingMs=(candidates[0].spacingMs+candidates[1].spacingMs)/2;
+  return {source:tag==='chordjack'?'hand-strike-interval-mode':'same-finger-rearticulation-mode',
+    equivBpm:Math.round(15000/spacingMs),spacingMs,resolutionMs,rowCount:m.eventCount,
+    pairCount:m.pairCount,intervalShare:Math.min(...candidates.map(c=>c.intervalShare)),
+    handMeasurements:measurements.map(({thumb,sides})=>({thumb,hands:sides.map(({side,spacingMs,intervalShare,eventCount,coveredMs})=>({side,spacingMs,intervalShare,eventCount,coveredMs}))}))};
+}
+// CS is a stream of finger substitutions across the two hands, not a
+// repeated whole-hand rebound. Its stream clock is the union of observed
+// substitutions; it must not inherit the Jack per-hand division by two.
+function switchCadence(ctx,start,end,speedRate=1,config={}){
+  const measurements=handViews(ctx,start,end).map((sides,thumb)=>{
+    const times=[];
+    for(const rows of sides)for(let i=1;i<rows.length;i++){
+      const a=rows[i-1].mask,b=rows[i].mask;
+      if((a&~b)&&(b&~a))times.push(rows[i].t);
+    }
+    const sorted=[...new Set(times)].sort((a,b)=>a-b),pairs=sorted.slice(1).map((t,i)=>({dt:t-sorted[i],width:1}));
+    const m=intervalMode(pairs,1/speedRate,config);
+    return m?{...m,thumb,eventCount:sorted.length}:null;
+  });
+  if(measurements.some(m=>!m)||Math.abs(measurements[0].spacingMs-measurements[1].spacingMs)>2/speedRate+1e-7)return null;
+  const m=measurements[0],spacingMs=(m.spacingMs+measurements[1].spacingMs)/2;
+  return {source:'hand-substitution-stream-mode',equivBpm:Math.round(15000/spacingMs),spacingMs,resolutionMs:1/speedRate,
+    rowCount:m.eventCount,pairCount:m.pairCount,intervalShare:Math.min(...measurements.map(m=>m.intervalShare))};
+}
+function describeActions(ctx,start,end){
+  return {meaning:'per-hand head-event geometry, both thumb assignments',
+    thumbAssignments:handViews(ctx,start,end).map((sides,thumb)=>({thumb,hands:sides.map((rows,side)=>{
+      let coactivation=0,rearticulation=0,substitution=0,unchanged=0;
+      for(let i=0;i<rows.length;i++){
+        coactivation+=rows[i].width>1;
+        if(!i)continue;const a=rows[i-1].mask,b=rows[i].mask;
+        rearticulation+=!!(a&b);substitution+=!!(a&~b)&&!!(b&~a);unchanged+=a===b;
+      }
+      return {side,eventCount:rows.length,coactiveFraction:coactivation/Math.max(1,rows.length),
+        rearticulationFraction:rearticulation/Math.max(1,rows.length-1),
+        substitutionFraction:substitution/Math.max(1,rows.length-1),fixedGripFraction:unchanged/Math.max(1,rows.length-1)};
+    })}))};
+}
+module.exports={handViews,intervalMode,jackCadence,switchCadence,describeActions};
+
+},
+function(module,exports,load){
+module.exports={
+  "schemaVersion": 1,
+  "id": "type-conditional-action-period-r1",
+  "minimumShare": 0.5,
+  "widthPower": 0,
+  "handSupportRatio": 0.5
+}
+;
+},
+function(module,exports,load){
+'use strict';
+const {lowerBound}=load(2);
+
+// Timing supplies metre and red-line phase, not an audio phrase detector.
+// Inherited SV/hitsound points never reset that phase.
+function measureLines(map,start=map.firstNote,end=map.lastNote){
+  const out=[],points=map.timingPoints;
+  for(let i=0;i<points.length;i++){
+    const p=points[i],stop=Math.min(end,points[i+1]?.t??Infinity),bar=p.beatLength*(p.meter??4);
+    if(!(bar>0&&Number.isFinite(bar))||stop<=start)continue;
+    // The first red point's grid also describes a negative-time pickup.
+    const lo=Math.max(i?0:-Infinity,Math.ceil((start-p.t)/bar-1e-10));
+    const hi=Math.floor((stop-p.t)/bar+1e-10);
+    for(let n=lo;n<=hi;n++){
+      const t=p.t+n*bar;
+      if(t<start-1e-7||t>end+1e-7||i+1<points.length&&t>=points[i+1].t-1e-7||n===0&&p.omitFirstBarLine)continue;
+      out.push({t,beatLength:p.beatLength,meter:p.meter??4,kind:n===0?'timing-section':'measure'});
+    }
+  }
+  return out;
+}
+function contrastAt(windows,norm,t){
+  const i=lowerBound(windows,t,w=>w.t),half=4;
+  const mean=(a,b)=>{
+    const v=Array(norm.featureNames.length).fill(0);let n=0;
+    for(let j=Math.max(0,a);j<Math.min(windows.length,b);j++){n++;for(let k=0;k<v.length;k++)v[k]+=norm.values[j][k];}
+    return n?v.map(x=>x/n):v;
+  };
+  const a=mean(i-half,i),b=mean(i,i+half);
+  return a.reduce((s,x,k)=>s+Math.abs(x-b[k]),0)/Math.max(1,a.length);
+}
+function musicalSegments(ctx,input,{maxMoveBeats=1,mode='nearest'}={}){
+  const {map,rows}=ctx,{segments,windows,norm}=input;
+  if(!map.timingPoints.length||segments.length<2)return segments;
+  const rate=input.speedRate??1;
+  // Put a rounded/truncated downbeat head in the FOLLOWING interval. The
+  // ideal fractional barline can be up to one source millisecond after it.
+  const lines=measureLines(map).map(p=>{
+    const source=p.t*rate,epsilon=16*Number.EPSILON*Math.max(1,Math.abs(source));
+    const t=Math.floor(source+epsilon)/rate;return {...p,t,...(t!==p.t?{nominalTime:p.t}:{})};
+  }),ends=segments.slice(0,-1).map(s=>s.end),points=[segments[0].start],evidence=[];
+  for(let i=0;i<ends.length;i++){
+    const old=ends[i],at=lowerBound(rows,old,r=>r.t),before=rows[at-1],after=rows[at];
+    // Actual silence/pickups and headless sustained intervals are not moved
+    // merely to make a musically neat display. They require physical cuts.
+    const gap=before&&after?after.t-before.t:Infinity;
+    const ti=lowerBound(map.timingPoints,old,p=>p.t);
+    const timing=map.timingPoints[map.timingPoints[ti]?.t===old?ti:Math.max(0,ti-1)];
+    const radius=timing.beatLength*maxMoveBeats;
+    let candidates=lines.filter(p=>Math.abs((p.nominalTime??p.t)-old)<=radius+1e-7);
+    const leftMin=Math.min(3000/(input.speedRate??1),segments[i].end-segments[i].start);
+    const rightMin=Math.min(3000/(input.speedRate??1),segments[i+1].end-segments[i+1].start);
+    candidates=candidates.filter(p=>p.t-points.at(-1)>=leftMin-1e-7&&segments[i+1].end-p.t>=rightMin-1e-7);
+    if(gap>=timing.beatLength)candidates=[];
+    candidates.sort((a,b)=>mode==='contrast'?
+      contrastAt(windows,norm,b.t)-contrastAt(windows,norm,a.t)||Math.abs(a.t-old)-Math.abs(b.t-old):
+      Math.abs(a.t-old)-Math.abs(b.t-old)||a.t-b.t);
+    const chosen=candidates[0];points.push(chosen?.t??old);evidence.push(chosen?{...chosen,originalTime:old}:null);
+  }
+  points.push(segments.at(-1).end);
+  return segments.map((s,i)=>{
+    // Keep the original observation contract at every unmoved endpoint.
+    // Its sequential window assignment can intentionally include one edge
+    // window after a short pickup; recomputing it would change unrelated data.
+    const lo=points[i]===s.start?s.windowRange[0]:Math.max(0,Math.min(windows.length-1,Math.round((points[i]-map.firstNote)/250)));
+    const hi=points[i+1]===s.end?s.windowRange[1]:Math.min(windows.length,Math.max(lo+1,Math.round((points[i+1]-map.firstNote)/250)));
+    return {start:points[i],end:points[i+1],windowRange:[lo,hi],
+      ...(evidence[i-1]?{musicalStart:evidence[i-1]}:{}),...(evidence[i]?{musicalEnd:evidence[i]}:{})};
+  });
+}
+module.exports={measureLines,musicalSegments};
+
+},
+function(module,exports,load){
+module.exports={
+  "schemaVersion": 1,
+  "id": "meter-aware-snap-r1",
+  "maxMoveBeats": 1,
+  "mode": "nearest"
+}
+;
+},
+function(module,exports,load){
+'use strict';
 const {lowerBound:lb}=load(2);
-const {correctCadenceDisplay}=load(10);
+const {correctCadenceDisplay,regularRowCadence}=load(10);
 const CS=new Set(['dense chordstream','fast chordstream']);
 const STEP_MS=500,CONTEXT_MS=4000,MIN_DISPLAY_MS=1800;
 
@@ -6068,17 +6300,18 @@ function excludeCut(s){
   return {...s,scores,tag,confidence:Math.min(1,value),secondary};
 }
 
-function smoothCadenceFrames(frames,ctx,speedRate=1){
+function smoothCadenceFrames(frames,ctx,speedRate=1,actionClocks=true){
   const same=(a,b)=>a.tag===b.tag&&a.secondary===b.secondary&&a.family===b.family;
   const measured=(s,anchor=s.equivBpm)=>{
+    if(!regularRowCadence(ctx,s.start,s.end,speedRate))return null;
     const copy={...s,evidence:{sourceStart:s.start,sourceEnd:s.end}};
-    correctCadenceDisplay({segments:[copy],modelInfo:{}},ctx,speedRate);
+    correctCadenceDisplay({segments:[copy],modelInfo:{}},ctx,speedRate,{actionClocks});
     const c=copy.evidence.cadence;
-    if(c&&Number.isFinite(anchor)){
+    if(c?.source==='uniform-rows-within-source-ms'&&Number.isFinite(anchor)){
       const e=c.resolutionMs/(c.rowCount-1),lo=15000/(c.spacingMs+e),hi=c.spacingMs>e?15000/(c.spacingMs-e):Infinity;
       if(lo<=anchor+.5&&hi>=anchor-.5)copy.equivBpm=anchor;
     }
-    return c?copy:null;
+    return c&&Number.isFinite(copy.equivBpm)?copy:null;
   };
   const groups=[];
   for(const s of frames){
@@ -6125,7 +6358,7 @@ function smoothCadenceFrames(frames,ctx,speedRate=1){
   }
   return out;
 }
-function refine(ctx,source,classes,{speedRate=1,supportPower=1,resolveBpm}={}){
+function refine(ctx,source,classes,{speedRate=1,supportPower=1,resolveBpm,actionClocks=true}={}){
   const map=ctx.map,hands=prepareHands(ctx),frames=[],support=[];let exclusions=0;
   source.forEach((old,parent)=>{
     const scores=old.scores??{[old.tag]:1},div=Math.max(1,...Object.values(scores));
@@ -6138,7 +6371,7 @@ function refine(ctx,source,classes,{speedRate=1,supportPower=1,resolveBpm}={}){
       frames.push(s);support.push(q.map((v,j)=>excluded&&CS.has(classes[j])?0:v));
     }
   });
-  return {frames,support,segments:smoothCadenceFrames(frames,ctx,speedRate),exclusions};
+  return {frames,support,segments:smoothCadenceFrames(frames,ctx,speedRate,actionClocks),exclusions};
 }
 module.exports={refine,prepareHands,noCut,smoothCadenceFrames};
 
@@ -8200,7 +8433,8 @@ var TagClassifier = (() => {
     const norm = normalizeWindows(windows);
     const activeCut = windows.map((w) => w.cutDemand).filter((v) => v > 0).sort((a, b) => a - b);
     const cutDemandRef = activeCut.length ? activeCut[Math.floor(activeCut.length * 0.8)] : 1;
-    const rawSegs0 = segmentMap({ map, rows, windows, norm });
+    const referenceSegs = segmentMap({ map, rows, windows, norm });
+    const rawSegs0 = opts._musicalSegmenter ? opts._musicalSegmenter({segments:referenceSegs,windows,norm,speedRate:rate}) : referenceSegs;
     const marks = markBreaks(map, rows, rawSegs0);
     const rawSegs = rawSegs0.map((s, i) => ({
       start: s.start,
@@ -8209,7 +8443,9 @@ var TagClassifier = (() => {
       family0: marks[i].family
     }));
     const extras = rawSegs.map((s) => computeSegmentExtras(ctx, s.start, s.end));
-    return { cutDemandRef, rawSegs, extras, windows };
+    const result={cutDemandRef,rawSegs,extras,windows};
+    if(opts._musicalSegmenter){const marks=markBreaks(map,rows,referenceSegs);result.referenceCm={cutDemandRef,windows,rawSegs:referenceSegs.map((s,i)=>({...s,family0:marks[i].family})),extras:referenceSegs.map(s=>computeSegmentExtras(ctx,s.start,s.end))};}
+    return result;
   }
   function analyzeMap(osuText, opts = {}) {
     let map = parseOsu(osuText);
@@ -8219,7 +8455,7 @@ var TagClassifier = (() => {
     const rawEvidence = opts._rawEvidence ? classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined,_breakPolicy:opts._archivedExpert?undefined:opts._breakPolicy}) : null;
 
     const originalSegments = smoothSegments(rawEvidence ? rawEvidence.map(s=>({...s})) : classifySegments(cm,{scorer:"model",_expertModel:opts._archivedExpert?model_generated_default:undefined,_breakPolicy:opts._archivedExpert?undefined:opts._breakPolicy}));
-    const classicPrior = aggregateOverall(smoothSegments(classifySegments(cm,{scorer:"model",_expertModel:model_generated_default})), {"dominantShare":0.52,"mixShare":0.07,"secondRel":0.75});
+    const classicPrior = aggregateOverall(smoothSegments(classifySegments(cm.referenceCm??cm,{scorer:"model",_expertModel:model_generated_default})), {"dominantShare":0.52,"mixShare":0.07,"secondRel":0.75});
     let readout = null;
     if (opts._segmentReadout) {
       const mapMedians=computeMapMedians(cm.windows),medians=new Map();

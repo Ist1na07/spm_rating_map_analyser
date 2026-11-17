@@ -62,6 +62,7 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
   await chart(mapText);let state=await checkPercentages();assert.deepEqual(state.solid,state.expected);assert.equal(state.profile,'detail');assert.equal(state.calls,1);assert.equal(state.ratings,1);
   const pressure=await page.evaluate(()=>__tags.at(-1).modelInfo.breakPolicy);
   assert.equal(pressure.id,'sustained-native-demand-r1');assert.equal(pressure.ratingUsed,true);
+  assert.equal(await page.evaluate(()=>__tags.at(-1).modelInfo.segmentation.id),'meter-aware-snap-r1');
   assert(settingsRequests.length>0);
   assert(settingsRequests.every(r=>r.from===counterName&&r.command===`getSettings:${counterName}`));
   await page.waitForFunction(()=>document.querySelector('#settings-warning').textContent.includes('Detailed defaults'));
@@ -179,6 +180,21 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
    }
    await change({algorithm:'SPM Rating v1.2.0-Compact'});
   }
+  // Optional local regression chart; its contents never enter the repository.
+  if(process.argv[4]){
+   const example=fs.readFileSync(process.argv[4],'utf8');
+   for(const model of ['SPM Rating v1.2.0-Detailed','SPM Rating v1.2.0-Compact']){
+    await change({algorithm:model});
+    for(const [mods,bpm] of [['HT','100'],['','133'],['DT','200']]){
+     await chart(example,mods);game.send(JSON.stringify(frame(mods,136000,true)));
+     await page.waitForFunction(bpm=>document.querySelector('#seg-bpm').textContent===bpm,bpm);
+     assert.equal(await page.locator('#seg-tag').textContent(),'Chordjack');
+     assert((await page.evaluate(()=>__tags.at(-1).modelInfo.cadencePolicy)).includes('type-conditional observed action periods'));
+     await page.waitForTimeout(600);
+     await page.screenshot({path:path.join(output,`action-clock-${model.includes('Compact')?'compact':'detail'}-${mods||'NM'}.png`)});
+    }
+   }
+  }
   const easy='osu file format v14\n[General]\nMode:3\n[Difficulty]\nCircleSize:7\nOverallDifficulty:5\n[TimingPoints]\n0,500,4,2,1,100,1,0\n[HitObjects]\n'+Array.from({length:12},(_,i)=>`36,192,${1000+i*4000},1,0,0:0:0:0:`).join('\n');
   await change({uiStyle:'Rating first',algorithm:'SPM Rating v1.2.0-Detailed'});
   await chart(easy);assert.equal(await page.locator('#rc-dan').textContent(),'< 0.50');
@@ -186,6 +202,6 @@ const {fixture,patternFixture,filesUnder}=require('./helpers.cjs');
   const r=await page.evaluate(()=>__tags.at(-1));assert.equal(r.modelInfo.version,'1.2.4');
   assert.equal(r.modelInfo.localExpert,'original56-joint-fixed-ridge01');
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS',initialProtectedParents:pressure.protectedParents,scenarios:['b311c40 pressure-aware Break policy and retuned local expert','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','710px full-width chips and natural narrow wrapping','430px and 380px layout','Minimal/Compact','DT and paused playback','native 4K/6K classification, percentages, live segments, difficulty and timeline; NM/DT/HT','numeric <0.50'],screenshots:output},null,2));
+  console.log(JSON.stringify({result:'PASS',initialProtectedParents:pressure.protectedParents,scenarios:['d2bbb90 action clocks, musical segmentation and retained pressure-aware Break policy','150/200 and DT225/300 live segment cadence','Wildcard support is not a fabricated zero','no Burden prefix','Hybrid proportions normalized to 100 without mutating classifier output','nested/space settings paths with late tosu injection','settings-error visibility and recovery without changing the model','raw-curve reuse','Detailed/Compact live switch','smoothing and resize invariance','710px full-width chips and natural narrow wrapping','430px and 380px layout','Minimal/Compact','DT and paused playback','native 4K/6K classification, percentages, live segments, difficulty and timeline; NM/DT/HT','numeric <0.50'],screenshots:output},null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

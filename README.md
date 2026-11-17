@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.3
+# SPM Map Analyser v1.2.4
 
 A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
 
@@ -43,12 +43,14 @@ The map is automatically split into sections. **7K** retains the detailed taxono
 
 What you get from it:
 
-- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `b311c40`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
+- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `d2bbb90`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
 - **Overall 4K/6K tags** — the upstream dominant morphology is solid; secondary classes are outlined. Percentages show normalized local morphology support weighted by duration, relative physical effort and concentration. The five raw shares sum to 100% before rounding; this is a different measure from 7K difficulty-integral burden. These classifiers do not consume the Detailed/Compact rating field
 - **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and, for Chordstream / Jack / Speed / Density / Coordination, an equivalent BPM (number first, without a BPM suffix)
 - **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
 
-**Classifier source:** the pinned [b311c40 snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/src/index.cjs) retains the jointly retuned 56D RC/LN experts, fixed whole-map reference prior, static-hand false chordstream exclusion, LN Wildcard rest exemption and stable tempo plateaus. It includes unreleased changes beyond the published v1.2.4 bundle; `modern` remains a separate opt-in candidate.
+**Classifier source:** the pinned [d2bbb90 snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/src/index.cjs) retains the jointly retuned 56D RC/LN experts, fixed whole-map reference prior, static-hand false chordstream exclusion, LN Wildcard rest exemption and stable tempo plateaus. It includes unreleased changes beyond the published v1.2.4 bundle; `modern` remains a separate opt-in candidate.
+
+**Action cadence and musical cuts:** 7K measures type-specific same-hand Jack backbones, same-finger rearticulations or within-hand substitution streams. Interleaved/filler notes no longer inflate the wrong clock; unsupported scalar tempos are omitted, not replaced by song BPM or archived grid guesses. Before classification, suitable change candidates snap to valid measure boundaries within one beat, recomputing segment extras and decisions while retaining the frozen whole-map reference's original cuts. Type weights, difficulty integrands and native 4K/6K morphology stay unchanged. Boundaries, tags and whole-map percentages can change; see [integration and tradeoffs](CLASSIFIER.md).
 
 **Pressure-aware Break repair:** the same Detailed/Compact raw demand now participates in soft-rest decisions before aggregation. Switching rating models can therefore change local Break boundaries; smoothing cannot. Long head gaps and time after the last head do not extend pressure evidence. No additional rating pass is needed. See [CLASSIFIER.md](CLASSIFIER.md).
 
@@ -101,7 +103,7 @@ Three layouts under **UI Style**:
 
 ## Usage
 
-1. Download the [v1.2.3 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.3 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
+1. Download the [v1.2.4 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.4 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
 
@@ -135,6 +137,12 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
+
+### v1.2.4
+
+- Vendor classifier `d2bbb90`: type-conditional action BPM with unsupported periods omitted, plus meter-aware pre-classification cuts on stable 7K.
+- Preserve ratings, dans, frontend cadence whitelist and tag/percentage presentation; no expert refit or extra rating pass.
+- Bump the cache/model identity to clear obsolete analysis at startup; verify both models, NM/HT/DT and 4K/6K/7K.
 
 ### v1.2.3
 
@@ -238,7 +246,7 @@ Run the checked-in regression tests from a Git checkout with Node 20 or newer:
 
 ```sh
 node --test tests/regression.test.cjs tests/cache.test.cjs
-# Optional: use your own local datasets/maps and classifier runtime source pinned to `b311c40`.
+# Optional: use your own local datasets/maps and classifier runtime source pinned to `d2bbb90`.
 node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
 ```
 
@@ -250,7 +258,7 @@ The tests compare ratings against the original `1e99e4d` engine and check the ne
 
 - [tosu](https://tosu.app) — the runtime this overlay runs on
 - [SPM Rating](https://github.com/Ist1na07/SPMRating) — the difficulty algorithm
-- [SPMTagClassifier b311c40](https://github.com/Ist1na07/SPMTagClassifier/tree/b311c408ef02d6705d30b51a4ea789d3e86d2976) — the pattern classifier and whole-map burden integration
+- [SPMTagClassifier d2bbb90](https://github.com/Ist1na07/SPMTagClassifier/tree/d2bbb90e7ea685e5345cecf91e176c64dbed0e80) — the pattern classifier and whole-map burden integration
 - [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — the RC / long-note sub-model
 
 ## License

@@ -1,11 +1,63 @@
 # Classifier source and integration
 
 `tag_engine.js` is the complete, unmodified `dist/tag-engine.js` from
-[SPMTagClassifier commit b311c40](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/dist/tag-engine.js),
-full commit `b311c408ef02d6705d30b51a4ea789d3e86d2976`. Its package version is **1.2.4**,
-but this commit includes the unreleased local-expert retune and pressure-aware
-Break repair; the published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
-see [LICENSE](LICENSE). The analyser version is **v1.2.2**.
+[SPMTagClassifier commit d2bbb90](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/dist/tag-engine.js),
+full commit `d2bbb90e7ea685e5345cecf91e176c64dbed0e80`. Its package version is **1.2.4**,
+but this snapshot also includes unreleased type-specific action cadence and
+meter-aware segmentation, on top of the local-expert retune and pressure-aware
+Break repair. The published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
+see [LICENSE](LICENSE). The analyser version is **v1.2.4**.
+
+## d2bbb90: action cadence and music-aware cuts
+
+The analyser consumes the exact static browser bundle, without patching its
+weights, gates, periods or output. The default stable 7K call activates both
+new mechanisms; it does not select `classic` or `modern`.
+
+- Chordjack measures supported same-hand coactive-backbone rearticulations;
+  Minijack measures same-finger rearticulations. Interleaved opposite-hand
+  notes and common-finger Anchor embellishments do not double the Jack clock.
+- Dense/Fast Chordstream measures the union of within-hand substitution
+  events. Speed, Coordination and Density use supported head articulation.
+  Equivalent BPM still means `15000 / intervalMs`, not song BPM. The upstream
+  bundle also measures Tech/Wildcard, but the established frontend whitelist
+  continues to hide those readouts.
+- Jack and Chordstream require both admissible thumb assignments to support
+  the period. Unsupported scalar periods are omitted, not replaced by old grid estimates. The UI and
+  compressed cache preserve the resulting missing `equivBpm` field.
+- Primary and secondary branches may have different cadence evidence;
+  `evidence.secondaryCadence` records the latter. The frontend still displays
+  the primary tag's BPM only, following its existing layout. Research evidence
+  is omitted from disk snapshots as before; the UI's tags and BPM are lossless.
+- Before classification, existing candidate cuts may snap to a valid measure
+  boundary within one beat. Meter, red-line phase, omit-first-bar flags and
+  source-millisecond ownership are respected. Inherited SV does not reset
+  the grid; missing timing, physical gaps and headless held regions are not
+  blindly forced onto it. This is not a cut at every measure.
+- New cut positions recompute extras and expert decisions, while the frozen
+  whole-map reference retains its original segmentation and shared feature
+  windows. Local tags, boundaries and whole-map percentages can therefore
+  change, including on the unrated stable 7K path. Type W/b and the continuous
+  difficulty-integral recipe are unchanged; no additional rating call is made.
+
+`modelInfo.segmentation.id` is `meter-aware-snap-r1`, with `maxMoveBeats:1`.
+`evidence.cadence`, `actions` and `musicalStart/End` expose the measurement and
+boundary provenance in the full classifier result. Native 4K/6K morphology,
+classic/modern cadence policies and raw legacy classification remain intact;
+the maintained parser additionally preserves meter/omit-first-bar metadata.
+
+Upstream's local Chordjack example at source time 136 s changes from 263 to
+133 BPM at NM, with 100 at HT and 200 at DT. This was reproduced using both
+rating models in the analyser. Upstream reports a retrospective six-chart
+rated segment accuracy change from 72.3687% to 73.3754%, but Detailed whole-map
+macro-F1 falls from 58.7703% to 58.4853%, while Compact rises from 56.9551% to
+57.2801%. Scalar-tempo coverage decreases; HT still has a known opening-rest
+error. These are upstream development comparisons, not accuracy measured by
+our integration tests. See the pinned [action/music report](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/research/action_clock/README.md).
+
+Version **1.2.4** and cache revision **tag-d2bbb90** invalidate previous cached
+classification at startup. The snapshot format and all rating/dan models stay
+unchanged.
 
 ## Default 7K now uses the retuned local expert
 
@@ -13,8 +65,8 @@ The overlay calls the stable path without `classic` or `modern` overrides.
 The selected original 56-dimensional RC/LN W/b parameters are
 `original56-joint-fixed-ridge01`: fixed gain 1.4, ridge 0.1. The old reference
 predictor remains fixed as the whole-map integral prior, matching upstream's
-training/deployment contract. Unlike the previous v1.2.3 integration, local
-scores and labels can change.
+training/deployment contract. These W/b parameters were adopted at `b311c40`;
+`d2bbb90` keeps them, but new boundaries can change the inputs and decisions.
 
 The same pinned build also includes the LN Wildcard low-fit rest exemption,
 static-hand false chordstream exclusion under both thumb assignments, and
@@ -37,8 +89,9 @@ low-fit rest gate. A single spike is not sufficient.
 Head-to-head gaps of 2500 ms or more and time after the last head do not extend
 pressure evidence. Initial marked/empty rests and sparse handling remain in
 place. The fixed whole-map reference prior and local type W/b are unchanged.
-Actions without rating input, `classic`, `legacy`, `modern` and native 4K/6K
-retain their prior behavior.
+For that pressure repair, actions without rating input retained their prior
+behavior. The newer music-aware cuts now also affect unrated stable 7K;
+`classic`, `legacy`, `modern` and native 4K/6K retain their classification paths.
 
 Switching Detailed/Compact may now change local Break boundaries as well as
 whole-map tags and percentages. Raw field reuse still needs only one rating
@@ -106,7 +159,7 @@ branches into main tags. The tag row uses the full panel width and wraps only
 when its actual contents no longer fit.
 
 The continuous integral, support definition, LN interval union and exact
-endpoint rules are in the pinned [perception contract](https://github.com/Ist1na07/SPMTagClassifier/blob/b311c408ef02d6705d30b51a4ea789d3e86d2976/docs/perception.md).
+endpoint rules are in the pinned [perception contract](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/docs/perception.md).
 Detailed uses alpha=2, beta=1; Compact uses alpha=4, beta=1.5. Both use a 1000 ms
 action window and hold credit 1. Concrete branch percentages can overlap; they
 are not accuracy, elapsed-time shares or a normalized partition.

@@ -7,8 +7,8 @@ const {fixture}=require('./helpers.cjs');
  const root=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'spm-frontend-'));
  const probe=`window.__front={
   bpm:segmentBpm,
-  install(tags,duration=1000){
-   cachedTagResult.segments=tags.map((tag,i)=>({tag,start:1000+i*duration,end:1000+(i+1)*duration,equivBpm:180,confidence:.87,family:'rc'}));
+  install(tags,duration=1000,bpm=180){
+   cachedTagResult.segments=tags.map((tag,i)=>({tag,start:1000+i*duration,end:1000+(i+1)*duration,equivBpm:bpm,confidence:.87,family:'rc'}));
    cachedTagResult.map.firstNote=1000;cachedTagResult.map.lastNote=1000+tags.length*duration;
    rebuildCurves();showResult(cachedResult);
   },
@@ -90,6 +90,13 @@ const {fixture}=require('./helpers.cjs');
   const labels=await page.evaluate(()=>[getComputedStyle(document.querySelector('#seg-bpm'),'::after').content,getComputedStyle(document.querySelector('#seg-conf'),'::before').content]);
   assert(labels.every(s=>!s.includes('BPM')&&!s.includes('CONF')));
   assert.equal(await page.evaluate(()=>__front.bpm({tag:'speed',equivBpm:NaN})), '');
+  // An unsupported action period must clear the preceding numeric readout.
+  await page.evaluate(()=>{__front.install(['speed'],4300);__front.at(2000);});
+  assert.equal(await page.locator('#seg-bpm').textContent(),'180');
+  await page.evaluate(()=>{__front.install(['speed'],4300,null);__front.at(2000);});
+  assert.equal(await page.locator('#seg-bpm').textContent(),'');
+  assert.equal(await page.locator('#seg-tag').textContent(),'Speed');
+  await page.evaluate(tags=>__front.install(tags),tags);
   await page.evaluate(()=>__front.at(1500));
   const graph=await page.locator('#curve-canvas').boundingBox();
   await page.mouse.move(graph.x+graph.width*.4,graph.y+graph.height*.5);
