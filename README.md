@@ -4,7 +4,7 @@ A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time di
 
 [中文](README_zh.md)
 
-![Default view](screenshots/default-7k.png)
+![Default view: Dan first, Aurora](screenshots/default-7k.png)
 
 ## Features
 
@@ -94,7 +94,7 @@ Three layouts under **UI Style**:
 
 ![Aurora, rating first](screenshots/aurora-7k.png)
 ![High Contrast, dan first](screenshots/high-contrast-dan-first.png)
-![Minimal](screenshots/minimal-7k.png)
+![Minimal with borderless segment readout](screenshots/minimal-7k.png)
 
 ### Other
 

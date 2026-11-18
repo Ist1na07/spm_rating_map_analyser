@@ -44,4 +44,9 @@ test('v1.2.5 metadata and default-on setting are delivered together',()=>{
     const defaults=Object.fromEntries(settings.map(s=>[s.uniqueID,s.value]));
     assert.deepEqual([defaults.uiStyle, defaults.colorScheme, defaults.danDisplayStyle, defaults.curveSmoothing],
         ['Dan first', 'Aurora', 'Signs (-/+)', 'Medium']);
+    for (const setting of settings.filter(s=>s.type==='options' && s.uniqueID!=='curveSmoothing')) {
+        assert.equal(setting.options[0],setting.value,setting.uniqueID);
+    }
+    assert.deepEqual(settings.find(s=>s.uniqueID==='curveSmoothing').options,
+        ['Off', 'Light', 'Medium', 'Strong', 'Max']);
 });

@@ -135,6 +135,11 @@ const {fixture}=require('./helpers.cjs');
   assert(!await page.locator('#seg-diff .sd-star').isVisible());
   assert.equal(await page.locator('#seg-diff .sd-star').textContent(),'');
   assert(await page.locator('#seg-diff .sd-dan').isVisible());
+  const danStyle=await page.locator('#seg-diff').evaluate(n=>{
+   const style=getComputedStyle(n);return [style.borderTopWidth,style.backgroundColor];
+  });
+  assert.deepEqual(danStyle,['0px','rgba(0, 0, 0, 0)']);
+
   assert.match(await page.locator('#seg-diff').getAttribute('title'),/^RC segment dan: /);
   const fontSizes=await page.locator('#seg-bpm,#seg-tag,#seg-diff .sd-dan').evaluateAll(nodes=>nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
   assert(fontSizes.every(px=>px>=17),JSON.stringify(fontSizes));

@@ -8,6 +8,8 @@
   in Minimal, and restored stars on switching back to a full style. Settings
   schema and overlay fallback both default to Dan first / Aurora / Signs (-/+) /
   Medium. The Medium smoothing kernel matches the previous Light value.
+  The final Minimal layout also verifies transparent, borderless dan text.
+  The default leads each dropdown except the ordered smoothing scale.
 - Minimal places the shared live row beside the dans at 488 px and below at
   300 px. Playhead updates reach the readout. Missing time clears it, Break
   and the two segment visibility settings are respected, and curve/timeline

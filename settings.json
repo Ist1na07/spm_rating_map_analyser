@@ -51,8 +51,8 @@
     "title": "UI Style",
     "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: dans, overall tags and a live segment readout (BPM, pattern and dan) without stars, graph or timeline",
     "options": [
-      "Rating first",
       "Dan first",
+      "Rating first",
       "Minimal"
     ],
     "value": "Dan first"
@@ -75,8 +75,8 @@
     "title": "Color Scheme",
     "description": "Overlay palette. Aurora is the new v1.0.1 theme; High Contrast is tuned for readability over bright gameplay",
     "options": [
-      "Default Dark",
       "Aurora",
+      "Default Dark",
       "High Contrast"
     ],
     "value": "Aurora"
@@ -87,8 +87,8 @@
     "title": "Dan Display Style",
     "description": "Within-dan position: three segments (low/high), signs (-/+) or decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K)",
     "options": [
-      "Thirds (low/high)",
       "Signs (-/+)",
+      "Thirds (low/high)",
       "Number"
     ],
     "value": "Signs (-/+)"

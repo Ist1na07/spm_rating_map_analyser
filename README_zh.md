@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-![默认界面](screenshots/default-7k.png)
+![默认界面：Dan first，Aurora](screenshots/default-7k.png)
 
 ## 主要功能
 
@@ -94,7 +94,7 @@
 
 ![Aurora 配色，Rating first](screenshots/aurora-7k.png)
 ![High Contrast 配色，Dan first](screenshots/high-contrast-dan-first.png)
-![Minimal 风格](screenshots/minimal-7k.png)
+![Minimal：无框分段读数](screenshots/minimal-7k.png)
 
 ### 其他
 
