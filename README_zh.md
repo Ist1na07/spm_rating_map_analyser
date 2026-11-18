@@ -35,7 +35,7 @@
 
 - 面板下半部分的难度随时间变化图，带跟随进度的播放游标；游戏暂停时游标变为暂停标记
 - 同时含常规与长键段落的谱面会画**两条线**——**RC**（冷色）与 **LN**（暖色），一眼区分流段和长键段；两条线与顶部评级使用同一套校准尺度
-- **曲线平滑** 消除原始 400ms 数值的锯齿。强度可从 *Off* 调到 *Max*，单位是绘制的像素而不是秒，因此同一个档位在 30 秒短图和 15 分钟马拉松上看起来一致。峰值会保留：默认档（*Medium*）保留 86% 的原始峰值高度，同时去掉约 90% 的粗糙度（在 332 张 7K 谱面语料上实测）。切换档位不需要重新分析谱面
+- **曲线平滑** 消除原始 400ms 数值的锯齿。强度可从 *Off* 调到 *Max*，单位是绘制的像素而不是秒，因此同一个档位在 30 秒短图和 15 分钟马拉松上看起来一致。默认 **Medium** 等同旧版 **Light**（0.75 px）；要恢复旧版 Medium 的效果，选 **Strong**。切换档位不需要重新分析谱面
 
 ### 键型分类
 
@@ -88,7 +88,7 @@
 |------|------|
 | **Rating first** | 星数为头条数字，下方双卡片同时显示 RC／LN 星数和段位 |
 | **Dan first** | 段位为头条数字（mania 玩家最常引用的指标），星数移到旁边 |
-| **Minimal** | 保留摘要、段位与整谱标签；段位右侧显示当前段等效 BPM、键型、星数和段位，窄窗口改为上下排列。不显示曲线或时间轴 |
+| **Minimal** | 保留摘要、段位与整谱标签；段位右侧显示当前段等效 BPM、键型和段位，窄窗口改为上下排列。不显示曲线或时间轴 |
 
 **Panel Density** 提供 **Standard**、**Compact** 和 **Low profile**。Low profile 在较宽的窗口里把子难度移到主数值右侧，并压低曲线；保留时间轴色带，省略单独的图例。
 
@@ -128,17 +128,17 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Rating Algorithm | SPM Rating v1.2.0 的模型选择：**SPM Rating v1.2.0-Detailed**（完整模型）或 **SPM Rating v1.2.0-Compact**（轻量模型）。两者各有独立实测的段位节点，切换后当前谱面会立即重新计算 | Detailed |
 | Sub Difficulty Scheme | **Direct**：RC/LN 子难度始终来自新子模型；**Legacy v0.5.1**：LN 谱面的 LN 难度等于总难度 | Direct |
 | Local Analysis Cache | 本地压缩保存分析结果；核对编辑、清除不兼容版本；关闭时清空缓存 | 开 |
-| UI Style | **Rating first**、**Dan first** 或 **Minimal**（摘要、段位、整谱标签、当前段 BPM／键型／难度） | Rating first |
+| UI Style | **Rating first**、**Dan first** 或 **Minimal**（摘要、段位、整谱标签、当前段 BPM／键型／段位） | Dan first |
 | Panel Density | **Standard**、**Compact** 或 **Low profile**；矮视口自动适配 | Standard |
-| Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Default Dark |
-| Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字（+0.5 偏移：8.5 对应 8dan、11.5 对应 Gamma） | Thirds |
+| Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Aurora |
+| Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字（+0.5 偏移：8.5 对应 8dan、11.5 对应 Gamma） | Signs (-/+) |
 | Curve Smoothing | 难度曲线的平滑强度：Off、Light、Medium、Strong、Max | Medium |
 | UI Animations | 启用数字翻动、曲线平滑过渡与界面动效（关闭可降低 GPU/CPU 占用） | 开 |
 | Hide While Playing | 开始游玩后隐藏 overlay（结算界面会再次显示） | 关 |
 | Show Map Summary | 显示曲师/曲名/难度名/谱师/键数/BPM/物量/时长摘要行 | 开 |
 | Show Pattern Tags | 显示整体键型标签 | 开 |
 | Show Current Segment | 显示当前段键型与等效 BPM | 开 |
-| Show Segment Difficulty | 显示当前段的星数与段位（4K／6K／7K） | 开 |
+| Show Segment Difficulty | 显示当前段段位，非极简模式还显示星数（4K／6K／7K） | 开 |
 | Show Segment Timeline | 显示全谱键型色带 | 开 |
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
@@ -146,7 +146,8 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 
 ### v1.2.5
 
-- 极简模式在谱面段位右侧加入当前段 BPM、键型、星数与段位，窄窗口改为上下排列。
+- 极简模式把当前段 BPM、键型和段位放大并排，窄窗口下移到谱面段位下方；星数仅在完整模式显示。
+- 默认改为 Dan first、Aurora、Signs (-/+) 与 Medium 平滑（旧 Light 的效果），已保存的选项不覆盖。
 - 新增 Low profile，矮直播槽保留曲线和时间轴；排版还放不下时等比缩小面板，不再裁掉底部。
 - 取消旧版 380 px 最小宽度，修正窄窗口的摘要、缩放后的曲线悬停定位及暂停时的画布尺寸更新。
 

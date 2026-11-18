@@ -7,6 +7,7 @@ const {fixture}=require('./helpers.cjs');
  const root=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'spm-frontend-'));
  const probe=`window.__front={
   bpm:segmentBpm,
+  displayDefaults(){return [settings.uiStyle,settings.colorScheme,settings.danDisplayStyle,settings.curveSmoothing,smoothPx()];},
   install(tags,duration=1000,bpm=180){
    cachedTagResult.segments=tags.map((tag,i)=>({tag,start:1000+i*duration,end:1000+(i+1)*duration,equivBpm:bpm,confidence:.87,family:'rc'}));
    cachedTagResult.map.firstNote=1000;cachedTagResult.map.lastNote=1000+tags.length*duration;
@@ -35,7 +36,7 @@ const {fixture}=require('./helpers.cjs');
    window.__frames=0;const raf=window.requestAnimationFrame;
    window.requestAnimationFrame=fn=>raf.call(window,t=>{__frames++;fn(t);});
   });
-  let game,settingsSocket,settings={enableAnalysisCache:false,danDisplayStyle:'Number'};
+  let game,settingsSocket,settings={enableAnalysisCache:false};
   await page.route('http://localhost:24050/**',r=>r.fulfill({body:mapText,contentType:'text/plain',headers:{'Access-Control-Allow-Origin':'*'}}));
   await page.routeWebSocket('ws://localhost:24050/**',s=>{
    if(s.url().includes('/commands')){settingsSocket=s;s.onMessage(()=>s.send(JSON.stringify({message:settings})));}else game=s;
@@ -55,16 +56,20 @@ const {fixture}=require('./helpers.cjs');
   const counts=()=>page.evaluate(()=>[__ratingCalls,__tagCalls,__smoothCalls]);
   const idle=async()=>{const a=await page.evaluate(()=>__frames);await page.waitForTimeout(300);return (await page.evaluate(()=>__frames))-a;};
   assert.equal(await idle(),0,'paused renderer should stop after morph');
+  const oldLightPx=await page.evaluate(()=>SPMEngine.CURVE_SIGMA_PX.light);
+  assert.deepEqual(await page.evaluate(()=>__front.displayDefaults()),['Dan first','Aurora','Signs (-/+)','Medium',oldLightPx]);
+  assert(await page.locator('#container.ui-style-dan-first').isVisible());
+
   assert.deepEqual(await page.locator('#curve-header,#curve-legend,#curve-peak,#seg-dot').count(),0);
   async function change(next){settings={...settings,...next};settingsSocket.send(JSON.stringify({message:settings}));await page.waitForTimeout(500);}
   const before=await counts(),curves=await page.evaluate(()=>__front.curves());
-  await change({colorScheme:'Aurora',danDisplayStyle:'Signs (-/+)'});
+  await change({colorScheme:'Default Dark',danDisplayStyle:'Number'});
   assert.deepEqual(await counts(),before,'palette/dan-only changes must not rerun smoothing or engines');
   assert.equal(await page.evaluate(()=>__front.curves()),curves);
   assert.equal(await idle(),0);
   // Capture the real renderer before installing synthetic display-only segments.
   for(const [name,width,style,density,color] of [
-   ['default-7k',710,'Rating first','Standard','Default Dark'],
+   ['default-7k',710,'Dan first','Standard','Aurora'],
    ['aurora-7k',710,'Rating first','Standard','Aurora'],
    ['high-contrast-dan-first',430,'Dan first','Compact','High Contrast'],
    ['minimal-7k',430,'Minimal','Standard','Aurora']
@@ -127,10 +132,17 @@ const {fixture}=require('./helpers.cjs');
   await page.evaluate(()=>{__front.install(['dense chordstream','coordination','break','speed'],4300);__front.at(2300);__front.pinDifficulty();});
   assert.equal(await page.locator('#minimal-block > #seg-row').count(),1);
   assert(await page.locator('#seg-row').isVisible());assert(await page.locator('#seg-diff').isVisible());
+  assert(!await page.locator('#seg-diff .sd-star').isVisible());
+  assert.equal(await page.locator('#seg-diff .sd-star').textContent(),'');
+  assert(await page.locator('#seg-diff .sd-dan').isVisible());
+  assert.match(await page.locator('#seg-diff').getAttribute('title'),/^RC segment dan: /);
+  const fontSizes=await page.locator('#seg-bpm,#seg-tag,#seg-diff .sd-dan').evaluateAll(nodes=>nodes.map(n=>parseFloat(getComputedStyle(n).fontSize)));
+  assert(fontSizes.every(px=>px>=17),JSON.stringify(fontSizes));
+
   assert.equal(await page.locator('#seg-bpm').textContent(),'180');
   assert(!await page.locator('#seg-timeline').isVisible());
   const left=await page.locator('#min-ranks').boundingBox(),right=await page.locator('#seg-row').boundingBox();
-  assert(right.x>=left.x+left.width);
+  assert(right.x>=left.x+left.width && right.width>left.width);
   await page.screenshot({path:path.join(out,'minimal-488x168.png')});
   game.send(JSON.stringify(frame(6500)));
   await page.waitForFunction(()=>document.querySelector('#seg-tag').textContent==='Coordination');
@@ -153,6 +165,11 @@ const {fixture}=require('./helpers.cjs');
   const narrowRanks=await page.locator('#min-ranks').boundingBox(),narrowSeg=await page.locator('#seg-row').boundingBox();
   assert(narrowSeg.y>=narrowRanks.y+narrowRanks.height);
   await page.screenshot({path:path.join(out,'minimal-300x180.png')});
+
+  await change({uiStyle:'Rating first'});
+  await page.evaluate(()=>__front.pinDifficulty());
+  assert(await page.locator('#seg-diff .sd-star').isVisible());
+  assert.match(await page.locator('#seg-diff .sd-star').textContent(),/^\d+\.\d{2}$/);
 
   // Mimic the capture slot: keep the graph, live segment and timeline,
   // constrain by source height, then expand back without re-analysis.

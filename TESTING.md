@@ -4,6 +4,10 @@
   current segment and timeline fit without clipping. A 488 × 380 source uses
   height fitting when needed; a taller source restores the selected density
   and natural size. The explicit Low profile option also works in Dan first.
+- Follow-up: verified larger BPM/tag/dan text, no segment star or star tooltip
+  in Minimal, and restored stars on switching back to a full style. Settings
+  schema and overlay fallback both default to Dan first / Aurora / Signs (-/+) /
+  Medium. The Medium smoothing kernel matches the previous Light value.
 - Minimal places the shared live row beside the dans at 488 px and below at
   300 px. Playhead updates reach the readout. Missing time clears it, Break
   and the two segment visibility settings are respected, and curve/timeline

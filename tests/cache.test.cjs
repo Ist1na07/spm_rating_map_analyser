@@ -41,4 +41,7 @@ test('v1.2.5 metadata and default-on setting are delivered together',()=>{
     const settings=require('../settings.json');
     assert.equal(settings.find(s=>s.uniqueID==='enableAnalysisCache').value,true);
     assert.equal(settings.find(s=>s.uniqueID==='enableAnimations').value,true);
+    const defaults=Object.fromEntries(settings.map(s=>[s.uniqueID,s.value]));
+    assert.deepEqual([defaults.uiStyle, defaults.colorScheme, defaults.danDisplayStyle, defaults.curveSmoothing],
+        ['Dan first', 'Aurora', 'Signs (-/+)', 'Medium']);
 });

@@ -35,7 +35,7 @@ While playing, the overlay follows your position and shows the current section's
 
 - A graph of the map's difficulty over time, occupying the lower half of the panel, with a playhead cursor following your position; the playhead turns into a pause marker while the game is paused
 - Maps with both regular and hold sections draw **two lines** — **RC** (cool) and **LN** (warm) — so you can see at a glance which sections are stream-heavy and which are hold-heavy. Both lines are drawn on the same calibrated scale as the headline ratings
-- **Curve smoothing** removes the jaggedness of the raw per-400 ms values. The strength is adjustable from *Off* to *Max* and is measured in pixels of the drawn curve, so one setting looks the same on a 30-second chart and on a 15-minute marathon. Peaks survive: at the default (*Medium*) the curve keeps 86% of its original peak height while shedding about 90% of its roughness (measured over a 332-map 7K corpus). Changing the strength does not re-analyse the map
+- **Curve smoothing** removes the jaggedness of the raw per-400 ms values. The strength is adjustable from *Off* to *Max* and is measured in pixels of the drawn curve, so one setting looks the same on a 30-second chart and on a 15-minute marathon. The default **Medium** uses the previous **Light** curve (0.75 px); choose **Strong** to reproduce the previous **Medium**. Changing the strength does not re-analyse the map
 
 ### Pattern classification
 
@@ -88,7 +88,7 @@ Three layouts under **UI Style**:
 |-------|------------|
 | **Rating first** | The star rating is the headline number; RC/LN ratings and dans share paired cards below |
 | **Dan first** | The dan value is the headline (the metric mania players quote) and the star rating moves next to it |
-| **Minimal** | Summary, dans and overall tags, with live BPM, pattern, stars and dan to the right (or below at narrow widths). No graph or timeline |
+| **Minimal** | Summary, dans and overall tags, with live BPM, pattern and segment dan to the right (or below at narrow widths). No graph or timeline |
 
 **Panel Density** offers **Standard**, **Compact**, and **Low profile**. Low profile puts the sub-ratings beside the headline in wide slots, shortens the graph, and keeps the timeline band without its separate legend.
 
@@ -128,17 +128,17 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Rating Algorithm | SPM Rating v1.2.0 model variant: **SPM Rating v1.2.0-Detailed** (full model) or **SPM Rating v1.2.0-Compact** (lighter model). Each has its own measured dan nodes; changing it re-rates the current chart | Detailed |
 | Sub Difficulty Scheme | **Direct**: RC/LN sub-ratings always come from the new sub-models. **Legacy v0.5.1**: LN maps show LN difficulty equal to the total | Direct |
 | Local Analysis Cache | Persist compressed results locally; verify edits, clear incompatible versions; turning off clears cached data | On |
-| UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags + live BPM/pattern/difficulty) | Rating first |
+| UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags + live BPM/pattern/dan) | Dan first |
 | Panel Density | **Standard**, **Compact**, or **Low profile**; auto-fit short viewports | Standard |
-| Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Default Dark |
-| Dan Display Style | How the dan value is shown: thirds (low/high), signs (-/+) or a decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K) | Thirds |
+| Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Aurora |
+| Dan Display Style | How the dan value is shown: thirds (low/high), signs (-/+) or a decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K) | Signs (-/+) |
 | Curve Smoothing | How much the difficulty curve is smoothed: Off, Light, Medium, Strong, Max | Medium |
 | UI Animations | Enable digit rolling, curve morphing, and UI transitions (turn off to reduce GPU/CPU usage) | On |
 | Hide While Playing | Hide the overlay after gameplay starts (shown again on the results screen) | Off |
 | Show Map Summary | Show the song/difficulty/mapper/keys/BPM/objects/length line | On |
 | Show Pattern Tags | Show the overall pattern chips | On |
 | Show Current Segment | Show the live section pattern and equivalent BPM | On |
-| Show Segment Difficulty | Show the live section's star rating and dan (4K/6K/7K) | On |
+| Show Segment Difficulty | Show the live section's dan; full modes also show its star rating (4K/6K/7K) | On |
 | Show Segment Timeline | Show the full-map pattern colour band | On |
 | Show Break Segments | Show "Break" during rest sections | On |
 
@@ -146,7 +146,8 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 
 ### v1.2.5
 
-- Minimal shows live segment BPM, tag, stars and dan beside the map's dans; narrow widths stack the readouts.
+- Minimal groups larger live BPM, tag and segment dan beside the map ranks; narrow widths stack the groups. Stars remain in the full layouts.
+- Display defaults: Dan first, Aurora, Signs (-/+), Medium smoothing (previous Light). Existing saved choices are retained.
 - Low profile keeps the graph and timeline for short OBS slots. Very short sources fit by proportionally scaling the panel after reflow, instead of clipping.
 - Narrow panels no longer force a 380 px minimum. Summary facts, hover coordinates and paused canvas resizing follow the viewport.
 

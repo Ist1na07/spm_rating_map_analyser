@@ -49,13 +49,13 @@
     "uniqueID": "uiStyle",
     "type": "options",
     "title": "UI Style",
-    "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: dans, overall tags and a compact live segment readout without the graph or timeline",
+    "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: dans, overall tags and a live segment readout (BPM, pattern and dan) without stars, graph or timeline",
     "options": [
       "Rating first",
       "Dan first",
       "Minimal"
     ],
-    "value": "Rating first"
+    "value": "Dan first"
   },
   {
     "uniqueID": "panelDensity",
@@ -79,7 +79,7 @@
       "Aurora",
       "High Contrast"
     ],
-    "value": "Default Dark"
+    "value": "Aurora"
   },
   {
     "uniqueID": "danDisplayStyle",
@@ -91,13 +91,13 @@
       "Signs (-/+)",
       "Number"
     ],
-    "value": "Thirds (low/high)"
+    "value": "Signs (-/+)"
   },
   {
     "uniqueID": "curveSmoothing",
     "type": "options",
     "title": "Curve Smoothing",
-    "description": "Softens the difficulty curve. Off draws the raw per-400ms values; higher settings remove more jaggedness while keeping the peaks",
+    "description": "Softens the difficulty curve. Off draws raw per-400 ms values; Medium now matches the previous Light setting",
     "options": [
       "Off",
       "Light",
@@ -159,7 +159,7 @@
     "uniqueID": "showSegmentDiff",
     "type": "checkbox",
     "title": "Show Segment Difficulty",
-    "description": "Display the current segment's difficulty (star rating and dan) next to its pattern tag for 4K/6K/7K; needs Show Current Segment",
+    "description": "Display the segment dan and, outside Minimal, its star rating for 4K/6K/7K; needs Show Current Segment",
     "options": [],
     "value": true
   },

@@ -967,30 +967,45 @@ body.no-motion #summary-main.mq-run {
 }
 
 /* ---------- Minimal UI Style ---------- */
-#minimal-block { display: none; gap: 6px 12px; align-items: center; }
+#minimal-block { display: none; gap: 6px 12px; align-items: stretch; }
 #container.ui-style-minimal #minimal-block { display: flex; }
-#min-ranks { min-width: 0; flex: 1 1 48%; display: grid; gap: 4px; }
+#min-ranks { min-width: 0; flex: 1 1 36%; display: grid; align-content: center; gap: 4px; }
 #minimal-block #seg-row {
-    flex: 1 1 48%;
+    flex: 2 1 64%;
     min-width: 0;
-    justify-content: flex-end;
-    align-content: center;
-    gap: 3px 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
     margin: 0;
-    padding: 4px 0 4px 10px;
-    border-inline-start: 1px solid var(--rule);
+    padding: 6px 10px;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface);
 }
-#minimal-block #seg-row.is-break { padding-inline-end: 9px; }
-#minimal-block #seg-bpm, #minimal-block #seg-tag { font-size: 13px; }
-#minimal-block #seg-conf, #minimal-block #seg-tag .secondary, #minimal-block #seg-dur { display: none; }
-#minimal-block #seg-secondary { flex: 0 0 100%; justify-content: flex-end; }
-#minimal-block #seg-diff { padding: 0; background: none; border: 0; }
-#minimal-block #seg-diff .sd-star { font-size: 13px; }
+#minimal-block #seg-bpm { font-size: clamp(17px, 4.1vw, 22px); }
+#minimal-block #seg-tag {
+    flex: 1 1 auto;
+    font-size: clamp(15px, 3.6vw, 21px);
+    letter-spacing: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+#minimal-block #seg-conf, #minimal-block #seg-tag .secondary,
+#minimal-block #seg-dur, #minimal-block #seg-diff .sd-star { display: none; }
+#minimal-block #seg-secondary { margin: 0; }
+#minimal-block #seg-secondary:not(:has(#seg-diff:not(.hidden))) { display: none; }
+#minimal-block #seg-diff { padding: 3px 7px; border: 0; }
+#minimal-block #seg-diff .sd-dan {
+    font-size: clamp(16px, 3.9vw, 22px);
+    font-weight: 700;
+    line-height: 1.1;
+}
+#minimal-block #seg-diff.rc .sd-dan { color: var(--rc); }
+#minimal-block #seg-diff.ln .sd-dan { color: var(--ln); }
 @media (max-width: 340px) {
-    #container.ui-style-minimal #minimal-block { flex-direction: column; align-items: stretch; }
-    #minimal-block #seg-row { flex-basis: auto; padding: 5px 0 0; border-inline-start: 0; border-top: 1px solid var(--rule); }
-    #minimal-block #seg-row.is-break { padding: 4px 9px; }
-    #minimal-block #seg-secondary { flex: none; }
+    #container.ui-style-minimal #minimal-block { flex-direction: column; }
+    #minimal-block #seg-row { flex-basis: auto; padding: 5px 8px; }
 }
 #container.ui-style-minimal #header,
 #container.ui-style-minimal #dan-row,
@@ -1465,9 +1480,9 @@ body.no-motion #summary-main.mq-run {
         algorithm: 'SPM Rating v1.2.0-Detailed',
         subDifficultyScheme: 'Direct (RC/LN sub-model)',
         enableAnalysisCache: true,
-        danDisplayStyle: 'Thirds (low/high)',
-        colorScheme: 'Default Dark',
-        uiStyle: 'Rating first',
+        danDisplayStyle: 'Signs (-/+)',
+        colorScheme: 'Aurora',
+        uiStyle: 'Dan first',
         panelDensity: 'Standard',
         curveSmoothing: 'Medium',
         enableAnimations: true,
@@ -1506,15 +1521,15 @@ body.no-motion #summary-main.mq-run {
         }
     }
 
+    // Display presets only. Default Medium uses the previous Light kernel.
+    const CURVE_SMOOTHING_PX = {
+        Off: 0, Light: 0.35, Medium: 0.75, Strong: 2, Max: 8,
+    };
+
     function smoothPx() {
-        switch (settings.curveSmoothing) {
-            case 'Off': return 0;
-            case 'Light': return SPMEngine.CURVE_SIGMA_PX.light;
-            case 'Medium': return SPMEngine.CURVE_SIGMA_PX.medium;
-            case 'Strong': return SPMEngine.CURVE_SIGMA_PX.strong;
-            case 'Max': return SPMEngine.CURVE_SIGMA_PX.extreme;
-            default: return SPMEngine.CURVE_SIGMA_PX.medium;
-        }
+        const preset = settings.curveSmoothing;
+        return Object.hasOwn(CURVE_SMOOTHING_PX, preset)
+            ? CURVE_SMOOTHING_PX[preset] : CURVE_SMOOTHING_PX.Medium;
     }
 
     let ws = null;
@@ -2343,16 +2358,23 @@ body.no-motion #summary-main.mq-run {
         const danTxt = stat.dan != null
             ? SPMEngine.danLevelToLabel(stat.dan, cachedKeyCount, kind, danStyleKey())
             : '';
+        const minimal = uiStyleKey() === 'minimal';
+        if (minimal && !danTxt) {
+            elSegDiff.classList.add('hidden');
+            elSegDiff.removeAttribute('title');
+            return;
+        }
         const wasHidden = elSegDiff.classList.contains('hidden');
         elSegDiff.className = kind === 'LN' ? 'ln' : 'rc';
-        setRollingDigits(elSegDiffStar, stat.mean.toFixed(2));
+        setRollingDigits(elSegDiffStar, minimal ? '' : stat.mean.toFixed(2));
         setMorphText(elSegDiffDan, danTxt);
         if (settings.enableAnimations && wasHidden) {
             elSegDiff.classList.add('pill-pop');
         }
-        elSegDiff.title = 'Segment difficulty (mean of the section curve: '
-            + stat.mean.toFixed(2) + '\u2605)'
-            + (danTxt ? '\n' + kind + ' dan: ' + danTxt : '');
+        elSegDiff.title = minimal ? kind + ' segment dan: ' + danTxt
+            : 'Segment difficulty (mean of the section curve: '
+                + stat.mean.toFixed(2) + '\u2605)'
+                + (danTxt ? '\n' + kind + ' dan: ' + danTxt : '');
     }
 
     function segKind(idx) {
