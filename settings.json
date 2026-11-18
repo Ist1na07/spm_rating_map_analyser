@@ -49,7 +49,7 @@
     "uniqueID": "uiStyle",
     "type": "options",
     "title": "UI Style",
-    "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: only the dans (total, RC, LN) and the overall pattern tags",
+    "description": "Rating first: the star rating is the headline number. Dan first: the dan value is the headline and the star rating moves next to it. Minimal: dans, overall tags and a compact live segment readout without the graph or timeline",
     "options": [
       "Rating first",
       "Dan first",
@@ -61,10 +61,11 @@
     "uniqueID": "panelDensity",
     "type": "options",
     "title": "Panel Density",
-    "description": "Standard is the full-size layout; Compact shrinks fonts, spacing and the curve to cover less of the screen",
+    "description": "Standard is full-size; Compact is tighter; Low profile keeps the full-mode graph and timeline in a shorter layout. Short browser viewports use Low profile automatically",
     "options": [
       "Standard",
-      "Compact"
+      "Compact",
+      "Low profile"
     ],
     "value": "Standard"
   },

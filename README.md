@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.4
+# SPM Map Analyser v1.2.5
 
 A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
 
@@ -88,9 +88,9 @@ Three layouts under **UI Style**:
 |-------|------------|
 | **Rating first** | The star rating is the headline number; RC/LN ratings and dans share paired cards below |
 | **Dan first** | The dan value is the headline (the metric mania players quote) and the star rating moves next to it |
-| **Minimal** | Just the summary line, the dans (total with the type badge, RC and LN) and the overall pattern tags |
+| **Minimal** | Summary, dans and overall tags, with live BPM, pattern, stars and dan to the right (or below at narrow widths). No graph or timeline |
 
-**Panel Density** shrinks the whole panel: **Compact** uses smaller fonts, tighter spacing and a flatter curve to cover less of the screen.
+**Panel Density** offers **Standard**, **Compact**, and **Low profile**. Low profile puts the sub-ratings beside the headline in wide slots, shortens the graph, and keeps the timeline band without its separate legend.
 
 ![Aurora, rating first](screenshots/aurora-7k.png)
 ![High Contrast, dan first](screenshots/high-contrast-dan-first.png)
@@ -103,9 +103,15 @@ Three layouts under **UI Style**:
 
 ## Usage
 
-1. Download the [v1.2.4 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.4 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
+1. Download the [v1.2.5 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.5 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
 2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
 3. Launch tosu — find **SPM Map Analyser** in the dashboard.
+
+### Fit a short OBS slot without using Minimal
+
+In the [OBS Browser Source](https://obsproject.com/kb/browser-source), set **Width** and **Height** to the wanted source viewport (try **500 × 180**). Keep **Rating first** or **Dan first**. At 300 px high or less the overlay switches to **Low profile** automatically, then scales down only if the content still exceeds the viewport. It restores the selected density on taller sources. Pick **Panel Density → Low profile** to use the short layout on a taller source.
+
+If the source is already cropped in the scene, remove the crop: OBS scene transforms and crops do not resize the web viewport. Change the Browser Source dimensions first, then position or scale the source in the scene. Allow more height if the text looks too small.
 
 ### Settings errors or small rating differences after upgrading
 
@@ -122,8 +128,8 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Rating Algorithm | SPM Rating v1.2.0 model variant: **SPM Rating v1.2.0-Detailed** (full model) or **SPM Rating v1.2.0-Compact** (lighter model). Each has its own measured dan nodes; changing it re-rates the current chart | Detailed |
 | Sub Difficulty Scheme | **Direct**: RC/LN sub-ratings always come from the new sub-models. **Legacy v0.5.1**: LN maps show LN difficulty equal to the total | Direct |
 | Local Analysis Cache | Persist compressed results locally; verify edits, clear incompatible versions; turning off clears cached data | On |
-| UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags only) | Rating first |
-| Panel Density | **Standard** or **Compact** panel size | Standard |
+| UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags + live BPM/pattern/difficulty) | Rating first |
+| Panel Density | **Standard**, **Compact**, or **Low profile**; auto-fit short viewports | Standard |
 | Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Default Dark |
 | Dan Display Style | How the dan value is shown: thirds (low/high), signs (-/+) or a decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K) | Thirds |
 | Curve Smoothing | How much the difficulty curve is smoothed: Off, Light, Medium, Strong, Max | Medium |
@@ -137,6 +143,12 @@ Tosu stores settings separately for each installation directory. Match **Rating 
 | Show Break Segments | Show "Break" during rest sections | On |
 
 ## Version history
+
+### v1.2.5
+
+- Minimal shows live segment BPM, tag, stars and dan beside the map's dans; narrow widths stack the readouts.
+- Low profile keeps the graph and timeline for short OBS slots. Very short sources fit by proportionally scaling the panel after reflow, instead of clipping.
+- Narrow panels no longer force a 380 px minimum. Summary facts, hover coordinates and paused canvas resizing follow the viewport.
 
 ### v1.2.4
 

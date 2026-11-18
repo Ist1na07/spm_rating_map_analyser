@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -70,6 +71,12 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
+/* The stage scales only after responsive layout, without changing the
+   graph's layout-space dimensions or competing with panel entry animation. */
+#overlay-stage { transform-origin: top left; }
+#overlay-stage.is-fitted #container.panel-enter { animation-name: panel-fade; }
+@keyframes panel-fade { from { opacity: 0; } to { opacity: 1; } }
+
 /* ---------- Panel Shell ---------- */
 #container {
     position: relative;
@@ -83,7 +90,6 @@ body {
     border-radius: var(--panel-radius);
     backdrop-filter: blur(10px);
     box-shadow: var(--panel-shadow);
-    min-width: 380px;
     transition: background-color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease, padding 0.22s ease, gap 0.22s ease;
 }
 /* Top edge = live RC/LN family split (data, not decoration). */
@@ -148,7 +154,7 @@ body {
 }
 #summary-main {
     flex: 1 1 auto;
-    min-width: 72px;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -490,7 +496,7 @@ body {
     pointer-events: none;
     transition: opacity 0.14s ease;
 }
-#curve-tooltip span { flex: none; }
+#curve-tooltip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 
 .divider {
@@ -536,8 +542,10 @@ body {
     white-space: nowrap;
     transition: background-color 0.24s ease, border-color 0.24s ease, color 0.24s ease, box-shadow 0.24s ease, transform 0.2s var(--ease-out);
 }
+.ov-tag, .ov-share { min-width: 0; }
+.chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ov-share .pct,
-.ov-tag .pct { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ov-tag .pct { flex: none; font-variant-numeric: tabular-nums; font-weight: 600; }
 .ov-share .pct { opacity: 0.7; margin-left: 4px; }
 /* Live tag ring: a crisp outline, no glow. */
 .ov-tag.is-live-tag,
@@ -553,9 +561,8 @@ body {
 }
 
 /* ---------- Live Segment Row ----------
-   One left-aligned readout: tempo, tag, confidence; pattern and tempo
-   model confidence are read in a single glance. Difficulty and duration
-   are secondary and sit together at the right edge. */
+   Tempo, tag and confidence lead; difficulty and duration stay together
+   at the right edge. */
 #seg-row {
     display: flex;
     align-items: center;
@@ -759,7 +766,7 @@ body {
     color: var(--text-dim);
     text-align: center;
     padding: 18px 22px;
-    min-width: 280px;
+    overflow-wrap: anywhere;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: var(--panel-radius);
@@ -960,18 +967,43 @@ body.no-motion #summary-main.mq-run {
 }
 
 /* ---------- Minimal UI Style ---------- */
-#minimal-block { display: none; flex-direction: column; gap: 4px; }
+#minimal-block { display: none; gap: 6px 12px; align-items: center; }
 #container.ui-style-minimal #minimal-block { display: flex; }
+#min-ranks { min-width: 0; flex: 1 1 48%; display: grid; gap: 4px; }
+#minimal-block #seg-row {
+    flex: 1 1 48%;
+    min-width: 0;
+    justify-content: flex-end;
+    align-content: center;
+    gap: 3px 6px;
+    margin: 0;
+    padding: 4px 0 4px 10px;
+    border-inline-start: 1px solid var(--rule);
+}
+#minimal-block #seg-row.is-break { padding-inline-end: 9px; }
+#minimal-block #seg-bpm, #minimal-block #seg-tag { font-size: 13px; }
+#minimal-block #seg-conf, #minimal-block #seg-tag .secondary, #minimal-block #seg-dur { display: none; }
+#minimal-block #seg-secondary { flex: 0 0 100%; justify-content: flex-end; }
+#minimal-block #seg-diff { padding: 0; background: none; border: 0; }
+#minimal-block #seg-diff .sd-star { font-size: 13px; }
+@media (max-width: 340px) {
+    #container.ui-style-minimal #minimal-block { flex-direction: column; align-items: stretch; }
+    #minimal-block #seg-row { flex-basis: auto; padding: 5px 0 0; border-inline-start: 0; border-top: 1px solid var(--rule); }
+    #minimal-block #seg-row.is-break { padding: 4px 9px; }
+    #minimal-block #seg-secondary { flex: none; }
+}
 #container.ui-style-minimal #header,
 #container.ui-style-minimal #dan-row,
 #container.ui-style-minimal #rc-ln-row,
 #container.ui-style-minimal #curve-container,
 #container.ui-style-minimal #divider,
-#container.ui-style-minimal #seg-row,
 #container.ui-style-minimal #seg-timeline-wrap { display: none; }
-#min-hero { display: flex; align-items: center; gap: 8px; }
+#min-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; }
 #min-total-dan {
-    font-size: var(--hero-size);
+    font-size: min(var(--hero-size), clamp(22px, 6.7vw, 38px));
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 700;
     letter-spacing: -0.4px;
     line-height: 1.02;
@@ -986,7 +1018,8 @@ body.no-motion #summary-main.mq-run {
     opacity: 0.6;
     text-transform: uppercase;
 }
-#min-sub-row { display: flex; align-items: baseline; gap: 8px; }
+#min-sub-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.min-family { display: inline-flex; align-items: baseline; gap: 5px; }
 #min-sub-row .min-label {
     font-size: 10.5px;
     font-weight: 700;
@@ -997,7 +1030,7 @@ body.no-motion #summary-main.mq-run {
 #min-sub-row .min-value { font-weight: 600; font-size: var(--dan-size); font-variant-numeric: tabular-nums; }
 #min-sub-row .min-value.rc { color: var(--rc); }
 #min-sub-row .min-value.ln { color: var(--ln); }
-#min-ln-wrap { display: inline-flex; align-items: baseline; gap: 8px; margin-left: 6px; }
+
 
 /* ---------- Panel Density: Compact ---------- */
 #container.compact {
@@ -1010,13 +1043,63 @@ body.no-motion #summary-main.mq-run {
 }
 #container.compact #summary-row { padding-bottom: 4px; }
 #container.compact #rc-ln-row .sub-item { padding: 5px 11px 6px 12px; }
-#container.compact #seg-row { min-height: 22px; gap: 7px; }
-#container.compact #seg-secondary { gap: 7px; }
-#container.compact #seg-bpm { font-size: 14px; }
-#container.compact #seg-tag { font-size: 14px; }
-#container.compact #seg-conf { font-size: 11px; }
+#container.compact:not(.ui-style-minimal) #seg-row { min-height: 22px; gap: 7px; }
+#container.compact:not(.ui-style-minimal) #seg-secondary { gap: 7px; }
+#container.compact:not(.ui-style-minimal) #seg-bpm { font-size: 14px; }
+#container.compact:not(.ui-style-minimal) #seg-tag { font-size: 14px; }
+#container.compact:not(.ui-style-minimal) #seg-conf { font-size: 11px; }
 #container.compact #tags-row { min-height: 0; }
 #container.compact #seg-timeline { height: 12px; }
+
+/* Low profile keeps the readouts and graph; only the redundant timeline
+   legend is omitted. Auto-select it on genuinely short browser viewports. */
+#container.low-profile {
+    gap: 4px;
+    padding: 6px 9px 7px;
+    --hero-size: 27px;
+    --sub-size: 15px;
+    --dan-size: 11px;
+    --curve-h: 38px;
+}
+#container.low-profile #summary-row { padding-bottom: 2px; }
+#container.low-profile :is(#type-badge, #min-type-badge) { padding: 2px 7px; }
+#container.low-profile #rc-ln-row .sub-item { padding: 3px 7px 3px 9px; row-gap: 1px; }
+#container.low-profile #rc-ln-row .sub-item :is(.dan-value, .sub-value) { padding-top: 0; }
+#container.low-profile .divider { display: none; }
+#container.low-profile:not(.ui-style-minimal) #seg-row { min-height: 22px; flex-wrap: nowrap; column-gap: 6px; }
+#container.low-profile:not(.ui-style-minimal) #seg-bpm, #container.low-profile:not(.ui-style-minimal) #seg-tag { font-size: 13px; }
+#container.low-profile:not(.ui-style-minimal) #seg-conf { font-size: 11px; }
+#container.low-profile:not(.ui-style-minimal) #seg-diff { padding-block: 0; }
+#container.low-profile #seg-legend { display: none; }
+#container.low-profile #seg-timeline { height: 8px; }
+#container.low-profile #seg-timeline-wrap, #container.low-profile #curve-container { margin-top: 0; }
+/* A landscape slot spends horizontal room on the two rating groups instead
+   of stacking them above the chart. Narrower slots keep the stacked layout. */
+@media (min-width: 420px) {
+    #container.low-profile:not(.ui-style-minimal) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+        align-items: center;
+        column-gap: 10px;
+    }
+    #container.low-profile > :not(#header):not(#dan-row) { grid-column: 1 / -1; }
+    #container.low-profile #header { gap: 4px 6px; }
+    #container.low-profile #header-meta { margin: 0; justify-content: flex-start; }
+    #container.low-profile #rc-ln-row { gap: 4px; }
+    #container.low-profile #rc-ln-row .sub-item { column-gap: 4px; }
+}
+@media (max-width: 340px) {
+    #container { padding-inline: 9px; }
+    #summary-meta { gap: 5px; }
+    #hero-dan { max-width: 100%; font-size: min(var(--hero-size), 10vw); }
+    #header-meta { max-width: 100%; }
+    #seg-secondary { gap: 5px; }
+    #seg-row { column-gap: 6px; }
+}
+@media (max-height: 300px) {
+    #container { box-shadow: none; }
+    #loading { padding: 6px 10px; }
+}
 #settings-warning {
     font-size: 12px;
     line-height: 1.4;
@@ -1030,6 +1113,7 @@ body.no-motion #summary-main.mq-run {
 </style>
 </head>
 <body>
+<div id="overlay-stage">
 <div id="container" class="hidden">
     <div id="settings-warning" class="hidden" role="status"></div>
     <div id="summary-row" class="hidden">
@@ -1037,10 +1121,12 @@ body.no-motion #summary-main.mq-run {
         <span id="summary-meta"></span>
     </div>
     <div id="minimal-block">
-        <div id="min-hero"><span id="min-total-dan">-</span><span id="min-type-badge" class="rc hidden">RC</span><span id="min-hero-suf"></span></div>
-        <div id="min-sub-row">
-            <span class="min-label">RC</span><span class="min-value rc" id="min-rc-dan">-</span>
-            <span id="min-ln-wrap"><span class="min-label">LN</span><span class="min-value ln" id="min-ln-dan">-</span></span>
+        <div id="min-ranks">
+            <div id="min-hero"><span id="min-total-dan">-</span><span id="min-type-badge" class="rc hidden">RC</span><span id="min-hero-suf"></span></div>
+            <div id="min-sub-row">
+                <span class="min-family"><span class="min-label">RC</span><span class="min-value rc" id="min-rc-dan">-</span></span>
+                <span class="min-family" id="min-ln-wrap"><span class="min-label">LN</span><span class="min-value ln" id="min-ln-dan">-</span></span>
+            </div>
         </div>
     </div>
     <div id="header">
@@ -1075,7 +1161,7 @@ body.no-motion #summary-main.mq-run {
     </div>
     <div class="divider" id="divider"></div>
     <div id="tags-row"></div>
-    <div id="seg-row">
+    <div id="seg-row" role="group" aria-label="Current segment">
         <span id="seg-bpm"></span>
         <span id="seg-tag">—</span>
         <span id="seg-conf"></span>
@@ -1090,6 +1176,7 @@ body.no-motion #summary-main.mq-run {
     </div>
 </div>
 <div id="loading">SPM Map Analyser</div>
+</div>
 
 <script src="spm_algorithm.js"></script>
 <script src="tag_engine.js"></script>
@@ -1479,6 +1566,8 @@ body.no-motion #summary-main.mq-run {
     let prevSongTimeReceiveTs = 0;
 
     const elContainer = document.getElementById('container');
+    const elStage = document.getElementById('overlay-stage');
+    const elMinimalBlock = document.getElementById('minimal-block');
     const elLoading = document.getElementById('loading');
     const elSettingsWarning = document.getElementById('settings-warning');
     const elCacheStatus = document.getElementById('cache-status');
@@ -1680,14 +1769,14 @@ body.no-motion #summary-main.mq-run {
     }
 
     function extractSongTimeMs(data) {
-        const live = Number(data?.beatmap?.time?.live);
-        if (Number.isFinite(live)) return live;
         const candidates = [
+            data?.beatmap?.time?.live,
             data?.beatmap?.time?.current,
             data?.menu?.bm?.time?.current,
             data?.play?.time?.current,
         ];
         for (const v of candidates) {
+            if (v == null || v === '') continue;
             const n = Number(v);
             if (Number.isFinite(n)) return n;
         }
@@ -2014,7 +2103,7 @@ body.no-motion #summary-main.mq-run {
         if (!cachedResult || !cachedResult.sectionTimes || !cachedResult.sectionTimes.length) return;
         const rect = elCanvas.getBoundingClientRect();
         if (!(rect.width > 8)) return;
-        const pad = 4;
+        const pad = 4 * rect.width / elCanvas.clientWidth;
         const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left - pad) / Math.max(1, rect.width - 2 * pad)));
         hoverRatioX = ratio;
         const st = cachedResult.sectionTimes;
@@ -2085,6 +2174,13 @@ body.no-motion #summary-main.mq-run {
         return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
     }
 
+    function appendChipLabel(chip, tag) {
+        const label = document.createElement('span');
+        label.className = 'chip-label';
+        label.textContent = tagLabel(tag);
+        chip.appendChild(label);
+    }
+
     // SPMTagClassifier: retain each native path's percentage semantics.
     function renderOverallTags(tagRes) {
         elTagsRow.innerHTML = '';
@@ -2111,7 +2207,7 @@ body.no-motion #summary-main.mq-run {
             chip.style.background = hexA(c, CHIP_TINT_ALPHA);
             chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
             chip.style.color = chipInk(c);
-            chip.textContent = tagLabel(tag);
+            appendChipLabel(chip, tag);
             elTagsRow.appendChild(chip);
         }
         const tags = overall.tags || [];
@@ -2158,7 +2254,8 @@ body.no-motion #summary-main.mq-run {
             if (animateEnter) chip.style.setProperty('--chip-i', String(chipIdx++));
             chip.dataset.tagKey = tag;
             chip.style.borderColor = hexA(c, CHIP_BORDER_ALPHA);
-            chip.style.color = chipInk(c); chip.textContent = tagLabel(tag);
+            chip.style.color = chipInk(c);
+            appendChipLabel(chip, tag);
             chip.title = coarse ? 'Secondary weighted morphology composition; not the dominant class'
                 : 'Secondary branch burden share; not selected by the prior-aware whole-map tag gates';
             const pct = document.createElement('span'); pct.className = 'pct';
@@ -2279,9 +2376,9 @@ body.no-motion #summary-main.mq-run {
 
     /** Per-frame: current segment row + timeline cursor. */
     function updateSegmentLive(cursorTime) {
-        if (!cachedTagResult || cursorTime === null) return;
+        if (!cachedTagResult) return;
         const segments = cachedTagResult.segments;
-        const idx = findSegment(segments, cursorTime);
+        const idx = cursorTime === null ? -1 : findSegment(segments, cursorTime);
 
         if (idx !== lastSegIndex) {
             const hadPrev = lastSegIndex >= -1;
@@ -2327,10 +2424,13 @@ body.no-motion #summary-main.mq-run {
                     elSegTag.classList.add('seg-enter');
                 }
             }
+            elSegTag.title = idx < 0 || elSegTag.textContent === '—' ? '' : elSegTag.textContent;
             syncActiveSegmentHighlight(idx, activeTag);
             renderSegDiff(idx);
         }
 
+        elSegCursor.classList.toggle('hidden', cursorTime === null);
+        if (cursorTime === null) return;
         const first = cachedTagResult.map.firstNote, last = cachedTagResult.map.lastNote;
         const pct = Math.max(0, Math.min(100, ((cursorTime - first) / Math.max(1, last - first)) * 100));
         if (Math.abs(pct - lastCursorPct) >= 0.03) {
@@ -2361,6 +2461,7 @@ body.no-motion #summary-main.mq-run {
             elSummaryRow.classList.add('hidden');
             return;
         }
+        elSummaryRow.classList.remove('hidden');
         const frame = cachedPayloadMeta || {};
         const meta = cachedMeta || {};
         const artist = frame.artist || meta.artist || '';
@@ -2397,7 +2498,6 @@ body.no-motion #summary-main.mq-run {
             : (frame.durationMs != null ? frame.durationMs
                 : (meta.durationMs > 0 ? meta.durationMs / rate : 0));
 
-        elSummaryMeta.innerHTML = '';
         const facts = [];
         if (keys) facts.push({ text: keys + 'K', cls: 's-keys' });
         if (bpmSrc.bpm) {
@@ -2499,6 +2599,22 @@ body.no-motion #summary-main.mq-run {
         }
     }
 
+    const shortViewport = window.matchMedia('(max-height: 300px)');
+    function applyPanelDensity() {
+        const low = settings.panelDensity === 'Low profile' || shortViewport.matches;
+        elContainer.classList.toggle('compact', low || settings.panelDensity === 'Compact');
+        elContainer.classList.toggle('low-profile', low);
+    }
+
+    function fitOverlay() {
+        const height = Math.max(elContainer.offsetHeight, elLoading.offsetHeight);
+        const available = document.documentElement.clientHeight;
+        const scale = available > 0 && height > available ? (available - 0.5) / height : 1;
+        elStage.classList.toggle('is-fitted', scale < 1);
+        const transform = scale < 1 ? 'scale(' + scale + ')' : '';
+        if (elStage.style.transform !== transform) elStage.style.transform = transform;
+    }
+
     function applyUiStyle() {
         const styleKey = uiStyleKey();
         const prevStyleKey = lastUiStyleKey;
@@ -2506,7 +2622,11 @@ body.no-motion #summary-main.mq-run {
         const first = styleKey === 'dan-first';
         elContainer.classList.toggle('ui-style-dan-first', first);
         elContainer.classList.toggle('ui-style-minimal', styleKey === 'minimal');
-        elContainer.classList.toggle('compact', settings.panelDensity === 'Compact');
+        const segmentParent = styleKey === 'minimal' ? elMinimalBlock : elContainer;
+        if (elSegRow.parentElement !== segmentParent) {
+            segmentParent.insertBefore(elSegRow, styleKey === 'minimal' ? null : elTimelineWrap);
+        }
+        applyPanelDensity();
         applyMotionSetting();
         const totalItemShown = !elTotalDanWrap.classList.contains('hidden');
         elContainer.classList.toggle('dan-hero-total',
@@ -2609,6 +2729,7 @@ body.no-motion #summary-main.mq-run {
         elHeroDan.style.color = heroColor;
 
         setMorphText(elMinTotalDan, heroTxt || '-');
+        elMinTotalDan.title = heroTxt || '';
         elMinTotalDan.style.color = heroColor;
         elMinTypeBadge.textContent = result.mapType;
         elMinTypeBadge.className = result.mapType.toLowerCase()
@@ -2730,14 +2851,18 @@ body.no-motion #summary-main.mq-run {
 
     let lastCurveWidth = 0;
     function maybeResizeCurves() {
+        applyPanelDensity();
+        if (cachedResult) renderSummary();
+        fitOverlay();
         if (!cachedResult || !cachedRawCurves) return;
+        startAnimationLoop();
         const w = curveInnerWidth();
         if (Math.abs(w - lastCurveWidth) < 1) return;
         lastCurveWidth = w;
         rebuildCurves();
         lastSegIndex = -2;
         if (cachedTagResult) renderSegTimeline(cachedTagResult);
-        startAnimationLoop();
+        updateSegmentLive(getInterpolatedTime());
     }
 
     function cacheIndicator(state, reason='') {
@@ -2858,26 +2983,29 @@ body.no-motion #summary-main.mq-run {
         return {result,tags};
     }
 
+    function clockMoving() {
+        return !isPaused && songTimeMs !== null && songTimeMs !== prevSongTimeMs
+            && performance.now() - songTimeReceiveTs < 1000;
+    }
+
     function startAnimationLoop() {
-        if (animFrameId || document.hidden || hideOnPlayActive
-            || elContainer.classList.contains('hidden') || settings.uiStyle === 'Minimal') return;
+        if (animFrameId || document.hidden || hideOnPlayActive || elContainer.classList.contains('hidden')
+            || (settings.uiStyle === 'Minimal' && (elSegRow.classList.contains('hidden') || !clockMoving()))) return;
         animFrameId = requestAnimationFrame(() => {
             animFrameId = null;
             if (!cachedResult || document.hidden || hideOnPlayActive
-                || elContainer.classList.contains('hidden') || settings.uiStyle === 'Minimal') return;
+                || elContainer.classList.contains('hidden')) return;
             const cursorTime = getInterpolatedTime();
-            drawCurve(
+            const minimal = settings.uiStyle === 'Minimal';
+            if (!minimal) drawCurve(
                 cachedResult.sectionDifficulties, cachedResult.rcSectionDifficulties,
                 cachedResult.mapType, cursorTime, cachedResult.sectionTimes,
                 cachedResult.firstNoteTime, cachedResult.lastNoteTime,
                 cachedResult.lnSectionDifficulties
             );
             updateSegmentLive(cursorTime);
-            const moving = !isPaused && songTimeMs !== null
-                && (prevSongTimeMs === null || songTimeMs !== prevSongTimeMs)
-                && performance.now() - songTimeReceiveTs < 1000
-                && cursorTime < cachedResult.lastNoteTime;
-            if (moving || curveMorphFrom) startAnimationLoop();
+            const moving = clockMoving() && cursorTime < cachedResult.lastNoteTime;
+            if (moving || (!minimal && curveMorphFrom)) startAnimationLoop();
         });
     }
 
@@ -3089,10 +3217,14 @@ body.no-motion #summary-main.mq-run {
 
             if (Number.isFinite(liveTimeMs)) {
                 const scaledTime = liveTimeMs / modData.speedRate;
-                prevSongTimeMs = songTimeMs;
-                prevSongTimeReceiveTs = songTimeReceiveTs;
+                const sameClock = selectionKey === currentSelectionKey && modData.modSignature === currentModSignature;
+                prevSongTimeMs = sameClock ? songTimeMs : null;
+                prevSongTimeReceiveTs = sameClock ? songTimeReceiveTs : 0;
                 songTimeMs = scaledTime;
                 songTimeReceiveTs = performance.now();
+            } else {
+                songTimeMs = prevSongTimeMs = null;
+                songTimeReceiveTs = prevSongTimeReceiveTs = 0;
             }
 
             if (mode !== 3) {
@@ -3156,7 +3288,7 @@ body.no-motion #summary-main.mq-run {
             } else if (cachedResult && !analysisPending && elContainer.classList.contains('hidden') && !hideOnPlayActive) {
                 showResult(cachedResult);
                 startAnimationLoop();
-            } else if (cachedResult && !hideOnPlayActive && Number.isFinite(liveTimeMs)) {
+            } else if (cachedResult && !hideOnPlayActive) {
                 updateSegmentLive(getInterpolatedTime());
                 startAnimationLoop();
             }
@@ -3203,6 +3335,11 @@ body.no-motion #summary-main.mq-run {
     applyUiStyle();
 
     window.addEventListener('resize', maybeResizeCurves);
+    const panelObserver = new ResizeObserver(fitOverlay);
+    panelObserver.observe(elContainer);
+    panelObserver.observe(elLoading);
+    // A height-only density transition must repaint even with a paused clock.
+    new ResizeObserver(startAnimationLoop).observe(elCanvas);
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) stopAnimationLoop();
         else startAnimationLoop();

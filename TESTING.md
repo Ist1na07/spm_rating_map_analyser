@@ -1,4 +1,26 @@
-# v1.2.4 / d2bbb90 verification
+# v1.2.5 responsive overlay verification
+
+- In 488 × 168 and 280 × 125 browser viewports, the full rating panel, curve,
+  current segment and timeline fit without clipping. A 488 × 380 source uses
+  height fitting when needed; a taller source restores the selected density
+  and natural size. The explicit Low profile option also works in Dan first.
+- Minimal places the shared live row beside the dans at 488 px and below at
+  300 px. Playhead updates reach the readout. Missing time clears it, Break
+  and the two segment visibility settings are respected, and curve/timeline
+  remain hidden. The frontend check ran on both a fixture and a local 7K map.
+- Inspected settled renders in both layouts and at narrow widths. Tests
+  exercise hover on a scaled curve, repaint after a height change while
+  paused, long labels, motion settings and hide-on-play recovery. Resizing
+  and switching display modes do not call the rating or tag engines again.
+- The 18 rating/classifier/cache checks and the existing browser and IndexedDB
+  suites passed; the browser suite included real 4K/6K/7K samples. Rating,
+  classifier `d2bbb90`, dan constants and the cache model signature are
+  unchanged. Version-triggered cache invalidation still applies.
+
+The viewport checks use Chrome with a simulated tosu feed, not the user's OBS
+scene. See the [OBS setup instructions](README.md#fit-a-short-obs-slot-without-using-minimal).
+
+# Historical v1.2.4 / d2bbb90 verification
 
 - The vendored `tag_engine.js` equals the exact `dist/tag-engine.js` from
   `d2bbb90e7ea685e5345cecf91e176c64dbed0e80`. A small ignored runtime checkout

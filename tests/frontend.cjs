@@ -14,6 +14,7 @@ const {fixture}=require('./helpers.cjs');
   },
   at(t){stopAnimationLoop();songTimeMs=t;isPaused=true;lastSegIndex=-2;updateSegmentLive(t);},
   curves(){return JSON.stringify([cachedResult.sectionDifficulties,cachedResult.rcSectionDifficulties,cachedResult.lnSectionDifficulties]);},
+  pinDifficulty(){cachedSegStats[0]={mean:Math.max(3.42,segmentDiffFloor+1),dan:8};renderSegDiff(0);},
   rolling(s){setRollingDigits(elSegBpm,s);},
   get pendingFrame(){return !!animFrameId;}
  };`;
@@ -119,6 +120,71 @@ const {fixture}=require('./helpers.cjs');
    await page.screenshot({path:path.join(out,`${width}-${style.replace(' ','-')}-${density}.png`)});
    assert.equal(await idle(),0);
   }
+  // Reuse the same live row in Minimal; both independently configurable
+  // fields follow the tosu clock rather than freezing at the selected chart.
+  await page.setViewportSize({width:488,height:168});
+  await change({uiStyle:'Minimal',panelDensity:'Standard',showTimeline:true});
+  await page.evaluate(()=>{__front.install(['dense chordstream','coordination','break','speed'],4300);__front.at(2300);__front.pinDifficulty();});
+  assert.equal(await page.locator('#minimal-block > #seg-row').count(),1);
+  assert(await page.locator('#seg-row').isVisible());assert(await page.locator('#seg-diff').isVisible());
+  assert.equal(await page.locator('#seg-bpm').textContent(),'180');
+  assert(!await page.locator('#seg-timeline').isVisible());
+  const left=await page.locator('#min-ranks').boundingBox(),right=await page.locator('#seg-row').boundingBox();
+  assert(right.x>=left.x+left.width);
+  await page.screenshot({path:path.join(out,'minimal-488x168.png')});
+  game.send(JSON.stringify(frame(6500)));
+  await page.waitForFunction(()=>document.querySelector('#seg-tag').textContent==='Coordination');
+  await change({showSegmentDiff:false});
+  assert(!await page.locator('#seg-diff').isVisible());assert(await page.locator('#seg-tag').isVisible());
+  await change({showSegmentDiff:true,showSegmentTag:false});
+  assert(!await page.locator('#seg-row').isVisible());
+  await change({showSegmentTag:true,showBreak:false});
+  game.send(JSON.stringify(frame(10000)));
+  await page.waitForFunction(()=>document.querySelector('#seg-row').classList.contains('is-break'));
+  assert.equal(await page.locator('#seg-tag').textContent(),'—');
+  assert(!await page.locator('#seg-diff').isVisible());
+  await change({showBreak:true});
+  assert.equal(await page.locator('#seg-tag').textContent(),'Break');
+  const noClock=frame();noClock.beatmap.time.live=null;game.send(JSON.stringify(noClock));
+  await page.waitForFunction(()=>document.querySelector('#seg-tag').textContent==='—');
+  await page.setViewportSize({width:300,height:180});
+  game.send(JSON.stringify(frame(2300)));
+  await page.waitForFunction(()=>document.querySelector('#seg-tag').textContent==='Dense Chordstream');
+  const narrowRanks=await page.locator('#min-ranks').boundingBox(),narrowSeg=await page.locator('#seg-row').boundingBox();
+  assert(narrowSeg.y>=narrowRanks.y+narrowRanks.height);
+  await page.screenshot({path:path.join(out,'minimal-300x180.png')});
+
+  // Mimic the capture slot: keep the graph, live segment and timeline,
+  // constrain by source height, then expand back without re-analysis.
+  await change({uiStyle:'Rating first',panelDensity:'Standard'});
+  for(const [width,height] of [[488,168],[280,125],[488,380],[488,600]]){
+   await page.setViewportSize({width,height});
+   await page.waitForTimeout(300);
+   const panel=await page.locator('#container').boundingBox(),tl=await page.locator('#seg-timeline').boundingBox();
+   assert(panel.y+panel.height<=height+0.6,JSON.stringify({width,height,panel}));
+   assert(tl.y+tl.height<=height,JSON.stringify({width,height,tl}));
+   assert(await page.locator('#curve-canvas').isVisible());assert(await page.locator('#seg-row').isVisible());
+   const low=await page.locator('#container').evaluate(el=>el.classList.contains('low-profile'));
+   assert.equal(low,height<=300);
+   assert.equal(await page.locator('#seg-legend').isVisible(),!low);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   const curve=await page.locator('#curve-canvas').boundingBox();
+   assert.equal(await page.locator('#curve-canvas').evaluate(c=>c.height),await page.locator('#curve-canvas').evaluate(c=>c.clientHeight));
+   if(height===125){
+    // Hover scrubbing uses the transformed chart coordinates.
+    await page.mouse.move(curve.x+curve.width*.5,curve.y+curve.height*.5);
+    assert(await page.locator('#curve-tooltip').isVisible());
+    await page.mouse.move(width-1,height-1);
+    assert(await page.locator('#overlay-stage').evaluate(el=>el.classList.contains('is-fitted')));
+   }
+   await page.screenshot({path:path.join(out,`full-${width}x${height}.png`)});
+  }
+  assert.equal(await page.locator('#overlay-stage').evaluate(el=>el.style.transform),'');
+  await change({uiStyle:'Dan first',panelDensity:'Low profile'});
+  assert(await page.locator('#container.low-profile').isVisible());
+  assert(await page.locator('#curve-canvas').isVisible());
+  await change({uiStyle:'Rating first',panelDensity:'Standard'});
+  assert.deepEqual((await counts()).slice(0,2),[1,1]);
   // Break is an inset surface, not edge-aligned text. Check the attached 4.3s case
   // with and without digit motion, at narrow/compact and wide/standard sizes.
   for(const [width,density] of [[380,'Compact'],[430,'Standard'],[710,'Standard']]){

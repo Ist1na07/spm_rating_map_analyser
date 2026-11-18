@@ -6,7 +6,7 @@ full commit `d2bbb90e7ea685e5345cecf91e176c64dbed0e80`. Its package version is *
 but this snapshot also includes unreleased type-specific action cadence and
 meter-aware segmentation, on top of the local-expert retune and pressure-aware
 Break repair. The published v1.2.4 tag is not an equivalent source. MIT, copyright (c) 2026 Ist1na;
-see [LICENSE](LICENSE). The analyser version is **v1.2.4**.
+see [LICENSE](LICENSE). The bundle was adopted in analyser v1.2.4 and is unchanged in v1.2.5.
 
 ## d2bbb90: action cadence and music-aware cuts
 
@@ -55,8 +55,8 @@ macro-F1 falls from 58.7703% to 58.4853%, while Compact rises from 56.9551% to
 error. These are upstream development comparisons, not accuracy measured by
 our integration tests. See the pinned [action/music report](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/research/action_clock/README.md).
 
-Version **1.2.4** and cache revision **tag-d2bbb90** invalidate previous cached
-classification at startup. The snapshot format and all rating/dan models stay
+The cache revision remains **tag-d2bbb90**. Changing the analyser version
+invalidates previous cached classification at startup. The snapshot format and all rating/dan models stay
 unchanged.
 
 ## Default 7K now uses the retuned local expert

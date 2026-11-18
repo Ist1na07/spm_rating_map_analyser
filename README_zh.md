@@ -1,4 +1,4 @@
-# SPM Map Analyser v1.2.4
+# SPM Map Analyser v1.2.5
 
 一个 [tosu](https://tosu.app) 游戏内叠加界面，为 osu!mania **4K / 6K / 7K** 谱面提供实时难度评级、段位映射与键型分类。
 
@@ -88,9 +88,9 @@
 |------|------|
 | **Rating first** | 星数为头条数字，下方双卡片同时显示 RC／LN 星数和段位 |
 | **Dan first** | 段位为头条数字（mania 玩家最常引用的指标），星数移到旁边 |
-| **Minimal** | 只保留摘要行、段位（总段位带类型徽章、RC、LN）与整体键型标签 |
+| **Minimal** | 保留摘要、段位与整谱标签；段位右侧显示当前段等效 BPM、键型、星数和段位，窄窗口改为上下排列。不显示曲线或时间轴 |
 
-**Panel Density** 控制面板整体密度：**Compact** 使用更小的字号、更紧的间距与更扁的曲线，占用更少屏幕空间。
+**Panel Density** 提供 **Standard**、**Compact** 和 **Low profile**。Low profile 在较宽的窗口里把子难度移到主数值右侧，并压低曲线；保留时间轴色带，省略单独的图例。
 
 ![Aurora 配色，Rating first](screenshots/aurora-7k.png)
 ![High Contrast 配色，Dan first](screenshots/high-contrast-dan-first.png)
@@ -103,9 +103,15 @@
 
 ## 使用方法
 
-1. 从本仓库下载 [v1.2.4 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
+1. 从本仓库下载 [v1.2.5 源码快照](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip)（本次不发布 Release）；历史打包版本可在 [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases) 下载。
 2. 将**直接包含 `index.html`、`settings.json`、`metadata.txt` 的那一层文件夹**放入 tosu 的 `static` 目录，不要再套一层解压目录。
 3. 启动 tosu，进入 dashboard 即可找到 **SPM Map Analyser** 插件。
+
+### OBS：给完整面板腾出一条横向空间
+
+在 [OBS 浏览器源](https://obsproject.com/kb/browser-source)属性里设置 **宽度**和**高度**（例如 **500 × 180**），保留 **Rating first** 或 **Dan first**。视口高度 ≤300 px 时会自动启用 **Low profile**，排版后仍超高才等比缩小整个面板；视口增高后恢复用户选定的密度。想在较高的视口里也固定使用矮版，可选 **Panel Density → Low profile**。
+
+若场景原来裁切了该来源，先取消裁切。场景里的拉伸或裁切不会改变网页视口；应先改浏览器源的尺寸，再在场景里摆放。若字太小，增加浏览器源高度，或改用带分段信息的 **Minimal**。
 
 ### 设置报错或新旧难度相差 0.0几
 
@@ -122,8 +128,8 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Rating Algorithm | SPM Rating v1.2.0 的模型选择：**SPM Rating v1.2.0-Detailed**（完整模型）或 **SPM Rating v1.2.0-Compact**（轻量模型）。两者各有独立实测的段位节点，切换后当前谱面会立即重新计算 | Detailed |
 | Sub Difficulty Scheme | **Direct**：RC/LN 子难度始终来自新子模型；**Legacy v0.5.1**：LN 谱面的 LN 难度等于总难度 | Direct |
 | Local Analysis Cache | 本地压缩保存分析结果；核对编辑、清除不兼容版本；关闭时清空缓存 | 开 |
-| UI Style | **Rating first**、**Dan first** 或 **Minimal**（只显示摘要、段位与整体键型标签） | Rating first |
-| Panel Density | **Standard** 或 **Compact** 面板密度 | Standard |
+| UI Style | **Rating first**、**Dan first** 或 **Minimal**（摘要、段位、整谱标签、当前段 BPM／键型／难度） | Rating first |
+| Panel Density | **Standard**、**Compact** 或 **Low profile**；矮视口自动适配 | Standard |
 | Color Scheme | **Default Dark**、**Aurora** 或 **High Contrast** | Default Dark |
 | Dan Display Style | 段位值的显示风格：三段（low/high）、符号（-/+）或小数数字（+0.5 偏移：8.5 对应 8dan、11.5 对应 Gamma） | Thirds |
 | Curve Smoothing | 难度曲线的平滑强度：Off、Light、Medium、Strong、Max | Medium |
@@ -137,6 +143,12 @@ tosu 按安装目录分别存储配置，换目录不会自动沿用旧设置。
 | Show Break Segments | 休息段显示 "Break" | 开 |
 
 ## 版本历史
+
+### v1.2.5
+
+- 极简模式在谱面段位右侧加入当前段 BPM、键型、星数与段位，窄窗口改为上下排列。
+- 新增 Low profile，矮直播槽保留曲线和时间轴；排版还放不下时等比缩小面板，不再裁掉底部。
+- 取消旧版 380 px 最小宽度，修正窄窗口的摘要、缩放后的曲线悬停定位及暂停时的画布尺寸更新。
 
 ### v1.2.4
 
