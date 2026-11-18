@@ -23,8 +23,12 @@
   classifier `d2bbb90`, dan constants and the cache model signature are
   unchanged. Version-triggered cache invalidation still applies.
 
-The viewport checks use Chrome with a simulated tosu feed, not the user's OBS
-scene. See the [OBS setup instructions](README.md#fit-a-short-obs-slot-without-using-minimal).
+The viewport checks use Chrome with a simulated tosu feed.
+The release ZIP was extracted to an isolated `static` directory and its
+overlay loaded from the extracted files. Settings used the extracted folder
+name, and a real 7K chart analysed and hit the cache after reload. The ZIP
+contains only the overlay entry point, settings, metadata, three runtime
+scripts, dan constants and the MIT license, under one installable folder.
 
 # Historical v1.2.4 / d2bbb90 verification
 

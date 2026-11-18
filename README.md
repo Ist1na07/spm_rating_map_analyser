@@ -1,279 +1,55 @@
-# SPM Map Analyser v1.2.5
+# SPM Map Analyser
 
-A [tosu](https://tosu.app) in-game overlay for osu!mania that shows real-time difficulty ratings, dan levels and pattern classification for **4K / 6K / 7K** beatmaps.
+A [tosu](https://tosu.app) overlay for **4K, 6K and 7K osu!mania**. See a chart’s difficulty, dan levels and patterns as you play.
 
-[中文](README_zh.md)
+[中文](README_zh.md) · [Download v1.2.5](https://github.com/Ist1na07/spm_rating_map_analyser/releases/download/v1.2.5/SPM-Map-Analyser-v1.2.5.zip) · [Release notes](https://github.com/Ist1na07/spm_rating_map_analyser/releases/tag/v1.2.5)
 
-![Default view: Dan first, Aurora](screenshots/default-7k.png)
+![Dan first in the default Aurora palette](screenshots/default-7k.png)
 
-## Features
+## Install
 
-### Difficulty rating
+1. Download **SPM-Map-Analyser-v1.2.5.zip** from the link above, rather than GitHub’s “Source code” archive.
+2. Extract it **into tosu’s `static` folder**. The result should be `tosu/static/spm_rating_map_analyser/index.html`, with no extra folder in between.
+3. Open the tosu dashboard and select **SPM Map Analyser**.
 
-- **Total difficulty** (SPM stars) for the current map, plus two sub-ratings:
-  - **RC** — regular (non-hold) difficulty
-  - **LN** — long-note (hold) difficulty
-- On pure RC maps the LN rating is hidden automatically, so you only see the numbers that matter.
-- Ratings use SPM Rating's **reference scale** (each key count is aligned to its own label domain), so compare star values within the same key count.
-- **Both SPM Rating v1.2.0 models are available** and selectable under **Rating Algorithm**: **SPM Rating v1.2.0-Detailed** (the full model, default) and **SPM Rating v1.2.0-Compact** (the lighter upstream model that differs in 16 calibrated parameters, its role price and its reference alignment). Switching updates the current chart, reusing a matching cache entry when available.
+**Updating?** Replace the files inside your existing overlay folder and refresh the page. Keep its folder name to retain saved settings; tosu stores settings separately for each folder.
 
-### Local analysis cache
+## Choose a layout
 
-**Local Analysis Cache** is on by default. Once a chart has been analysed, its rating, raw curves and tag/segment results are gzip-compressed into local browser storage. **Saved** means the result was stored; **Cached** means both engines were skipped on a later selection, including after a browser restart.
+- **Dan first** (default) leads with the map’s dan and shows its star rating beside it.
+- **Rating first** leads with the star rating.
+- **Minimal** shows the map’s dans, overall tags and the current segment’s equivalent BPM, pattern and dan. It leaves out stars, the curve and the timeline.
+- **Panel Density** offers Standard, Compact and Low profile. Pick **Low profile** if you need a shorter panel that still has the curve and timeline.
 
-Before reuse, the actual `.osu` contents are checked. Edits delete every old variant for that file; an analyser version change clears the cache on startup. Detailed/Compact, speed rate and sub-difficulty schemes are cached separately. Storage is bounded to 64 MiB of compressed payloads / 1024 charts, evicting the least recently used charts first. Turning the setting off clears the cache; unavailable storage never prevents analysis. Cache data stays in the browser profile, not the plugin directory or Git repository. See [cache details](CACHE.md).
+**Default Dark · Rating first**
 
-### Map summary
+![Default Dark with Rating first](screenshots/default-dark-7k.png)
 
-An optional line at the top of the panel tells you what you are looking at: **artist – title [difficulty]**, the mapper, key count, BPM (a range when the chart's BPM moves), object count and play length. Values come from the tosu payload when the client exposes them and fall back to the parsed `.osu` header, so the line is complete on stable, lazer and every key count. Rate mods are taken into account — with DT/HT the BPM range and the play length follow the modded rate. A song line longer than the panel scrolls side to side instead of clipping. Toggle with **Show Map Summary**.
+**High Contrast · Dan first, Compact**
 
-### Segment difficulty
+![High Contrast with Dan first in Compact density](screenshots/high-contrast-dan-first.png)
 
-While playing, the overlay follows your position and shows the current section's pattern together with its **difficulty** — the SPM star value for that section plus the equivalent dan. It is computed from the raw per-section curve (smoothing never moves the number), so the value always belongs to the section shown next to it; hover it for the mean difficulty and dan. Available on 4K/6K/7K. Toggle with **Show Segment Difficulty**.
+**Aurora · Minimal**
 
-### Difficulty curve
+![Aurora in Minimal, showing BPM, pattern and segment dan](screenshots/minimal-7k.png)
 
-- A graph of the map's difficulty over time, occupying the lower half of the panel, with a playhead cursor following your position; the playhead turns into a pause marker while the game is paused
-- Maps with both regular and hold sections draw **two lines** — **RC** (cool) and **LN** (warm) — so you can see at a glance which sections are stream-heavy and which are hold-heavy. Both lines are drawn on the same calibrated scale as the headline ratings
-- **Curve smoothing** removes the jaggedness of the raw per-400 ms values. The strength is adjustable from *Off* to *Max* and is measured in pixels of the drawn curve, so one setting looks the same on a 30-second chart and on a 15-minute marathon. The default **Medium** uses the previous **Light** curve (0.75 px); choose **Strong** to reproduce the previous **Medium**. Changing the strength does not re-analyse the map
+## Read the panel
 
-### Pattern classification
+- **Stars and dans:** The panel shows total difficulty plus **RC** (regular notes) and **LN** (holds) where applicable. Compare stars within the same key count and rating model. DT, NC and HT adjust the analysis to the modded speed.
+- **Current segment:** The first number, when present, is the pattern’s equivalent BPM, not necessarily the song BPM. Irregular patterns may have no single supported tempo. Full layouts also show confidence, segment difficulty and a colour-coded timeline.
+- **Overall tags:** In 7K, percentages describe difficulty-weighted pattern burden and can overlap. The main tag is not always the highest percentage. In 4K/6K, the percentages describe the weighted composition of the map. Hybrid’s displayed RC and LN shares add to 100%.
+- **Saved / Cached:** Analysis is saved locally by default. Returning to an unchanged map can reuse it. Turning off **Local Analysis Cache** clears stored results.
 
-The map is automatically split into sections. **7K** retains the detailed taxonomy: **Chordjack**, **Minijack**, **Chordstream**, **Speed**, **Tech**, **Vibro**, **Coordination**, **Density**, **Inverse**, **Release**, **Technical**, **Break** and **Hybrid**. Native **4K/6K** uses five morphology classes: **Jack, Chordstream, Speed, Tech, LN**, plus Break segments. Chordstream is upstream's compatibility key `stamina`, not a generic endurance rating.
+## Useful settings
 
-What you get from it:
+| Setting | Default | When to change it |
+|---|---|---|
+| Rating Algorithm | Detailed | Choose Compact if you want the lighter model. Stars and dan thresholds differ between models. |
+| Sub Difficulty Scheme | Direct | Choose Legacy v0.5.1 to display LN difficulty as the total on LN maps. |
+| Dan Display Style | Signs (-/+) | Choose Thirds for low/high labels or Number for decimal dans (8.50 = 8th). |
+| Color Scheme | Aurora | Try Default Dark for blue/orange or High Contrast over bright scenes. |
+| Curve Smoothing | Medium | Medium matches the previous Light; Strong matches the previous Medium. It only changes the graph. |
 
-- **Overall 7K tags** — SPMTagClassifier **1.2.4 + commit `d2bbb90`** stable classification, with continuous-time, multi-factor burden percentages beside both primary and secondary chips. The calculation integrates **branch support × difficulty burden × action load**, using the active Detailed/Compact model's raw row-level demand from the same rating pass. These are overlapping burden shares, not confidence or elapsed-time shares; Hybrid shows the relative RC/LN family shares normalized to sum to 100% (display only). Switching the rating model updates the tags and percentages; smoothing does not
-- **Overall 4K/6K tags** — the upstream dominant morphology is solid; secondary classes are outlined. Percentages show normalized local morphology support weighted by duration, relative physical effort and concentration. The five raw shares sum to 100% before rounding; this is a different measure from 7K difficulty-integral burden. These classifiers do not consume the Detailed/Compact rating field
-- **Live current section** — while playing, the overlay follows your position and shows the current section's pattern, its confidence and, for Chordstream / Jack / Speed / Density / Coordination, an equivalent BPM (number first, without a BPM suffix)
-- **Pattern timeline** — a colour band spanning the whole map with a playhead cursor
+The visibility controls can hide the map summary, tags, current segment, segment difficulty or timeline. **Hide While Playing** hides the whole overlay during play.
 
-**Classifier source:** the pinned [d2bbb90 snapshot](https://github.com/Ist1na07/SPMTagClassifier/blob/d2bbb90e7ea685e5345cecf91e176c64dbed0e80/src/index.cjs) retains the jointly retuned 56D RC/LN experts, fixed whole-map reference prior, static-hand false chordstream exclusion, LN Wildcard rest exemption and stable tempo plateaus. It includes unreleased changes beyond the published v1.2.4 bundle; `modern` remains a separate opt-in candidate.
-
-**Action cadence and musical cuts:** 7K measures type-specific same-hand Jack backbones, same-finger rearticulations or within-hand substitution streams. Interleaved/filler notes no longer inflate the wrong clock; unsupported scalar tempos are omitted, not replaced by song BPM or archived grid guesses. Before classification, suitable change candidates snap to valid measure boundaries within one beat, recomputing segment extras and decisions while retaining the frozen whole-map reference's original cuts. Type weights, difficulty integrands and native 4K/6K morphology stay unchanged. Boundaries, tags and whole-map percentages can change; see [integration and tradeoffs](CLASSIFIER.md).
-
-**Pressure-aware Break repair:** the same Detailed/Compact raw demand now participates in soft-rest decisions before aggregation. Switching rating models can therefore change local Break boundaries; smoothing cannot. Long head gaps and time after the last head do not extend pressure evidence. No additional rating pass is needed. See [CLASSIFIER.md](CLASSIFIER.md).
-
-**Why can a lower-percentage 7K tag be solid?** Solid chips are selected by prior-aware gates, not a simple percentage ranking. Under Detailed, a prior tag can survive at 25% while a new tag normally needs 50%; family/mix gates also apply. Thus Fast Chordstream 33% may remain solid while Dense Chordstream 37% is outlined. The percentages describe burden, not correctness. Tags now use the full panel width and wrap only when needed.
-
-Classification, live segment difficulty and the timeline now run on **4K / 6K / 7K**. The 6K path is the upstream shared coarse model, not an unvalidated projection into 7K fine classes.
-
-### Dan mapping
-
-- The rating is mapped to a dan ladder, calibrated separately for each key count and skill:
-  - **4K RC**: 1st ~ 10th, then **Alpha / Beta / Gamma / Delta / Epsilon** · **4K LN**: 1st ~ 15th
-  - **6K RC**: Start ~ 9th · **6K LN**: 0th ~ 14th
-  - **7K RC / LN**: 0th ~ Stellium
-- The dan nodes are measured **separately for each rating-algorithm model** (SPM Rating v1.2.0-Detailed and SPM Rating v1.2.0-Compact), so switching the algorithm keeps the ladder's meaning
-- Outside the measured range it shows `< ...` / `> ...` (e.g. `< 0th`, `> Stellium`)
-- Three display styles for the dan value: **thirds** (low / high), **signs** (`-` / `+`), or a **decimal number** (+0.5 shift: 8.5 = 8th dan exactly, 11.5 = Gamma in 7K)
-- In number mode, levels below 0th retain the lower-bound marker: **`< 0.50`** rather than `0.50`
-- Hybrid maps additionally show a **Total** dan
-
-### Colour schemes and UI styles
-
-Three palettes, selectable under **Color Scheme**:
-
-| Scheme | What it is |
-|--------|------------|
-| **Default Dark** | Blue RC / orange LN on a neutral dark panel |
-| **Aurora** | Teal/cyan for RC against coral/red for LN — a complementary pair, which separates the two families more strongly than blue/orange at small sizes — on an indigo-tinted panel |
-| **High Contrast** | Near-black panel with Okabe-Ito derived hues, built for readability over bright gameplay |
-
-The flat panel, paired RC/LN cards and full-width pattern chips keep the same visual hierarchy across all three palettes.
-
-Three layouts under **UI Style**:
-
-| Style | What it is |
-|-------|------------|
-| **Rating first** | The star rating is the headline number; RC/LN ratings and dans share paired cards below |
-| **Dan first** | The dan value is the headline (the metric mania players quote) and the star rating moves next to it |
-| **Minimal** | Summary, dans and overall tags, with live BPM, pattern and segment dan to the right (or below at narrow widths). No graph or timeline |
-
-**Panel Density** offers **Standard**, **Compact**, and **Low profile**. Low profile puts the sub-ratings beside the headline in wide slots, shortens the graph, and keeps the timeline band without its separate legend.
-
-![Aurora, rating first](screenshots/aurora-7k.png)
-![High Contrast, dan first](screenshots/high-contrast-dan-first.png)
-![Minimal with borderless segment readout](screenshots/minimal-7k.png)
-
-### Other
-
-- **Mod support** — rate-changing mods (DT / NC / HT) are taken into account
-- **Hide while playing** — optionally hide the overlay once gameplay starts
-
-## Usage
-
-1. Download the [v1.2.5 source snapshot](https://github.com/Ist1na07/spm_rating_map_analyser/archive/refs/heads/main.zip) from this repository (no v1.2.5 Release is published), or choose an earlier package from [Releases](https://github.com/Ist1na07/spm_rating_map_analyser/releases).
-2. Place the folder **directly containing `index.html`, `settings.json` and `metadata.txt`** inside tosu's `static` directory; do not add another wrapper folder.
-3. Launch tosu — find **SPM Map Analyser** in the dashboard.
-
-### Fit a short OBS slot without using Minimal
-
-In the [OBS Browser Source](https://obsproject.com/kb/browser-source), set **Width** and **Height** to the wanted source viewport (try **500 × 180**). Keep **Rating first** or **Dan first**. At 300 px high or less the overlay switches to **Low profile** automatically, then scales down only if the content still exceeds the viewport. It restores the selected density on taller sources. Pick **Panel Density → Low profile** to use the short layout on a taller source.
-
-If the source is already cropped in the scene, remove the crop: OBS scene transforms and crops do not resize the web viewport. Change the Browser Source dimensions first, then position or scale the source in the scene. Allow more height if the text looks too small.
-
-### Settings errors or small rating differences after upgrading
-
-Use `tosu/static/spm_rating_map_analyser/index.html`. With a nested installation, tosu v4.26.3 can fail to create the settings-file parent directory (`ENOENT`). Flatten the installation, or, for an existing `static/outer/inner/index.html`, create `tosu/settings/outer/` before opening Settings. Keep existing `.values.json` files.
-
-The overlay now uses the full, fixed relative directory for its settings socket, avoiding `Wrong overlay` when tosu injects `COUNTER_PATH` after startup. A settings-read failure displays whether defaults or previously loaded settings are in use. Hover the star value to check the active Detailed/Compact model. Refresh open overlay pages after updating.
-
-Tosu stores settings separately for each installation directory. Match **Rating Algorithm, Sub Difficulty Scheme and rate** when comparing versions: Detailed and Compact can legitimately differ by a few hundredths. Rating optimization preserves results for the same model, chart and rate. Previous choices are in tosu's `settings/<old-folder>.values.json`; back up and copy them to the corresponding new settings file without overwriting the old file.
-
-## Settings
-
-| Setting | What it does | Default |
-|---------|--------------|---------|
-| Rating Algorithm | SPM Rating v1.2.0 model variant: **SPM Rating v1.2.0-Detailed** (full model) or **SPM Rating v1.2.0-Compact** (lighter model). Each has its own measured dan nodes; changing it re-rates the current chart | Detailed |
-| Sub Difficulty Scheme | **Direct**: RC/LN sub-ratings always come from the new sub-models. **Legacy v0.5.1**: LN maps show LN difficulty equal to the total | Direct |
-| Local Analysis Cache | Persist compressed results locally; verify edits, clear incompatible versions; turning off clears cached data | On |
-| UI Style | **Rating first**, **Dan first** or **Minimal** (summary + dans + overall tags + live BPM/pattern/dan) | Dan first |
-| Panel Density | **Standard**, **Compact**, or **Low profile**; auto-fit short viewports | Standard |
-| Color Scheme | **Default Dark**, **Aurora** or **High Contrast** | Aurora |
-| Dan Display Style | How the dan value is shown: thirds (low/high), signs (-/+) or a decimal number (+0.5 shift: 8.5 = 8dan, 11.5 = Gamma in 7K) | Signs (-/+) |
-| Curve Smoothing | How much the difficulty curve is smoothed: Off, Light, Medium, Strong, Max | Medium |
-| UI Animations | Enable digit rolling, curve morphing, and UI transitions (turn off to reduce GPU/CPU usage) | On |
-| Hide While Playing | Hide the overlay after gameplay starts (shown again on the results screen) | Off |
-| Show Map Summary | Show the song/difficulty/mapper/keys/BPM/objects/length line | On |
-| Show Pattern Tags | Show the overall pattern chips | On |
-| Show Current Segment | Show the live section pattern and equivalent BPM | On |
-| Show Segment Difficulty | Show the live section's dan; full modes also show its star rating (4K/6K/7K) | On |
-| Show Segment Timeline | Show the full-map pattern colour band | On |
-| Show Break Segments | Show "Break" during rest sections | On |
-
-## Version history
-
-### v1.2.5
-
-- Minimal groups larger live BPM, tag and segment dan beside the map ranks; narrow widths stack the groups. Stars remain in the full layouts.
-- Display defaults: Dan first, Aurora, Signs (-/+), Medium smoothing (previous Light). Existing saved choices are retained.
-- Low profile keeps the graph and timeline for short OBS slots. Very short sources fit by proportionally scaling the panel after reflow, instead of clipping.
-- Narrow panels no longer force a 380 px minimum. Summary facts, hover coordinates and paused canvas resizing follow the viewport.
-
-### v1.2.4
-
-- Vendor classifier `d2bbb90`: type-conditional action BPM with unsupported periods omitted, plus meter-aware pre-classification cuts on stable 7K.
-- Preserve ratings, dans, frontend cadence whitelist and tag/percentage presentation; no expert refit or extra rating pass.
-- Bump the cache/model identity to clear obsolete analysis at startup; verify both models, NM/HT/DT and 4K/6K/7K.
-
-### v1.2.3
-
-- Refreshed flat frontend with paired RC/LN cards, live tag highlighting, curve hover previews and an optional **UI Animations** switch (on by default).
-- Removed the graph legend and peak readout; live sections show tempo first, then tag and confidence, without dot / BPM / CONF labels.
-- Unified cadence visibility across the live row and timeline: Dense/Fast Chordstream, native 4K/6K Chordstream, Chordjack/Minijack/native Jack, Speed, Density and Coordination only.
-- Idle/paused/hidden/Minimal views stop requesting animation frames. Curve morphs reuse buffers; palette/dan-label changes do not rerun smoothing or analysis.
-- Rating/classifier engines and cache format are unchanged. The version bump invalidates the previous version's cache at startup.
-
-### v1.2.2
-- Add default-on, gzip-compressed local disk analysis caching with edit detection, version/config invalidation, bounded LRU storage and a settings switch
-- Restore complete rating/tag/curve UI without rerunning either engine, including the selected model's dan table; reject stale/wrong-map responses
-- Keep the SPM Rating and pinned `b311c40` classifier algorithms unchanged
-
-### v1.2.1
-- Update to classifier `b311c40`: reuse the existing raw SPM demand before soft Break gates, preserving sustained-pressure sections without another rating pass; keep unrated and native 4K/6K behavior unchanged
-- Expose native 4K/6K five-class tags, weighted composition percentages, live sections and timeline; remove the tag row's fixed 440px cap and clarify main-tag gating in tooltips
-- Remove the “Burden” prefix; normalize the Hybrid chip’s RC/LN pair to 100% while retaining its relative proportion and leaving algorithm outputs unchanged
-- Follow-up: fix nested/space settings paths and late tosu `COUNTER_PATH` injection; show settings failures and the active rating model instead of silently comparing default Detailed against saved Compact
-- Bundle the complete classifier from **SPMTagClassifier `b311c40`** (`b311c408ef02d6705d30b51a4ea789d3e86d2976`, package 1.2.4 plus unreleased local-expert retune and pressure-aware Break repair), including the selected RC/LN parameters, fixed integral prior and segment-readout repairs
-- Show the algorithm's integrated whole-map burden percentages, reusing the active rating model's raw demand without a second rating pass
-- Fix number-style dans below 0th to show `< 0.50`
-- Speed up rating with shared mirror recovery, linear window sweeps, cached interpolation operators and shared action-prefix moments. On the initial v1.2.3 integration's local 371-chart check, average rating time fell from 149.5 to 109.8 ms; the same upgraded-classifier pipeline fell from 207.7 to 168.1 ms (19.1%). See [verification details](TESTING.md)
-- Existing ratings, dan tables, curves, saved settings and live-section confidence are retained. Local datasets and beatmaps are not included
-
-### v1.2.0
-- **Algorithm upgraded to SPM Rating v1.2.0-rc3 + the new SPMSubmodel RC/LN model**
-- **Both v1.2.0 model variants are selectable** under **Rating Algorithm**: SPM Rating v1.2.0-Detailed (full) and SPM Rating v1.2.0-Compact (lighter). They differ in 16 calibrated parameters plus their role price and reference alignment; dan nodes are re-measured for both, and switching the algorithm re-rates the current chart
-- **Total / RC / LN difficulty** now come from the new hand-contact, finger-role, chord-gesture and two-level aggregation model; every chart is scored together with its mirror and the two difficulty fields are averaged
-- **Dan mapping re-measured** on the new reference scale for 4K / 6K / 7K and RC / LN; the ladder shape and `< ...` / `> ...` markers are unchanged
-- **Number dan style shifted by +0.5**: the displayed number is the value mania players quote, so 8.5 shows 8dan exactly and 11.5 shows Gamma in 7K. Thirds and signs styles, ratings, curves and all other logic are unchanged
-- Settings, metadata and the chart-analysis code paths are otherwise unchanged
-
-### v1.0.1
-- **New colour schemes**: **Aurora** and **High Contrast**, plus a WCAG contrast pass over all three palettes (chip ink, dim/faint text and the Break label were below 4.5:1 and are now above it)
-- **UI Style** option: **Dan first** promotes the dan value to the headline number; **Minimal** strips the panel to the summary line, the dans (total / RC / LN, with the type badge) and the overall tags
-- **Panel Density** option: **Compact** shrinks fonts, spacing and the curve
-- **Map summary line**: artist/title/difficulty, mapper, key count, BPM (range when it varies), object count and length; follows rate mods; overlong song lines scroll instead of clipping — toggleable
-- **Segment difficulty**: the current section's star rating and dan, next to its pattern tag — toggleable
-- **Curve smoothing**: pixel-space Gaussian smoothing with five strengths, adjustable while a map is loaded; the LN line's structural zeros are preserved exactly, and the graph's x-axis now shares one time mapping with the playhead
-- **Pause marker**: the playhead shows a pause glyph while the game is paused
-- Fix: the RC line of the curve is now drawn from the calibrated RC sub-rating — v1.0.0 mixed raw and calibrated scales between the two lines
-- The overlay no longer redraws the curve while hidden for gameplay
-
-> Note: during this update's development we found defects in SPM Rating v1.0.0 and its accompanying algorithms; the next algorithm version will attempt to fix them.
-
-### v1.0.0
-- **Algorithm upgraded to SPM Rating v1.0.0 with the new RC/LN sub-model**
-- **4K / 6K support**: difficulty rating and dan mapping now cover all key counts
-- **Dan mapping rebuilt**: ladders calibrated per key count and skill (RC/LN), with `< 0th` / `> Stellium` markers beyond the measured range
-- **Three dan display styles**: thirds (low/high), signs (-/+), decimal number
-- **New settings**: sub-difficulty scheme (Direct / Legacy v0.5.1), dan display style, hide-while-playing
-- Pure RC maps hide the LN rating and LN curve automatically
-- Analysis speed optimized
-
-### v0.5.1
-- Performance: full-map analysis (pattern classification + rating) 641ms → 188ms on average; worst LN-heavy marathon maps 13.6s → 1.2s
-
-### v0.5.0
-- Pattern classification replaced with a new segment-based engine: change-point segmentation, per-segment classification, coloured pattern timeline with playhead
-- Live current-section display (pattern, confidence, equivalent BPM) while playing
-- Overall tags aggregated from sections; sort derived from section LN share
-- Non-7K maps: classifier disabled, pattern UI hidden automatically
-- Settings actually take effect now; unified colour language (RC = cool blue, LN = warm orange)
-
-### v0.4.0
-- Core SR algorithm upgraded to SPM Rating v0.4.0; correction-layer features 7 → 9 (nps_std, chord2)
-- Dan mapping re-measured; LN mask calibration refitted
-- Tag classifier rebuilt on 42 features
-
-### v0.3.0
-- Core SR algorithm upgraded to SPM Rating v0.3.0 (correction layer)
-
-### v0.2.0
-- Core SR algorithm upgraded to SPM Rating v0.2.0; sort/tag classifiers retrained
-
-### v0.1.1
-- Hybrid tag unified; new Inverse / Technical classifiers; Mix maps show dual RC+LN ratings; several bug fixes
-
-### v0.1.0
-- Initial release: sigmoid aggregation model with RC/LN sub-models, pattern tags, dan mapping, difficulty curve, mod support
-
-## Ideas for later
-
-Measured against [ManiaMapAnalyser](https://github.com/LeoBlackMT/osumania_map_analyser) by Leo_Black. These are the things that would need real work rather than a settings toggle, so they are notes rather than features:
-
-- **Per-bucket percentile instead of per-bucket max.** Today a 400 ms bucket reports its single hardest note row, so a bucket holding one note looks as hard as a dense one. Taking the 85th percentile of the rows in a bucket would remove that bias at the source and steady the curve *without* any smoothing.
-- **Cover-art accent sampling.** Tint the panel from the beatmap background image, the way LeoBlack's `coverTheme` does. Needs an image fetch and a colour quantiser.
-- **Layout presets.** LeoBlack ships 15 named presets plus JSON import/export. The two UI styles and two densities here cover the useful range; a preset system only pays off with more content to preset.
-- **More estimators.** LeoBlack integrates Etterna MinaCalc (five versions), Interlude, Sunny Rework, Daniel and Companella through WASM/ONNX. That is a different scale of project — bundled binaries, a worker and a benchmark harness — and it changes what the numbers mean, which is why the rating algorithm setting here only offers SPM Rating's own two model variants.
-
-## Notes
-
-- Difficulty ratings and dan levels are estimates, for reference only.
-- The 7K pattern classifier is trained on limited data; rare or unusual patterns may occasionally be misjudged.
-- Legacy osu!stable beatmaps (format v12 or older) may fail to parse.
-
-## Development
-
-Run the checked-in regression tests from a Git checkout with Node 20 or newer:
-
-```sh
-node --test tests/regression.test.cjs tests/cache.test.cjs
-# Optional: use your own local datasets/maps and classifier runtime source pinned to `d2bbb90`.
-node tests/corpus.cjs ../dataset ../maps ../SPMTagClassifier
-```
-
-The browser checks are also checked in as `tests/browser.cjs`; test-only setup is in [TESTING.md](TESTING.md).
-
-The tests compare ratings against the original `1e99e4d` engine and check the new rating-evidence handoff, both model variants, rate mods, window edges and dan labels. The optional corpus check also verifies the exact upstream browser bundle and Node/browser output parity. It prints a JSON report to stdout; chart files are never copied into the repository. See [TESTING.md](TESTING.md) for the completed local checks and [CLASSIFIER.md](CLASSIFIER.md) for the pinned upstream source.
-
-## References
-
-- [tosu](https://tosu.app) — the runtime this overlay runs on
-- [SPM Rating](https://github.com/Ist1na07/SPMRating) — the difficulty algorithm
-- [SPMTagClassifier d2bbb90](https://github.com/Ist1na07/SPMTagClassifier/tree/d2bbb90e7ea685e5345cecf91e176c64dbed0e80) — the pattern classifier and whole-map burden integration
-- [SPM Submodel](https://github.com/Ist1na07/SPMSubmodel) — the RC / long-note sub-model
-
-## License
-
-MIT — see [LICENSE](LICENSE)
+[Version history](CHANGELOG.md) · [Classifier](CLASSIFIER.md) · [Cache](CACHE.md) · [Testing](TESTING.md) · [MIT license](LICENSE)
